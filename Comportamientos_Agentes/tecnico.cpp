@@ -39,7 +39,8 @@ char ViablePorAlturaT(char casilla, int dif) {
 
 // Nivel 1: Filtro de viabilidad (Terreno + Altura para el Ingeniero)
 char ViablePorAlturaT_Nivel1(char casilla, int dif) {
-    if (casilla == 'P' || casilla == 'M' || casilla == 'B' || casilla == 'A' || casilla == 'H') return 'P';
+    // Permitimos la hierba ('H') como último recurso para el Ingeniero
+    if (casilla == 'P' || casilla == 'M' || casilla == 'B' || casilla == 'A') return 'P';
     if (abs(dif) <= 1) return casilla;
     return 'P';
 }
@@ -59,10 +60,37 @@ int VeoCasillaInteresanteT(char i, char c, char d) {
 
 // Nivel 1: Evaluamos qué es más interesante para explorar
 int VeoCasillaInteresanteT_Nivel1(char i, char c, char d) {
-    if (c != 'P') return 2; // 1. Recto
-    if (d != 'P') return 3; // 2. Derecha (DIESTRO - ¡Se separan!)
-    if (i != 'P') return 1; // 3. Izquierda
-    return 0; 
+    bool izq = (i == 'C' || i == 'S');
+    bool rec = (c == 'C' || c == 'S');
+    bool der = (d == 'C' || d == 'S');
+
+    // 1. EL SECRETO: Si estamos en una bifurcación (varios caminos posibles), elegimos al azar
+    if (izq && der && rec) {
+        int r = rand() % 3;
+        if (r == 0) return 1;
+        if (r == 1) return 2;
+        return 3;
+    }
+    if (izq && der && !rec) return (rand() % 2 == 0) ? 1 : 3; // Cruce en T
+    if (izq && !der && rec) return (rand() % 2 == 0) ? 1 : 2; // Desvío a la izquierda
+    if (!izq && der && rec) return (rand() % 2 == 0) ? 2 : 3; // Desvío a la derecha
+
+    // 2. Si no hay cruces, simplemente seguimos el camino
+    if (rec) return 2;
+    if (izq) return 1;
+    if (der) return 3;
+
+    // 3. PLAN B: Si no hay caminos, nos metemos por la hierba ('H')
+    bool izq_h = (i == 'H');
+    bool rec_h = (c == 'H');
+    bool der_h = (d == 'H');
+
+    if (rec_h) return 2;
+    if (izq_h && der_h) return (rand() % 2 == 0) ? 1 : 3;
+    if (izq_h) return 1;
+    if (der_h) return 3;
+
+    return 0; // Callejón sin salida total
 }
 
 // Niveles del técnico
@@ -113,32 +141,32 @@ bool ComportamientoTecnico::es_camino(unsigned char c) const {
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_1(Sensores sensores) {
     ActualizarMapa(sensores);
     
-    // PROTOCOLO DE SUPERVIVENCIA: Evita que aborte la simulación.
+    // Protocolo de supervivencia (nos sentamos si hay poca energía)
     if (sensores.energia <= 50) return IDLE;
 
     Action accion = IDLE;
+
     if (sensores.choque) {
-        accion = TURN_SR; // Choca y gira a la derecha
+        accion = (rand() % 2 == 0) ? TURN_SL : TURN_SR;
         last_action = accion;
         return accion;
     }
 
     char i = ViablePorAlturaT_Nivel1(sensores.superficie[1], sensores.cota[1] - sensores.cota[0]);
     char c = ViablePorAlturaT_Nivel1(sensores.superficie[2], sensores.cota[2] - sensores.cota[0]);
-    char d = ViablePorAlturaT_Nivel1(sensores.superficie[3], sensores.cota[3] - sensores.cota[0]); // Nota: Asegúrate de usar sensores.cota aquí también
-
-    // CORRECCIÓN RÁPIDA DE TYPO: Arriba usé outcota sin querer, lo correcto es:
-    // char d = ViablePorAlturaT_Nivel1(sensores.superficie[3], sensores.cota[3] - sensores.cota[0]);
+    char d = ViablePorAlturaT_Nivel1(sensores.superficie[3], sensores.cota[3] - sensores.cota[0]);
 
     int pos = VeoCasillaInteresanteT_Nivel1(i, c, d);
 
     if (pos == 2) accion = WALK;
+    else if (pos == 1) accion = TURN_SL;
     else if (pos == 3) accion = TURN_SR;
-    else if (pos == 1) {
-        // Antibucle invertido para el diestro
-        if (last_action == TURN_SR) accion = TURN_SR;
-        else accion = TURN_SL;
-    } else accion = TURN_SR;
+    else {
+        // ANTIBUCLE en callejones: forzamos dar la media vuelta completa
+        if (last_action == TURN_SL) accion = TURN_SL;
+        else if (last_action == TURN_SR) accion = TURN_SR;
+        else accion = (rand() % 2 == 0) ? TURN_SL : TURN_SR;
+    }
 
     last_action = accion;
     return accion;

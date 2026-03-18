@@ -3,6 +3,7 @@
 #include <iostream>
 #include <queue>
 #include <set>
+#include <cstdlib>
 
 using namespace std;
 
@@ -54,25 +55,45 @@ char ViablePorAlturaI(char casilla, int dif, bool zap) {
 
 // Filtro Nivel 1 Ingeniero
 char ViablePorAlturaI_Nivel1(char casilla, int dif) {
-    if (casilla == 'P' || casilla == 'M' || casilla == 'B' || casilla == 'A' || casilla == 'H') return 'P';
+    // Permitimos la hierba ('H') como último recurso para el Ingeniero
+    if (casilla == 'P' || casilla == 'M' || casilla == 'B' || casilla == 'A') return 'P';
     if (abs(dif) <= 1) return casilla;
     return 'P';
 }
 
 // Devuelve 2 (WALK), 1 (TURN_SL), 3 (TURN_SR) o 0 (nada interesante)
 int VeoCasillaInteresanteI(char i, char c, char d, bool zap) {
-    if (c == 'U') return 2;
-    else if (i == 'U') return 1;
-    else if (d == 'U') return 3;
-    else if (!zap) {
-        if (c == 'D') return 2;
-        else if (i == 'D') return 1;
-        else if (d == 'D') return 3;
+    bool izq = (i == 'C' || i == 'S');
+    bool rec = (c == 'C' || c == 'S');
+    bool der = (d == 'C' || d == 'S');
+
+    // 1. EL SECRETO: Si estamos en una bifurcación (varios caminos posibles), elegimos al azar
+    if (izq && der && rec) {
+        int r = rand() % 3;
+        if (r == 0) return 1;
+        if (r == 1) return 2;
+        return 3;
     }
-    if (c == 'C') return 2;
-    else if (i == 'C') return 1;
-    else if (d == 'C') return 3;
-    else return 0;
+    if (izq && der && !rec) return (rand() % 2 == 0) ? 1 : 3; // Cruce en T
+    if (izq && !der && rec) return (rand() % 2 == 0) ? 1 : 2; // Desvío a la izquierda
+    if (!izq && der && rec) return (rand() % 2 == 0) ? 2 : 3; // Desvío a la derecha
+
+    // 2. Si no hay cruces, simplemente seguimos el camino
+    if (rec) return 2;
+    if (izq) return 1;
+    if (der) return 3;
+
+    // 3. PLAN B: Si no hay caminos, nos metemos por la hierba ('H')
+    bool izq_h = (i == 'H');
+    bool rec_h = (c == 'H');
+    bool der_h = (d == 'H');
+
+    if (rec_h) return 2;
+    if (izq_h && der_h) return (rand() % 2 == 0) ? 1 : 3;
+    if (izq_h) return 1;
+    if (der_h) return 3;
+
+    return 0; // Callejón sin salida total
 }
 
 // Curiosidad Nivel 1 Ingeniero
@@ -147,12 +168,13 @@ bool ComportamientoIngeniero::es_camino(unsigned char c) const
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores) {
     ActualizarMapa(sensores);
     
-    // PROTOCOLO DE SUPERVIVENCIA: Si me queda poca batería, me siento a esperar.
+    // Protocolo de supervivencia (nos sentamos si hay poca energía)
     if (sensores.energia <= 50) return IDLE;
 
     Action accion = IDLE;
+
     if (sensores.choque) {
-        accion = TURN_SL;
+        accion = (rand() % 2 == 0) ? TURN_SL : TURN_SR;
         last_action = accion;
         return accion;
     }
@@ -165,10 +187,13 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores
 
     if (pos == 2) accion = WALK;
     else if (pos == 1) accion = TURN_SL;
-    else if (pos == 3) {
+    else if (pos == 3) accion = TURN_SR;
+    else {
+        // ANTIBUCLE en callejones: forzamos dar la media vuelta completa
         if (last_action == TURN_SL) accion = TURN_SL;
-        else accion = TURN_SR;
-    } else accion = TURN_SL;
+        else if (last_action == TURN_SR) accion = TURN_SR;
+        else accion = (rand() % 2 == 0) ? TURN_SL : TURN_SR;
+    }
 
     last_action = accion;
     return accion;
