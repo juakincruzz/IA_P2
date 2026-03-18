@@ -47,6 +47,31 @@ Action ComportamientoIngeniero::think(Sensores sensores)
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores)
 {
   Action accion = IDLE;
+
+  // Fase 1: Actualización de información.
+  // Pinto el mapa lo que los sensores ven.
+  ActualizarMapa(sensores) ;
+
+  // Si la casilla en la que estoy es índice 0 es una zapatilla ('D'), me la guardo.
+  if (sensores.superficie[0] == 'D') tiene_zapatillas = true ;
+
+  // Fase 2: Definición del comportamiento.
+  // Si ya he llegado a la mete ('U'), me quedo quieto y devuelvo IDLE.
+  if (sensores.superficie[0] == 'U'){
+    return IDLE ;
+  } else if (sensores.superficie[2] == 'C') { // Si la casilla de enfrente es un camino, avanzo.
+    accion = WALK ;
+  } else if (sensores.superficie[1] == 'C') { // Si la casilla de la izquierda es un camino, giro a la izquierda.
+    accion = TURN_SL ;
+  } else if (sensores.superficie[3] == 'C') { // Si la casilla de la derecha es un camino, giro a la derecha.
+    accion = TURN_SR ;
+  } else { // Si no veo camino por ningún lado, giro a la izquierda para buscar uno nuevo.
+    accion = TURN_SL ;
+  }
+
+  // Guardo la acción realizada que ha sido tomada. 
+  last_action = accion ;
+
   return accion;
 }
 

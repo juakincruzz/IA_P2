@@ -33,6 +33,9 @@ public:
                          std::vector<std::vector<unsigned char>> mapaC): 
                          Comportamiento(mapaR, mapaC) {
     // Inicializar Variables de Estado
+    last_action = IDLE ;
+    tiene_zapatillas = false ;
+    giro45Izq = 0 ; 
   }
 
   ComportamientoIngeniero(const ComportamientoIngeniero &comport)
@@ -182,7 +185,9 @@ private:
   // =========================================================================
   // VARIABLES DE ESTADO (PUEDEN SER EXTENDIDAS POR EL ALUMNO)
   // =========================================================================
-
+  Action last_action ;
+  bool tiene_zapatillas ; 
+  int giro45Izq ;
 };
 
 #endif
