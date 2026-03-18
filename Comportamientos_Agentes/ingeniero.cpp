@@ -52,6 +52,13 @@ char ViablePorAlturaI(char casilla, int dif, bool zap) {
     }
 }
 
+// Filtro Nivel 1 Ingeniero
+char ViablePorAlturaI_Nivel1(char casilla, int dif) {
+    if (casilla == 'P' || casilla == 'M' || casilla == 'B' || casilla == 'A' || casilla == 'H') return 'P';
+    if (abs(dif) <= 1) return casilla;
+    return 'P';
+}
+
 // Devuelve 2 (WALK), 1 (TURN_SL), 3 (TURN_SR) o 0 (nada interesante)
 int VeoCasillaInteresanteI(char i, char c, char d, bool zap) {
     if (c == 'U') return 2;
@@ -66,6 +73,14 @@ int VeoCasillaInteresanteI(char i, char c, char d, bool zap) {
     else if (i == 'C') return 1;
     else if (d == 'C') return 3;
     else return 0;
+}
+
+// Curiosidad Nivel 1 Ingeniero
+int VeoCasillaInteresanteI_Nivel1(char i, char c, char d) {
+    if (c != 'P') return 2; // 1. Recto
+    if (i != 'P') return 1; // 2. Izquierda (ZURDO)
+    if (d != 'P') return 3; // 3. Derecha
+    return 0;
 }
 
 // Niveles iniciales (Comportamientos reactivos simples)
@@ -128,11 +143,35 @@ bool ComportamientoIngeniero::es_camino(unsigned char c) const
  * @brief Comportamiento reactivo del ingeniero para el Nivel 1.
  * @param sensores Datos actuales de los sensores.
  * @return Acción a realizar.
- */
-Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores)
-{
-  // TODO: Implementar comportamiento reactivo para el Nivel 1.
-  return IDLE;
+*/
+Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores) {
+    ActualizarMapa(sensores);
+    
+    // PROTOCOLO DE SUPERVIVENCIA: Si me queda poca batería, me siento a esperar.
+    if (sensores.energia <= 50) return IDLE;
+
+    Action accion = IDLE;
+    if (sensores.choque) {
+        accion = TURN_SL;
+        last_action = accion;
+        return accion;
+    }
+
+    char i = ViablePorAlturaI_Nivel1(sensores.superficie[1], sensores.cota[1] - sensores.cota[0]);
+    char c = ViablePorAlturaI_Nivel1(sensores.superficie[2], sensores.cota[2] - sensores.cota[0]);
+    char d = ViablePorAlturaI_Nivel1(sensores.superficie[3], sensores.cota[3] - sensores.cota[0]);
+
+    int pos = VeoCasillaInteresanteI_Nivel1(i, c, d);
+
+    if (pos == 2) accion = WALK;
+    else if (pos == 1) accion = TURN_SL;
+    else if (pos == 3) {
+        if (last_action == TURN_SL) accion = TURN_SL;
+        else accion = TURN_SR;
+    } else accion = TURN_SL;
+
+    last_action = accion;
+    return accion;
 }
 
 // Niveles avanzados (Uso de búsqueda)

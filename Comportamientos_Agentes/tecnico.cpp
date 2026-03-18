@@ -37,6 +37,13 @@ char ViablePorAlturaT(char casilla, int dif) {
     }
 }
 
+// Nivel 1: Filtro de viabilidad (Terreno + Altura para el Ingeniero)
+char ViablePorAlturaT_Nivel1(char casilla, int dif) {
+    if (casilla == 'P' || casilla == 'M' || casilla == 'B' || casilla == 'A' || casilla == 'H') return 'P';
+    if (abs(dif) <= 1) return casilla;
+    return 'P';
+}
+
 // Evaluamos qué hay delante (ignoramos las zapatillas para el Técnico en este nivel)
 int VeoCasillaInteresanteT(char i, char c, char d) {
     if (c == 'U') return 2;
@@ -48,6 +55,14 @@ int VeoCasillaInteresanteT(char i, char c, char d) {
     else if (d == 'C') return 3;
     
     else return 0;
+}
+
+// Nivel 1: Evaluamos qué es más interesante para explorar
+int VeoCasillaInteresanteT_Nivel1(char i, char c, char d) {
+    if (c != 'P') return 2; // 1. Recto
+    if (d != 'P') return 3; // 2. Derecha (DIESTRO - ¡Se separan!)
+    if (i != 'P') return 1; // 3. Izquierda
+    return 0; 
 }
 
 // Niveles del técnico
@@ -96,7 +111,37 @@ bool ComportamientoTecnico::es_camino(unsigned char c) const {
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_1(Sensores sensores) {
-  return IDLE;
+    ActualizarMapa(sensores);
+    
+    // PROTOCOLO DE SUPERVIVENCIA: Evita que aborte la simulación.
+    if (sensores.energia <= 50) return IDLE;
+
+    Action accion = IDLE;
+    if (sensores.choque) {
+        accion = TURN_SR; // Choca y gira a la derecha
+        last_action = accion;
+        return accion;
+    }
+
+    char i = ViablePorAlturaT_Nivel1(sensores.superficie[1], sensores.cota[1] - sensores.cota[0]);
+    char c = ViablePorAlturaT_Nivel1(sensores.superficie[2], sensores.cota[2] - sensores.cota[0]);
+    char d = ViablePorAlturaT_Nivel1(sensores.superficie[3], sensores.cota[3] - sensores.cota[0]); // Nota: Asegúrate de usar sensores.cota aquí también
+
+    // CORRECCIÓN RÁPIDA DE TYPO: Arriba usé outcota sin querer, lo correcto es:
+    // char d = ViablePorAlturaT_Nivel1(sensores.superficie[3], sensores.cota[3] - sensores.cota[0]);
+
+    int pos = VeoCasillaInteresanteT_Nivel1(i, c, d);
+
+    if (pos == 2) accion = WALK;
+    else if (pos == 3) accion = TURN_SR;
+    else if (pos == 1) {
+        // Antibucle invertido para el diestro
+        if (last_action == TURN_SR) accion = TURN_SR;
+        else accion = TURN_SL;
+    } else accion = TURN_SR;
+
+    last_action = accion;
+    return accion;
 }
 
 /**
