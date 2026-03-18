@@ -43,6 +43,31 @@ Action ComportamientoIngeniero::think(Sensores sensores)
   return accion;
 }
 
+// Devuelve la casilla si es transitable por altura, o 'P' (precipicio) si es un muro infranqueable
+char ViablePorAlturaI(char casilla, int dif, bool zap) {
+    if (abs(dif) <= 1 or (zap and abs(dif) <= 2)) {
+        return casilla;
+    } else {
+        return 'P';
+    }
+}
+
+// Devuelve 2 (WALK), 1 (TURN_SL), 3 (TURN_SR) o 0 (nada interesante)
+int VeoCasillaInteresanteI(char i, char c, char d, bool zap) {
+    if (c == 'U') return 2;
+    else if (i == 'U') return 1;
+    else if (d == 'U') return 3;
+    else if (!zap) {
+        if (c == 'D') return 2;
+        else if (i == 'D') return 1;
+        else if (d == 'D') return 3;
+    }
+    if (c == 'C') return 2;
+    else if (i == 'C') return 1;
+    else if (d == 'C') return 3;
+    else return 0;
+}
+
 // Niveles iniciales (Comportamientos reactivos simples)
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores)
 {
@@ -55,22 +80,36 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores
   // Si la casilla en la que estoy es índice 0 es una zapatilla ('D'), me la guardo.
   if (sensores.superficie[0] == 'D') tiene_zapatillas = true ;
 
-  // Fase 2: Definición del comportamiento.
-  // Si ya he llegado a la mete ('U'), me quedo quieto y devuelvo IDLE.
-  if (sensores.superficie[0] == 'U'){
-    return IDLE ;
-  } else if (sensores.superficie[2] == 'C') { // Si la casilla de enfrente es un camino, avanzo.
-    accion = WALK ;
-  } else if (sensores.superficie[1] == 'C') { // Si la casilla de la izquierda es un camino, giro a la izquierda.
-    accion = TURN_SL ;
-  } else if (sensores.superficie[3] == 'C') { // Si la casilla de la derecha es un camino, giro a la derecha.
-    accion = TURN_SR ;
-  } else { // Si no veo camino por ningún lado, giro a la izquierda para buscar uno nuevo.
-    accion = TURN_SL ;
-  }
+  // Fase 2: Definición del comportamiento
+    if (sensores.superficie[0] == 'U') { // Llegué a una 'U'
+        return IDLE;
+    }
 
-  // Guardo la acción realizada que ha sido tomada. 
-  last_action = accion ;
+    // Calculamos si las tres casillas de delante son viables por altura
+    char i = ViablePorAlturaI(sensores.superficie[1], sensores.cota[1] - sensores.cota[0], tiene_zapatillas);
+    char c = ViablePorAlturaI(sensores.superficie[2], sensores.cota[2] - sensores.cota[0], tiene_zapatillas);
+    char d = ViablePorAlturaI(sensores.superficie[3], sensores.cota[3] - sensores.cota[0], tiene_zapatillas);
+
+    // Evaluamos qué es lo más interesante de lo que SÍ podemos pisar
+    int pos = VeoCasillaInteresanteI(i, c, d, tiene_zapatillas);
+
+    switch (pos) {
+        case 2:
+            accion = WALK;
+            break;
+        case 1:
+            accion = TURN_SL;
+            break;
+        case 3:
+            accion = TURN_SR;
+            break;
+        default:
+            accion = TURN_SL; // Si no hay nada interesante, giro para buscar
+            break;
+    }
+
+    // Guardo la acción que he decidido tomar en mi memoria
+    last_action = accion;
 
   return accion;
 }

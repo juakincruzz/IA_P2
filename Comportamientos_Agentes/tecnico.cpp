@@ -28,12 +28,56 @@ Action ComportamientoTecnico::think(Sensores sensores) {
   return accion;
 }
 
+// El Técnico solo puede superar desniveles de máximo 1
+char ViablePorAlturaT(char casilla, int dif) {
+    if (abs(dif) <= 1) {
+        return casilla;
+    } else {
+        return 'P';
+    }
+}
+
+// Evaluamos qué hay delante (ignoramos las zapatillas para el Técnico en este nivel)
+int VeoCasillaInteresanteT(char i, char c, char d) {
+    if (c == 'U') return 2;
+    else if (i == 'U') return 1;
+    else if (d == 'U') return 3;
+    
+    if (c == 'C') return 2;
+    else if (i == 'C') return 1;
+    else if (d == 'C') return 3;
+    
+    else return 0;
+}
 
 // Niveles del técnico
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
-  Action accion = IDLE;
+    Action accion = IDLE;
 
-  return accion;
+    // Fase 1: Actualizar mapa
+    ActualizarMapa(sensores);
+
+    // Fase 2: Comportamiento
+    if (sensores.superficie[0] == 'U') {
+        return IDLE; // Llegó a la meta
+    }
+
+    // Comprobamos viabilidad de altura (sin zapatillas)
+    char i = ViablePorAlturaT(sensores.superficie[1], sensores.cota[1] - sensores.cota[0]);
+    char c = ViablePorAlturaT(sensores.superficie[2], sensores.cota[2] - sensores.cota[0]);
+    char d = ViablePorAlturaT(sensores.superficie[3], sensores.cota[3] - sensores.cota[0]);
+
+    int pos = VeoCasillaInteresanteT(i, c, d);
+
+    switch (pos) {
+        case 2: accion = WALK; break;
+        case 1: accion = TURN_SL; break;
+        case 3: accion = TURN_SR; break;
+        default: accion = TURN_SL; break; // Buscar nuevo camino
+    }
+
+    last_action = accion;
+    return accion;
 }
 
 /**
