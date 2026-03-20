@@ -252,6 +252,18 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_3(Sensores sensores
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_4(Sensores sensores)
 {
+  if (!hayPlanTuberias) {
+        // Planificamos desde la posición de la Belkanita
+        planTuberias = PlanificaTuberias(sensores.BelPosF, sensores.BelPosC);
+        
+        if (!planTuberias.empty()) {
+            // Le pasamos el plan al motor gráfico para que lo dibuje
+            VisualizaRedTuberias(planTuberias);
+        }
+        hayPlanTuberias = true;
+    }
+    
+  // El nivel 4 es solo teórico, no nos movemos.
   return IDLE;
 }
 
@@ -802,4 +814,88 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, co
 
     // Si la cola se vacía y no encontramos la meta, devolvemos una lista vacía (no hay camino)
     return list<Action>(); 
+}
+
+list<Paso> ComportamientoIngeniero::PlanificaTuberias(int f_inicio, int c_inicio) {
+    queue<nodo_tuberia> abierta;
+    set<estado_tuberia> cerrados;
+
+    // Metemos el inicio probando las 3 opciones posibles de excavación en la Belkanita
+    for (int mod_inicio = -1; mod_inicio <= 1; ++mod_inicio) {
+        nodo_tuberia inicial;
+        inicial.st.fila = f_inicio;
+        inicial.st.columna = c_inicio;
+        inicial.st.mod = mod_inicio; 
+        
+        Paso p;
+        p.fil = f_inicio;
+        p.col = c_inicio;
+        p.op = mod_inicio;
+        inicial.secuencia.push_back(p);
+
+        abierta.push(inicial);
+        cerrados.insert(inicial.st);
+    }
+
+    // Direcciones ortogonales (Norte, Sur, Este, Oeste)
+    int df[] = {-1, 1, 0, 0};
+    int dc[] = {0, 0, 1, -1};
+
+    while (!abierta.empty()) {
+        nodo_tuberia actual = abierta.front();
+        abierta.pop();
+
+        int f = actual.st.fila;
+        int c = actual.st.columna;
+
+        // ¿Llegamos a una Planta de Tratamiento?
+        if (mapaResultado[f][c] == 'U') {
+            return actual.secuencia; // ¡Ruta encontrada!
+        }
+
+        // Calculamos la altura real a la que está el agua en nuestra tubería actual
+        int h_actual = mapaCotas[f][c] + actual.st.mod;
+
+        // Explorar vecinos ortogonales
+        for (int i = 0; i < 4; ++i) {
+            int nf = f + df[i];
+            int nc = c + dc[i];
+
+            // Comprobamos límites del mapa
+            if (nf >= 0 && nf < mapaResultado.size() && nc >= 0 && nc < mapaResultado[0].size()) {
+                char sup = mapaResultado[nf][nc];
+                
+                // Las tuberías no pueden atravesar Muros ni Precipicios
+                if (sup == 'M' || sup == 'P') continue;
+
+                int h_vecino_base = mapaCotas[nf][nc];
+
+                // Probamos a poner la tubería en el vecino con las 3 modificaciones posibles
+                for (int mod_vecino = -1; mod_vecino <= 1; ++mod_vecino) {
+                    int h_vecino_final = h_vecino_base + mod_vecino;
+
+                    // REGLA DE GRAVEDAD: El agua no sube cuestas (h_actual >= h_vecino_final)
+                    if (h_actual >= h_vecino_final) {
+                        estado_tuberia st_hijo = {nf, nc, mod_vecino};
+
+                        // Si es una configuración nueva, la exploramos
+                        if (cerrados.find(st_hijo) == cerrados.end()) {
+                            nodo_tuberia hijo = actual;
+                            hijo.st = st_hijo;
+                            
+                            Paso p;
+                            p.fil = nf;
+                            p.col = nc;
+                            p.op = mod_vecino;
+                            hijo.secuencia.push_back(p);
+                            
+                            cerrados.insert(st_hijo);
+                            abierta.push(hijo);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return list<Paso>(); // No hay ruta posible
 }

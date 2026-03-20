@@ -38,6 +38,7 @@ public:
                          std::vector<std::vector<unsigned char>> mapaC): 
                          Comportamiento(mapaR, mapaC) {
     hayPlan = false ;
+    hayPlanTuberias = false ;
   }
 
   ComportamientoIngeniero(const ComportamientoIngeniero &comport)
@@ -145,6 +146,24 @@ public:
   };
 
 
+  // Estado para la planificación de tuberías
+  struct estado_tuberia {
+      int fila;
+      int columna;
+      int mod; // Modificación del terreno: -1 (DIG), 0 (Nada), 1 (RAISE)
+
+      bool operator<(const estado_tuberia& otro) const {
+          if (fila != otro.fila) return fila < otro.fila;
+          if (columna != otro.columna) return columna < otro.columna;
+          return mod < otro.mod;
+      }
+  };
+
+  struct nodo_tuberia {
+      estado_tuberia st;
+      std::list<Paso> secuencia; // Usamos la estructura 'Paso' del motor
+  };
+
 protected:
   // =========================================================================
   // FUNCIONES PROPORCIONADAS
@@ -226,6 +245,10 @@ private:
   bool hayPlan ;        // Para saber si ya he calculado la ruta o no
   list<Action> plan ;   // Aquí guardo las instrucciones a seguir
   list<Action> BusquedaEnAnchura(const estado& origen, const estado& destino); // Función del algoritmo de búsqueda.
+
+  bool hayPlanTuberias;
+  list<Paso> planTuberias;
+  list<Paso> PlanificaTuberias(int f_inicio, int c_inicio);
 };
 
 #endif
