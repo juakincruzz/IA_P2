@@ -46,6 +46,8 @@ public:
     // Inicializar Variables de Estado
     last_action = IDLE ;
     tiene_zapatillas = false;
+
+    estado_obra_tec = TEC_ESPERAR_AVISO ;
   }
 
   ComportamientoTecnico(const ComportamientoTecnico &comport): Comportamiento(comport) {}
@@ -226,6 +228,17 @@ private:
   list<Action> plan;
   list<Action> AEstrella(const estado& origen, const estado& destino);
 
+  // Nivel 5
+  // --- Variables Nivel 5 (Máquina de Estados) ---
+    enum EstadoObraTec {
+        TEC_ESPERAR_AVISO,
+        TEC_IR_CASILLA,
+        TEC_ALINEARSE,
+        TEC_INSTALAR
+    };
+
+    EstadoObraTec estado_obra_tec;
+    std::list<Action> ruta_actual_tec; // Ruta del técnico hacia el ingeniero
 };
 
 #endif

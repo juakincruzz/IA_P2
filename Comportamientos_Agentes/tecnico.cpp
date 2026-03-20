@@ -228,6 +228,70 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_4(Sensores sensores) {
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
+  if (sensores.tiempo == 0) estado_obra_tec = TEC_ESPERAR_AVISO;
+
+  switch(estado_obra_tec) {
+
+        case TEC_ESPERAR_AVISO:
+            // Si el jefe nos llama, preparamos las herramientas
+            if (sensores.venpaca) {
+                estado_obra_tec = TEC_IR_CASILLA;
+                ruta_actual_tec.clear(); // Limpiamos rutas viejas por si acaso
+                return IDLE;
+            }
+            return IDLE; // Descansamos ahorrando batería
+
+        case TEC_IR_CASILLA:
+            // FRENO DE MANO: ¿Estamos ya en una casilla ortogonal adyacente al Ingeniero?
+            // La suma de las diferencias absolutas de fila y columna debe ser exactamente 1.
+            if (abs(sensores.posF - sensores.GotoF) + abs(sensores.posC - sensores.GotoC) == 1) {
+                estado_obra_tec = TEC_ALINEARSE;
+                return IDLE;
+            }
+
+            // Si no tenemos ruta, calculamos hacia (GotoF, GotoC) con A*
+            if (ruta_actual_tec.empty()) {
+                estado origen; 
+                origen.fila = sensores.posF; 
+                origen.columna = sensores.posC; 
+                origen.orientacion = sensores.rumbo;
+                
+                estado destino; 
+                destino.fila = sensores.GotoF; 
+                destino.columna = sensores.GotoC;
+                
+                ruta_actual_tec = AEstrella(origen, destino);
+            }
+
+            // Damos el siguiente paso de la ruta
+            if (!ruta_actual_tec.empty()) {
+                Action a = ruta_actual_tec.front();
+                ruta_actual_tec.pop_front();
+                return a;
+            }
+            return IDLE; // Por si nos atascamos
+
+        case TEC_ALINEARSE:
+            // ¿Vemos al Ingeniero ('i') en la casilla de delante?
+            if (sensores.agentes[2] == 'i') {
+                
+                // Si lo vemos, comprobamos el sensor de confirmación mutua
+                if (sensores.enfrente) {
+                    // ¡Sincronización perfecta! Instalamos y volvemos a esperar.
+                    estado_obra_tec = TEC_ESPERAR_AVISO;
+                    return INSTALL;
+                } else {
+                    // Lo vemos, pero él aún está girando su radar y no nos ve. 
+                    // Nos quedamos quietos esperando a que haga contacto visual.
+                    return IDLE; 
+                }
+                
+            } else {
+                // Si no lo tenemos delante, giramos sobre nosotros mismos para buscarlo
+                return TURN_SR; 
+            }
+    }
+
   return IDLE;
 }
 

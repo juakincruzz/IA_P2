@@ -39,6 +39,8 @@ public:
                          Comportamiento(mapaR, mapaC) {
     hayPlan = false ;
     hayPlanTuberias = false ;
+
+    estado_obra_ing = ING_PLANIFICAR ;
   }
 
   ComportamientoIngeniero(const ComportamientoIngeniero &comport)
@@ -249,6 +251,22 @@ private:
   bool hayPlanTuberias;
   list<Paso> planTuberias;
   list<Paso> PlanificaTuberias(int f_inicio, int c_inicio);
+
+  // Nivel 5
+  // --- Variables Nivel 5 (Máquina de Estados) ---
+    enum EstadoObraIng {
+        ING_PLANIFICAR,
+        ING_IR_CASILLA,
+        ING_TERRAFORMAR,
+        ING_POSICIONARSE, 
+        ING_AVISAR_TECNICO,
+        ING_ESPERAR_TECNICO,
+        ING_INSTALAR
+    };
+
+    EstadoObraIng estado_obra_ing;
+    Paso paso_actual;            // La tubería que estamos instalando ahora mismo
+    list<Action> ruta_actual; // La ruta paso a paso para llegar a la casilla
 };
 
 #endif

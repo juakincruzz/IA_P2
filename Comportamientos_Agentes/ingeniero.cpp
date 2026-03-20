@@ -274,9 +274,117 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_4(Sensores sensores
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores)
 {
-  return IDLE;
-}
+  // ---------------------------------------------------------------------
+    // PARCHE DE SEGURIDAD: Forzamos la inicialización en el instante 0
+    // ---------------------------------------------------------------------
+    if (sensores.tiempo == 0) {
+        hayPlanTuberias = false;
+        estado_obra_ing = ING_PLANIFICAR;
+        ruta_actual.clear(); 
+    }
 
+    // ---------------------------------------------------------------------
+    // MÁQUINA DE ESTADOS DEL INGENIERO (JEFE DE OBRA)
+    // ---------------------------------------------------------------------
+    switch(estado_obra_ing) {
+        
+        case ING_PLANIFICAR:
+            // 1. Calculamos la red de tuberías entera la primera vez
+            if (!hayPlanTuberias) {
+                planTuberias = PlanificaTuberias(sensores.BelPosF, sensores.BelPosC);
+                hayPlanTuberias = true;
+                
+                if (!planTuberias.empty()) {
+                    VisualizaRedTuberias(planTuberias); // Dibujamos el plan
+                    
+                    cout << "¡Plan calculado ! Tuberías a instalar: " << planTuberias.size() << endl;
+                } else {
+                    cout << "¡ERROR! PlanificaTuberias ha devuelto una lista vacía." << endl;
+                }
+            }
+            
+            // 2. Si ya no quedan tubos, hemos terminado el nivel
+            if (planTuberias.empty()) return IDLE; 
+
+            // 3. Sacamos el siguiente tubo a instalar de la lista
+            paso_actual = planTuberias.front();
+            planTuberias.pop_front();
+            estado_obra_ing = ING_IR_CASILLA;
+            
+            cout << "Jefe de obra: Vamos a poner tubo en " << paso_actual.fil << "," << paso_actual.col << endl;
+            return IDLE;
+
+        case ING_IR_CASILLA:
+            // 1. ¿Ya estamos en la casilla donde va el tubo?
+            if (sensores.posF == paso_actual.fil && sensores.posC == paso_actual.col) {
+                estado_obra_ing = ING_TERRAFORMAR;
+                return IDLE;
+            }
+            
+            // 2. Si no tenemos ruta hacia esa casilla, la calculamos con nuestro BFS
+            if (ruta_actual.empty()) {
+                estado origen; 
+                origen.fila = sensores.posF; 
+                origen.columna = sensores.posC; 
+                origen.orientacion = sensores.rumbo;
+                
+                estado destino; 
+                destino.fila = paso_actual.fil; 
+                destino.columna = paso_actual.col;
+                
+                ruta_actual = BusquedaEnAnchura(origen, destino);
+                
+                if (ruta_actual.empty()) {
+                    cout << "¡ATASCO! El Ingeniero no encuentra ruta a la casilla " << destino.fila << "," << destino.columna << endl;
+                }
+            }
+            
+            // 3. Si tenemos ruta, damos el siguiente paso
+            if (!ruta_actual.empty()) {
+                Action a = ruta_actual.front();
+                ruta_actual.pop_front();
+                return a;
+            }
+            return IDLE; // Por si nos atascamos momentáneamente
+
+        case ING_TERRAFORMAR:
+            // Aplicamos la modificación si el terreno lo requiere
+            if (paso_actual.op == 1) {
+                paso_actual.op = 0; // Lo ponemos a 0 para no repetir la acción en el siguiente tick
+                return RAISE;
+            } else if (paso_actual.op == -1) {
+                paso_actual.op = 0; 
+                return DIG;
+            }
+            // Si no hay que hacer nada (op == 0), pasamos a avisar al Técnico
+            estado_obra_ing = ING_AVISAR_TECNICO;
+            return IDLE;
+
+        case ING_AVISAR_TECNICO:
+            estado_obra_ing = ING_ESPERAR_TECNICO;
+            return COME; // ¡Llamamos al Técnico! Sus sensores venpaca, GotoF y GotoC se encenderán
+
+        case ING_ESPERAR_TECNICO:
+            // Si vemos al técnico ('t') en la casilla justo delante nuestra, ¡estamos alineados!
+            if (sensores.agentes[2] == 't') {
+                estado_obra_ing = ING_INSTALAR;
+                return INSTALL; // Devolvemos INSTALL. En este instante, el Técnico también lo hará.
+            }
+            // Si no lo vemos, giramos sobre nosotros mismos como un radar hasta encontrarlo
+            return TURN_SR;
+
+        case ING_INSTALAR:
+            // El tubo ya está puesto. Volvemos al estado inicial para sacar el siguiente tubo
+            estado_obra_ing = ING_PLANIFICAR;
+            return IDLE;
+    } // Fin del switch
+
+    // ---------------------------------------------------------------------
+    // RETORNO FINAL DE SEGURIDAD
+    // (Soluciona el warning del compilador "control reaches end of non-void function")
+    // ---------------------------------------------------------------------
+    return IDLE;
+}
 /**
  * @brief Comportamiento del ingeniero para el Nivel 6.
  * @param sensores Datos actuales de los sensores.
