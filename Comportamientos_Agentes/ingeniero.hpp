@@ -7,6 +7,7 @@
 #include <set>
 #include <thread>
 #include <time.h>
+#include <list>
 
 #include "comportamientos/comportamiento.hpp"
 
@@ -22,6 +23,10 @@ public:
    */
   ComportamientoIngeniero(unsigned int size = 0) : Comportamiento(size) {
     // Inicializar Variables de Estado
+    // Inicializar Variables de Estado
+    last_action = IDLE ;
+    tiene_zapatillas = false ;
+    giro45Izq = 0 ; 
   }
 
   /**
@@ -32,10 +37,7 @@ public:
   ComportamientoIngeniero(std::vector<std::vector<unsigned char>> mapaR, 
                          std::vector<std::vector<unsigned char>> mapaC): 
                          Comportamiento(mapaR, mapaC) {
-    // Inicializar Variables de Estado
-    last_action = IDLE ;
-    tiene_zapatillas = false ;
-    giro45Izq = 0 ; 
+    hayPlan = false ;
   }
 
   ComportamientoIngeniero(const ComportamientoIngeniero &comport)
@@ -110,6 +112,38 @@ public:
    * @return Acción a realizar.
    */
   Action ComportamientoIngenieroNivel_6(Sensores sensores);
+
+  /**
+   * @brief Estructura para representar la situación exacta del agente
+   */
+  // Estructura para representar la situación exacta del agente
+  struct estado {
+      int fila;
+      int columna;
+      int orientacion; // 0: Norte, 1: Este, 2: Sur, 3: Oeste
+
+      // Sobrecargamos el operador < para que C++ nos deje usar std::set (memoria de visitados)
+      bool operator<(const estado& otro) const {
+          if (fila != otro.fila) return fila < otro.fila;
+          if (columna != otro.columna) return columna < otro.columna;
+          return orientacion < otro.orientacion;
+      }
+      
+      // Sobrecargamos el operador == para comprobar fácilmente si hemos llegado a la meta
+      bool operator==(const estado& otro) const {
+          return fila == otro.fila && columna == otro.columna;
+          // Nota: La orientación de llegada no importa para la meta, solo la posición
+      }
+  };
+
+  /**
+   * @brief Estructura para el árbol de búsqueda (nodos)
+   */
+  struct nodo {
+    estado st;
+    std::list<Action> secuencia; // La lista de acciones para llegar a este estado
+  };
+
 
 protected:
   // =========================================================================
@@ -188,6 +222,10 @@ private:
   Action last_action ;
   bool tiene_zapatillas ; 
   int giro45Izq ;
+
+  bool hayPlan ;        // Para saber si ya he calculado la ruta o no
+  list<Action> plan ;   // Aquí guardo las instrucciones a seguir
+  list<Action> BusquedaEnAnchura(const estado& origen, const estado& destino); // Función del algoritmo de búsqueda.
 };
 
 #endif

@@ -207,8 +207,32 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_2(Sensores sensores)
 {
-  // TODO: Implementar búsqueda para el Nivel 2.
-  return IDLE;
+  Action accion = IDLE;
+
+  // 1. Si no hay plan, es el primer instante: ¡Toca pensar!
+  if (!hayPlan) {
+      estado origen;
+      origen.fila = sensores.posF;
+      origen.columna = sensores.posC;
+      origen.orientacion = sensores.rumbo;
+
+      estado destino;
+      destino.fila = sensores.BelPosF;
+      destino.columna = sensores.BelPosC;
+
+      // Llamamos al algoritmo para que nos devuelva la lista de acciones óptima
+      plan = BusquedaEnAnchura(origen, destino);
+      
+      hayPlan = true;
+    }
+
+  // 2. Ejecutar el plan paso a paso
+  if (hayPlan && !plan.empty()) {
+      accion = plan.front(); // Miramos la siguiente acción
+      plan.pop_front();      // La sacamos de la lista porque la vamos a ejecutar ahora mismo
+  }
+
+  return accion;
 }
 
 /**
@@ -684,4 +708,98 @@ void ComportamientoIngeniero::VisualizaRedTuberias(const list<Paso> &plan)
     listaCanalizacionTuberias.push_back({it->fil, it->col, it->op});
     it++;
   }
+}
+
+// =========================================================================
+// ALGORITMOS DE BÚSQUEDA (NIVEL 2)
+// =========================================================================
+
+list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, const estado& destino) {
+    // La cola de estados por explorar (Abierta) y la memoria de estados ya visitados (Cerrados)
+    queue<nodo> abierta;
+    set<estado> cerrados;
+
+    // Metemos el estado inicial en la cola y lo marcamos como visitado
+    nodo inicial;
+    inicial.st = origen;
+    abierta.push(inicial);
+    cerrados.insert(origen);
+
+    while (!abierta.empty()) {
+        // Sacamos el primer nodo de la cola para evaluarlo
+        nodo actual = abierta.front();
+        abierta.pop();
+
+        // 1. ¿HEMOS LLEGADO A LA META?
+        // Gracias a que sobrecargamos el operador == en el .hpp, esto solo comprueba fila y columna
+        if (actual.st == destino) {
+            return actual.secuencia; // ¡Devolvemos la lista de instrucciones ganadora!
+        }
+
+        // 2. GENERAMOS LOS HIJOS (Posibles siguientes acciones)
+
+        // --- HIJO 1: GIRAR A LA IZQUIERDA (TURN_SL) ---
+        nodo hijo_sl = actual;
+        // Girar a la izquierda es restar 1 a la orientación (o sumar 7) en un reloj de 8 horas
+        hijo_sl.st.orientacion = (actual.st.orientacion + 7) % 8;
+        if (cerrados.find(hijo_sl.st) == cerrados.end()) {
+            hijo_sl.secuencia.push_back(TURN_SL);
+            cerrados.insert(hijo_sl.st);
+            abierta.push(hijo_sl);
+        }
+
+        // --- HIJO 2: GIRAR A LA DERECHA (TURN_SR) ---
+        nodo hijo_sr = actual;
+        // Girar a la derecha es sumar 1 a la orientación
+        hijo_sr.st.orientacion = (actual.st.orientacion + 1) % 8;
+        if (cerrados.find(hijo_sr.st) == cerrados.end()) {
+            hijo_sr.secuencia.push_back(TURN_SR);
+            cerrados.insert(hijo_sr.st);
+            abierta.push(hijo_sr);
+        }
+
+        // --- HIJO 3: AVANZAR (WALK) ---
+        nodo hijo_walk = actual;
+        int nf = actual.st.fila;
+        int nc = actual.st.columna;
+
+        // Calculamos dónde caeríamos si avanzamos según hacia dónde miramos
+        switch(actual.st.orientacion) {
+            case 0: nf--; break;           // Norte
+            case 1: nf--; nc++; break;     // Noreste
+            case 2: nc++; break;           // Este
+            case 3: nf++; nc++; break;     // Sureste
+            case 4: nf++; break;           // Sur
+            case 5: nf++; nc--; break;     // Suroeste
+            case 6: nc--; break;           // Oeste
+            case 7: nf--; nc--; break;     // Noroeste
+        }
+
+        // Comprobamos si el paso es legal (dentro del mapa)
+        if (nf >= 0 && nf < mapaResultado.size() && nc >= 0 && nc < mapaResultado[0].size()) {
+            unsigned char celda = mapaResultado[nf][nc];
+            
+            // Filtro de viabilidad: No muros, no precipicios, no agua, no bosque (asumiendo que no hay zapatillas de inicio)
+            if (celda != 'P' && celda != 'M' && celda != 'B' && celda != 'A') {
+                
+                // Filtro de altura: Desnivel máximo de 1
+                int dif_cota = mapaCotas[nf][nc] - mapaCotas[actual.st.fila][actual.st.columna];
+                if (abs(dif_cota) <= 1) {
+                    
+                    hijo_walk.st.fila = nf;
+                    hijo_walk.st.columna = nc;
+                    
+                    // Si nunca hemos estado en esta casilla mirando hacia allá, la añadimos
+                    if (cerrados.find(hijo_walk.st) == cerrados.end()) {
+                        hijo_walk.secuencia.push_back(WALK);
+                        cerrados.insert(hijo_walk.st);
+                        abierta.push(hijo_walk);
+                    }
+                }
+            }
+        }
+    }
+
+    // Si la cola se vacía y no encontramos la meta, devolvemos una lista vacía (no hay camino)
+    return list<Action>(); 
 }
