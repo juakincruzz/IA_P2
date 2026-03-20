@@ -3,6 +3,10 @@
 #include <iostream>
 #include <queue>
 #include <set>
+#include <map>
+#include <vector>
+
+
 
 using namespace std;
 
@@ -187,7 +191,26 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_2(Sensores sensores) {
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_3(Sensores sensores) {
-  return IDLE;
+  if (!hayPlan) {
+        estado origen;
+        origen.fila = sensores.posF;
+        origen.columna = sensores.posC;
+        origen.orientacion = sensores.rumbo;
+
+        estado destino;
+        destino.fila = sensores.BelPosF;
+        destino.columna = sensores.BelPosC;
+
+        plan = AEstrella(origen, destino);
+        hayPlan = true;
+    }
+
+    Action accion = IDLE;
+    if (hayPlan && !plan.empty()) {
+        accion = plan.front();
+        plan.pop_front();
+    }
+  return accion;
 }
 
 /**
@@ -591,4 +614,133 @@ void ComportamientoTecnico::VisualizaPlan(const ubicacion &st,
   }
 }
 
+// 1. Coste de Avanzar (WALK) para el Técnico
+int costeWALKTecnico(char superficie) {
+    if (superficie == 'A') return 90;
+    if (superficie == 'H') return 10;
+    if (superficie == 'S') return 4;
+    return 3; // Resto de casillas (C, U, D, X...)
+}
 
+// 2. Coste de Girar (TURN_SL / TURN_SR) para el Técnico
+int costeGIROTecnico(char superficie) {
+    if (superficie == 'A') return 5;
+    if (superficie == 'H') return 2;
+    if (superficie == 'S') return 1;
+    return 1; // Resto de casillas
+}
+
+// 3. Heurística Admisible (Distancia de Chebyshev * Coste Mínimo)
+int heuristica(const ComportamientoTecnico::estado& actual, const ComportamientoTecnico::estado& meta) {
+    // La distancia máxima entre filas y columnas.
+    // Lo multiplicamos por 3 porque es el coste de energía más bajo posible al avanzar (1 casilla normal = 3 de energía).
+    // Así garantizamos que NUNCA sobreestimamos el coste real (heurística admisible).
+    return std::max(abs(actual.fila - meta.fila), abs(actual.columna - meta.columna)) * 3;
+}
+
+list<Action> ComportamientoTecnico::AEstrella(const estado& origen, const estado& destino) {
+    // La cola de prioridad: Ordena automáticamente sacando primero los nodos con menor 'f'
+    priority_queue<nodo, vector<nodo>, greater<nodo>> abierta;
+    
+    // Diccionario de los mejores costes 'g' encontrados para cada estado
+    map<estado, int> g_costes;
+
+    nodo inicial;
+    inicial.st = origen;
+    inicial.coste_g = 0;
+    inicial.heuristica_h = heuristica(origen, destino);
+    inicial.f = inicial.coste_g + inicial.heuristica_h;
+
+    abierta.push(inicial);
+    g_costes[origen] = 0;
+
+    while (!abierta.empty()) {
+        nodo actual = abierta.top();
+        abierta.pop();
+
+        // 1. ¿Llegamos a la meta?
+        if (actual.st == destino) {
+            return actual.secuencia; 
+        }
+
+        // 2. Si este nodo es una versión vieja y más cara de un estado que ya mejoramos, lo saltamos
+        if (actual.coste_g > g_costes[actual.st]) continue;
+
+        char superficie_actual = mapaResultado[actual.st.fila][actual.st.columna];
+        int coste_giro = costeGIROTecnico(superficie_actual);
+
+        // --- HIJO 1: GIRAR IZQUIERDA (TURN_SL) ---
+        nodo hijo_sl = actual;
+        hijo_sl.st.orientacion = (actual.st.orientacion + 7) % 8;
+        hijo_sl.coste_g = actual.coste_g + coste_giro;
+        
+        // Solo lo exploramos si es la primera vez que llegamos a este estado o si es un camino más barato
+        if (g_costes.find(hijo_sl.st) == g_costes.end() || hijo_sl.coste_g < g_costes[hijo_sl.st]) {
+            hijo_sl.secuencia.push_back(TURN_SL);
+            hijo_sl.heuristica_h = heuristica(hijo_sl.st, destino);
+            hijo_sl.f = hijo_sl.coste_g + hijo_sl.heuristica_h;
+            g_costes[hijo_sl.st] = hijo_sl.coste_g;
+            abierta.push(hijo_sl);
+        }
+
+        // --- HIJO 2: GIRAR DERECHA (TURN_SR) ---
+        nodo hijo_sr = actual;
+        hijo_sr.st.orientacion = (actual.st.orientacion + 1) % 8;
+        hijo_sr.coste_g = actual.coste_g + coste_giro;
+        
+        if (g_costes.find(hijo_sr.st) == g_costes.end() || hijo_sr.coste_g < g_costes[hijo_sr.st]) {
+            hijo_sr.secuencia.push_back(TURN_SR);
+            hijo_sr.heuristica_h = heuristica(hijo_sr.st, destino);
+            hijo_sr.f = hijo_sr.coste_g + hijo_sr.heuristica_h;
+            g_costes[hijo_sr.st] = hijo_sr.coste_g;
+            abierta.push(hijo_sr);
+        }
+
+        // --- HIJO 3: AVANZAR (WALK) ---
+        int nf = actual.st.fila;
+        int nc = actual.st.columna;
+
+        switch(actual.st.orientacion) {
+            case 0: nf--; break;           // Norte
+            case 1: nf--; nc++; break;     // Noreste
+            case 2: nc++; break;           // Este
+            case 3: nf++; nc++; break;     // Sureste
+            case 4: nf++; break;           // Sur
+            case 5: nf++; nc--; break;     // Suroeste
+            case 6: nc--; break;           // Oeste
+            case 7: nf--; nc--; break;     // Noroeste
+        }
+
+        // Comprobamos límites del mapa
+        if (nf >= 0 && nf < mapaResultado.size() && nc >= 0 && nc < mapaResultado[0].size()) {
+            char sup_destino = mapaResultado[nf][nc];
+            
+            // Viabilidad física: Muros, precipicios y bosques sin zapatillas
+            bool es_obstaculo = (sup_destino == 'P' || sup_destino == 'M' || (sup_destino == 'B' && !tiene_zapatillas));
+
+            if (!es_obstaculo) {
+                // Viabilidad de altura
+                int dif_cota = mapaCotas[nf][nc] - mapaCotas[actual.st.fila][actual.st.columna];
+                int max_desnivel = tiene_zapatillas ? 2 : 1;
+                
+                if (abs(dif_cota) <= max_desnivel) {
+                    nodo hijo_walk = actual;
+                    hijo_walk.st.fila = nf;
+                    hijo_walk.st.columna = nc;
+                    
+                    int coste_avance = costeWALKTecnico(superficie_actual);
+                    hijo_walk.coste_g = actual.coste_g + coste_avance;
+                    
+                    if (g_costes.find(hijo_walk.st) == g_costes.end() || hijo_walk.coste_g < g_costes[hijo_walk.st]) {
+                        hijo_walk.secuencia.push_back(WALK);
+                        hijo_walk.heuristica_h = heuristica(hijo_walk.st, destino);
+                        hijo_walk.f = hijo_walk.coste_g + hijo_walk.heuristica_h;
+                        g_costes[hijo_walk.st] = hijo_walk.coste_g;
+                        abierta.push(hijo_walk);
+                    }
+                }
+            }
+        }
+    }
+    return list<Action>(); // Si se vacía la cola y no hay ruta
+}

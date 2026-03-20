@@ -45,6 +45,7 @@ public:
                        Comportamiento(mapaR, mapaC) {
     // Inicializar Variables de Estado
     last_action = IDLE ;
+    tiene_zapatillas = false;
   }
 
   ComportamientoTecnico(const ComportamientoTecnico &comport): Comportamiento(comport) {}
@@ -116,6 +117,37 @@ public:
  * @return Acción a realizar.
  */
   Action ComportamientoTecnicoNivel_6(Sensores sensores);
+
+  // Estructura de estado (igual que la del ingeniero)
+  struct estado {
+      int fila;
+      int columna;
+      int orientacion;
+
+      bool operator<(const estado& otro) const {
+          if (fila != otro.fila) return fila < otro.fila;
+          if (columna != otro.columna) return columna < otro.columna;
+          return orientacion < otro.orientacion;
+      }
+      bool operator==(const estado& otro) const {
+          return fila == otro.fila && columna == otro.columna;
+      }
+  };
+
+  // Estructura del Nodo para el algoritmo A*
+  struct nodo {
+      estado st;
+      std::list<Action> secuencia;
+      int coste_g; // Batería gastada hasta llegar aquí
+      int heuristica_h; // Estimación de batería hasta la meta
+      int f; // f = g + h
+
+      // IMPORTANTE: La cola de prioridad en C++ ordena de mayor a menor por defecto.
+      // Sobrecargamos el operador > para que ponga primero los nodos con MENOR 'f' (los más baratos).
+      bool operator>(const nodo& otro) const {
+          return f > otro.f;
+      }
+  };
 
 protected:
   // =========================================================================
@@ -189,6 +221,11 @@ private:
   // =========================================================================
   Action last_action; // Guarda la última acción tomada (útil para planificación)
   
+  bool tiene_zapatillas;
+  bool hayPlan;
+  list<Action> plan;
+  list<Action> AEstrella(const estado& origen, const estado& destino);
+
 };
 
 #endif
