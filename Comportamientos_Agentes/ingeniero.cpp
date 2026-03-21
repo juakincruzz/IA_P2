@@ -411,16 +411,12 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
 
         case ING6_EXPLORAR:
         {
-            // --- PROTECCION DE ENERGIA ---
-            if (sensores.energia < 500) return IDLE;
-
             // --- INTENTAR PLANIFICAR TUBERIAS ---
             if (sensores.BelPosF != -1 && sensores.BelPosC != -1) {
                 bool hay_U = false;
                 for (int r = 0; r < (int)mapaResultado.size() && !hay_U; r++)
                     for (int c2 = 0; c2 < (int)mapaResultado[0].size() && !hay_U; c2++)
                         if (mapaResultado[r][c2] == 'U') hay_U = true;
-
                 if (hay_U) {
                     list<Paso> plan_candidato = PlanificaTuberias(sensores.BelPosF, sensores.BelPosC);
                     if (!plan_candidato.empty()) {
@@ -435,74 +431,79 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
                 }
             }
 
-            // --- SEGUIR RUTA PENDIENTE ---
-            if (!ruta_actual.empty()) {
-                Action a = ruta_actual.front();
-                ruta_actual.pop_front();
-                if (a == WALK) {
-                    char enf = sensores.superficie[2];
-                    if (enf == 'M' || enf == 'P') { ruta_actual.clear(); return TURN_SR; }
-                    int dif_h = sensores.cota[2] - sensores.cota[0];
+            // --- PROTECCION DE ENERGIA ---
+            if (sensores.energia < 100) return IDLE;
+
+            // --- EXPLORACION REACTIVA DIRIGIDA HACIA LA BELKANITA ---
+            // Evaluar las 3 casillas frontales (izq=1, centro=2, der=3) del sensor
+            // Elegir la que nos acerque mas a la Belkanita, evitando obstaculos
+            {
+                int obj_f = sensores.BelPosF != -1 ? sensores.BelPosF : sensores.posF + 5;
+                int obj_c = sensores.BelPosC != -1 ? sensores.BelPosC : sensores.posC;
+                
+                // Calcular posicion que tendriamos al avanzar segun orientacion actual
+                int df[8] = {-1,-1,0,1,1,1,0,-1};
+                int dc[8] = {0,1,1,1,0,-1,-1,-1};
+                int ori = sensores.rumbo;
+                
+                // Posiciones de las 3 casillas frontales en coordenadas del mapa
+                // Centro: orientacion actual
+                int cf = sensores.posF + df[ori];
+                int cc = sensores.posC + dc[ori];
+                // Izquierda: orientacion - 1
+                int lo = (ori + 7) % 8;
+                int lf = sensores.posF + df[lo];
+                int lc = sensores.posC + dc[lo];
+                // Derecha: orientacion + 1
+                int ro = (ori + 1) % 8;
+                int rf = sensores.posF + df[ro];
+                int rc = sensores.posC + dc[ro];
+                
+                // Evaluar cada opcion: viable + coste + distancia al objetivo
+                int mejor_accion = -1; // -1=nada, 0=centro, 1=izq, 2=der
+                int mejor_score = 999999;
+                
+                // Funcion inline para evaluar una casilla
+                // idx: 1=izq, 2=centro, 3=der en sensores.superficie
+                for (int opt = 0; opt < 3; opt++) {
+                    int idx = (opt == 0) ? 2 : (opt == 1) ? 1 : 3; // centro, izq, der
+                    int nf = (opt == 0) ? cf : (opt == 1) ? lf : rf;
+                    int nc = (opt == 0) ? cc : (opt == 1) ? lc : rc;
+                    
+                    char sup = sensores.superficie[idx];
+                    if (sup == 'M' || sup == 'P') continue;
+                    if (sup == 'B' && !tiene_zapatillas) continue;
+                    
+                    int dif_h = sensores.cota[idx] - sensores.cota[0];
                     int max_d = tiene_zapatillas ? 2 : 1;
-                    if (abs(dif_h) > max_d) { ruta_actual.clear(); return TURN_SR; }
-                    if (sensores.agentes[2] != '_') { ruta_actual.clear(); return IDLE; }
-                }
-                return a;
-            }
-
-            // --- BUSCAR FRONTERA ---
-            if (sensores.choque) ruta_actual.clear();
-            {
-                int objetivo_f = sensores.posF, objetivo_c = sensores.posC;
-                if (sensores.BelPosF != -1) { objetivo_f = sensores.BelPosF; objetivo_c = sensores.BelPosC; }
-
-                int dest_f = -1, dest_c = -1;
-                int min_dist = 999999;
-                for (int r = 0; r < (int)mapaResultado.size(); r++) {
-                    for (int c2 = 0; c2 < (int)mapaResultado[0].size(); c2++) {
-                        char celda = mapaResultado[r][c2];
-                        if (celda == '?' || celda == 'M' || celda == 'P') continue;
-                        if (celda == 'B' && !tiene_zapatillas) continue;
-                        bool frontera = false;
-                        if (r > 0 && mapaResultado[r-1][c2] == '?') frontera = true;
-                        if (r < (int)mapaResultado.size()-1 && mapaResultado[r+1][c2] == '?') frontera = true;
-                        if (c2 > 0 && mapaResultado[r][c2-1] == '?') frontera = true;
-                        if (c2 < (int)mapaResultado[0].size()-1 && mapaResultado[r][c2+1] == '?') frontera = true;
-                        if (frontera) {
-                            int d = abs(sensores.posF - r) + abs(sensores.posC - c2) + abs(objetivo_f - r) + abs(objetivo_c - c2);
-                            if (celda == 'H') d += 5;
-                            if (celda == 'A') d += 50;
-                            if (d < min_dist) { min_dist = d; dest_f = r; dest_c = c2; }
-                        }
+                    if (abs(dif_h) > max_d) continue;
+                    
+                    // Calcular score: distancia al objetivo + coste del terreno
+                    int dist = abs(obj_f - nf) + abs(obj_c - nc);
+                    int coste_terreno = 0;
+                    if (sup == 'A') coste_terreno = 30; // Penalizar agua fuerte
+                    else if (sup == 'H') coste_terreno = 3;
+                    else coste_terreno = 0; // C, S, D, U, X son baratos
+                    
+                    int score = dist * 2 + coste_terreno;
+                    if (opt != 0) score += 2; // Penalizar girar (necesita 1 turno extra)
+                    
+                    if (score < mejor_score) {
+                        mejor_score = score;
+                        mejor_accion = opt;
                     }
                 }
-                if (dest_f != -1) {
-                    estado origen; origen.fila = sensores.posF; origen.columna = sensores.posC; origen.orientacion = sensores.rumbo;
-                    estado destino; destino.fila = dest_f; destino.columna = dest_c;
-                    ruta_actual = BusquedaEnAnchuraN6(origen, destino);
-                    if (!ruta_actual.empty()) {
-                        Action a = ruta_actual.front();
-                        ruta_actual.pop_front();
-                        if (a == WALK) {
-                            char enf = sensores.superficie[2];
-                            if (enf == 'M' || enf == 'P') { ruta_actual.clear(); return TURN_SR; }
-                            int dif_h = sensores.cota[2] - sensores.cota[0];
-                            int max_d = tiene_zapatillas ? 2 : 1;
-                            if (abs(dif_h) > max_d) { ruta_actual.clear(); return TURN_SR; }
-                        }
-                        return a;
-                    }
+                
+                if (mejor_accion == 0) {
+                    // Avanzar recto
+                    if (sensores.agentes[2] == '_') return WALK;
+                    else return TURN_SR;
                 }
-            }
-
-            // --- FALLBACK REACTIVO PURO ---
-            {
-                char enf = sensores.superficie[2];
-                int dif_h = sensores.cota[2] - sensores.cota[0];
-                int max_d = tiene_zapatillas ? 2 : 1;
-                bool puede = (enf != 'M' && enf != 'P' && abs(dif_h) <= max_d && sensores.agentes[2] == '_');
-                if (puede) return WALK;
-                else return TURN_SR;
+                if (mejor_accion == 1) return TURN_SL;
+                if (mejor_accion == 2) return TURN_SR;
+                
+                // Ninguna opcion viable: girar mas (180 grados)
+                return TURN_SR;
             }
         }
 
