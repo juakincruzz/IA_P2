@@ -33,6 +33,10 @@ public:
    */
   ComportamientoTecnico(unsigned int size = 0) : Comportamiento(size) {
     // Inicializar Variables de Estado
+    last_action = IDLE;
+    tiene_zapatillas = false;
+    hayPlan = false;
+    estado_obra_tec = TEC_ESPERAR_AVISO;
   }
 
   /**
@@ -227,6 +231,7 @@ private:
   bool hayPlan;
   list<Action> plan;
   list<Action> AEstrella(const estado& origen, const estado& destino);
+  list<Action> AEstrellaN6(const estado& origen, const estado& destino);
 
   // Nivel 5
   // --- Variables Nivel 5 (Máquina de Estados) ---

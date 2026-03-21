@@ -27,6 +27,9 @@ public:
     last_action = IDLE ;
     tiene_zapatillas = false ;
     giro45Izq = 0 ; 
+    intentos_exploracion = 0;
+    fase_construccion = false;
+    estado_obra_ing_6 = ING6_EXPLORAR;
   }
 
   /**
@@ -39,6 +42,11 @@ public:
                          Comportamiento(mapaR, mapaC) {
     hayPlan = false ;
     hayPlanTuberias = false ;
+    tiene_zapatillas = false ;
+    last_action = IDLE ;
+    giro45Izq = 0 ;
+    intentos_exploracion = 0;
+    fase_construccion = false;
 
     estado_obra_ing = ING_PLANIFICAR ;
   }
@@ -279,6 +287,11 @@ private:
     EstadoObraIng estado_obra_ing;
     Paso paso_actual;            // La tubería que estamos instalando ahora mismo
     list<Action> ruta_actual; // La ruta paso a paso para llegar a la casilla
+
+    // Nivel 6 - variables adicionales
+    list<Action> BusquedaEnAnchuraN6(const estado& origen, const estado& destino);
+    int intentos_exploracion;   // Contador de intentos fallidos de exploración
+    bool fase_construccion;     // true cuando ya tenemos plan de tuberías y estamos construyendo
 };
 
 
