@@ -434,76 +434,51 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
             // --- PROTECCION DE ENERGIA ---
             if (sensores.energia < 100) return IDLE;
 
-            // --- EXPLORACION REACTIVA DIRIGIDA HACIA LA BELKANITA ---
-            // Evaluar las 3 casillas frontales (izq=1, centro=2, der=3) del sensor
-            // Elegir la que nos acerque mas a la Belkanita, evitando obstaculos
+            // --- EXPLORACION REACTIVA PURA (estilo nivel 0 mejorado) ---
+            // Primero: evaluar las 3 casillas frontales con filtro de altura
             {
-                int obj_f = sensores.BelPosF != -1 ? sensores.BelPosF : sensores.posF + 5;
-                int obj_c = sensores.BelPosC != -1 ? sensores.BelPosC : sensores.posC;
-                
-                // Calcular posicion que tendriamos al avanzar segun orientacion actual
-                int df[8] = {-1,-1,0,1,1,1,0,-1};
-                int dc[8] = {0,1,1,1,0,-1,-1,-1};
-                int ori = sensores.rumbo;
-                
-                // Posiciones de las 3 casillas frontales en coordenadas del mapa
-                // Centro: orientacion actual
-                int cf = sensores.posF + df[ori];
-                int cc = sensores.posC + dc[ori];
-                // Izquierda: orientacion - 1
-                int lo = (ori + 7) % 8;
-                int lf = sensores.posF + df[lo];
-                int lc = sensores.posC + dc[lo];
-                // Derecha: orientacion + 1
-                int ro = (ori + 1) % 8;
-                int rf = sensores.posF + df[ro];
-                int rc = sensores.posC + dc[ro];
-                
-                // Evaluar cada opcion: viable + coste + distancia al objetivo
-                int mejor_accion = -1; // -1=nada, 0=centro, 1=izq, 2=der
-                int mejor_score = 999999;
-                
-                // Funcion inline para evaluar una casilla
-                // idx: 1=izq, 2=centro, 3=der en sensores.superficie
-                for (int opt = 0; opt < 3; opt++) {
-                    int idx = (opt == 0) ? 2 : (opt == 1) ? 1 : 3; // centro, izq, der
-                    int nf = (opt == 0) ? cf : (opt == 1) ? lf : rf;
-                    int nc = (opt == 0) ? cc : (opt == 1) ? lc : rc;
-                    
-                    char sup = sensores.superficie[idx];
-                    if (sup == 'M' || sup == 'P') continue;
-                    if (sup == 'B' && !tiene_zapatillas) continue;
-                    
-                    int dif_h = sensores.cota[idx] - sensores.cota[0];
-                    int max_d = tiene_zapatillas ? 2 : 1;
-                    if (abs(dif_h) > max_d) continue;
-                    
-                    // Calcular score: distancia al objetivo + coste del terreno
-                    int dist = abs(obj_f - nf) + abs(obj_c - nc);
-                    int coste_terreno = 0;
-                    if (sup == 'A') coste_terreno = 30; // Penalizar agua fuerte
-                    else if (sup == 'H') coste_terreno = 3;
-                    else coste_terreno = 0; // C, S, D, U, X son baratos
-                    
-                    int score = dist * 2 + coste_terreno;
-                    if (opt != 0) score += 2; // Penalizar girar (necesita 1 turno extra)
-                    
-                    if (score < mejor_score) {
-                        mejor_score = score;
-                        mejor_accion = opt;
-                    }
+                char i_s = ViablePorAlturaI(sensores.superficie[1], sensores.cota[1] - sensores.cota[0], tiene_zapatillas);
+                char c_s = ViablePorAlturaI(sensores.superficie[2], sensores.cota[2] - sensores.cota[0], tiene_zapatillas);
+                char d_s = ViablePorAlturaI(sensores.superficie[3], sensores.cota[3] - sensores.cota[0], tiene_zapatillas);
+
+                // Buscar C, S, D, U, X primero (terreno barato)
+                bool izq_buena = (i_s == 'C' || i_s == 'S' || i_s == 'D' || i_s == 'U' || i_s == 'X');
+                bool cen_buena = (c_s == 'C' || c_s == 'S' || c_s == 'D' || c_s == 'U' || c_s == 'X');
+                bool der_buena = (d_s == 'C' || d_s == 'S' || d_s == 'D' || d_s == 'U' || d_s == 'X');
+
+                // Seleccion con aleatoriedad en bifurcaciones
+                if (cen_buena && izq_buena && der_buena) {
+                    int r = rand() % 3;
+                    if (r == 0) return WALK;
+                    if (r == 1) return TURN_SL;
+                    return TURN_SR;
                 }
-                
-                if (mejor_accion == 0) {
-                    // Avanzar recto
-                    if (sensores.agentes[2] == '_') return WALK;
-                    else return TURN_SR;
-                }
-                if (mejor_accion == 1) return TURN_SL;
-                if (mejor_accion == 2) return TURN_SR;
-                
-                // Ninguna opcion viable: girar mas (180 grados)
-                return TURN_SR;
+                if (cen_buena && izq_buena) return (rand() % 2 == 0) ? WALK : TURN_SL;
+                if (cen_buena && der_buena) return (rand() % 2 == 0) ? WALK : TURN_SR;
+                if (izq_buena && der_buena) return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
+                if (cen_buena) return WALK;
+                if (izq_buena) return TURN_SL;
+                if (der_buena) return TURN_SR;
+
+                // Plan B: hierba (coste 6 por paso, aceptable)
+                bool izq_h = (i_s == 'H');
+                bool cen_h = (c_s == 'H');
+                bool der_h = (d_s == 'H');
+                if (cen_h) return WALK;
+                if (izq_h && der_h) return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
+                if (izq_h) return TURN_SL;
+                if (der_h) return TURN_SR;
+
+                // Plan C: agua (coste 60, solo si no hay otra opcion)
+                bool izq_a = (i_s == 'A');
+                bool cen_a = (c_s == 'A');
+                bool der_a = (d_s == 'A');
+                if (cen_a && sensores.agentes[2] == '_') return WALK;
+                if (izq_a) return TURN_SL;
+                if (der_a) return TURN_SR;
+
+                // Nada viable: girar para buscar nueva direccion
+                return TURN_SL;
             }
         }
 
