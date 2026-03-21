@@ -365,18 +365,17 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
             return COME; // ¡Llamamos al Técnico! Sus sensores venpaca, GotoF y GotoC se encenderán
 
         case ING_ESPERAR_TECNICO:
-            // Si vemos al técnico ('t') en la casilla justo delante nuestra, ¡estamos alineados!
-            if (sensores.agentes[2] == 't') {
+            // ¡DOBLE COMPROBACIÓN! Vemos al técnico ('t') Y él nos está mirando ('enfrente')
+            if (sensores.agentes[2] == 't' && sensores.enfrente) {
                 estado_obra_ing = ING_INSTALAR;
-                return INSTALL; // Devolvemos INSTALL. En este instante, el Técnico también lo hará.
+                return INSTALL; 
             }
-            // Si no lo vemos, giramos sobre nosotros mismos como un radar hasta encontrarlo
-            return TURN_SR;
+            return TURN_SR; // Giramos como un radar
 
         case ING_INSTALAR:
             // El tubo ya está puesto. Volvemos al estado inicial para sacar el siguiente tubo
             estado_obra_ing = ING_PLANIFICAR;
-            return IDLE;
+            return COME;
     } // Fin del switch
 
     // ---------------------------------------------------------------------
@@ -900,7 +899,7 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, co
             unsigned char celda = mapaResultado[nf][nc];
             
             // Filtro de viabilidad: No muros, no precipicios, no agua, no bosque (asumiendo que no hay zapatillas de inicio)
-            if (celda != 'P' && celda != 'M' && celda != 'B' && celda != 'A') {
+            if (celda != 'P' && celda != 'M') {
                 
                 // Filtro de altura: Desnivel máximo de 1
                 int dif_cota = mapaCotas[nf][nc] - mapaCotas[actual.st.fila][actual.st.columna];

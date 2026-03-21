@@ -228,28 +228,42 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_4(Sensores sensores) {
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
-  if (sensores.tiempo == 0) estado_obra_tec = TEC_ESPERAR_AVISO;
+  static int dest_f = -1;
+    static int dest_c = -1;
 
-  switch(estado_obra_tec) {
+    if (sensores.tiempo == 0) {
+        estado_obra_tec = TEC_ESPERAR_AVISO;
+        ruta_actual_tec.clear();
+        dest_f = -1;
+        dest_c = -1;
+    }
+
+    // ¡NUEVO!: El Técnico siempre escucha al Jefe, pase lo que pase.
+    // Si el Jefe se mueve al siguiente tubo, actualizamos el destino al vuelo.
+    if (sensores.venpaca) {
+        if (dest_f != sensores.GotoF || dest_c != sensores.GotoC) {
+            dest_f = sensores.GotoF;
+            dest_c = sensores.GotoC;
+            cout << "Operario: ¡El Jefe se ha movido! Persiguiendo hacia: " << dest_f << "," << dest_c << endl;
+            estado_obra_tec = TEC_IR_CASILLA;
+            ruta_actual_tec.clear(); // Borramos la ruta vieja
+        }
+    }
+
+    switch(estado_obra_tec) {
 
         case TEC_ESPERAR_AVISO:
-            // Si el jefe nos llama, preparamos las herramientas
-            if (sensores.venpaca) {
-                estado_obra_tec = TEC_IR_CASILLA;
-                ruta_actual_tec.clear(); // Limpiamos rutas viejas por si acaso
-                return IDLE;
-            }
-            return IDLE; // Descansamos ahorrando batería
+            return IDLE; 
 
         case TEC_IR_CASILLA:
-            // FRENO DE MANO: ¿Estamos ya en una casilla ortogonal adyacente al Ingeniero?
-            // La suma de las diferencias absolutas de fila y columna debe ser exactamente 1.
-            if (abs(sensores.posF - sensores.GotoF) + abs(sensores.posC - sensores.GotoC) == 1) {
+            // Si estamos a distancia 1 (adyacentes), paramos y nos alineamos
+            if (abs(sensores.posF - dest_f) + abs(sensores.posC - dest_c) <= 1) {
+                cout << "Operario: ¡Estoy al lado! Empezando maniobra de alineación." << endl;
                 estado_obra_tec = TEC_ALINEARSE;
                 return IDLE;
             }
 
-            // Si no tenemos ruta, calculamos hacia (GotoF, GotoC) con A*
+            // Si no tenemos ruta, calculamos con A*
             if (ruta_actual_tec.empty()) {
                 estado origen; 
                 origen.fila = sensores.posF; 
@@ -257,42 +271,40 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
                 origen.orientacion = sensores.rumbo;
                 
                 estado destino; 
-                destino.fila = sensores.GotoF; 
-                destino.columna = sensores.GotoC;
+                destino.fila = dest_f; 
+                destino.columna = dest_c;
                 
                 ruta_actual_tec = AEstrella(origen, destino);
+                
+                // Si falla el A* (quizás el jefe está abriendo camino con DIG/RAISE)
+                // Nos quedamos quietos este instante sin atascar la consola
+                if (ruta_actual_tec.empty()) return IDLE;
             }
 
-            // Damos el siguiente paso de la ruta
+            // Damos el siguiente paso
             if (!ruta_actual_tec.empty()) {
                 Action a = ruta_actual_tec.front();
                 ruta_actual_tec.pop_front();
                 return a;
             }
-            return IDLE; // Por si nos atascamos
+            return IDLE;
 
         case TEC_ALINEARSE:
-            // ¿Vemos al Ingeniero ('i') en la casilla de delante?
+            // Buscamos al Ingeniero ('i')
             if (sensores.agentes[2] == 'i') {
-                
-                // Si lo vemos, comprobamos el sensor de confirmación mutua
                 if (sensores.enfrente) {
-                    // ¡Sincronización perfecta! Instalamos y volvemos a esperar.
+                    cout << "Operario: ¡Contacto visual perfecto! INSTALANDO TUBERÍA." << endl;
                     estado_obra_tec = TEC_ESPERAR_AVISO;
                     return INSTALL;
                 } else {
-                    // Lo vemos, pero él aún está girando su radar y no nos ve. 
-                    // Nos quedamos quietos esperando a que haga contacto visual.
                     return IDLE; 
                 }
-                
             } else {
-                // Si no lo tenemos delante, giramos sobre nosotros mismos para buscarlo
-                return TURN_SR; 
+                return TURN_SR; // Giramos buscando al jefe
             }
     }
 
-  return IDLE;
+    return IDLE;
 }
 
 /**
@@ -723,7 +735,7 @@ list<Action> ComportamientoTecnico::AEstrella(const estado& origen, const estado
         abierta.pop();
 
         // 1. ¿Llegamos a la meta?
-        if (actual.st == destino) {
+        if (abs(actual.st.fila - destino.fila) + abs(actual.st.columna - destino.columna) <= 1) {
             return actual.secuencia; 
         }
 
@@ -780,7 +792,7 @@ list<Action> ComportamientoTecnico::AEstrella(const estado& origen, const estado
             char sup_destino = mapaResultado[nf][nc];
             
             // Viabilidad física: Muros, precipicios y bosques sin zapatillas
-            bool es_obstaculo = (sup_destino == 'P' || sup_destino == 'M' || (sup_destino == 'B' && !tiene_zapatillas));
+            bool es_obstaculo = (sup_destino == 'P' || sup_destino == 'M');
 
             if (!es_obstaculo) {
                 // Viabilidad de altura
