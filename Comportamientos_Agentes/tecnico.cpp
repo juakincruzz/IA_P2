@@ -313,7 +313,93 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
-  return IDLE;
+  // 1. ¡OBLIGATORIO EN NIVEL 6! El Técnico abre los ojos y mapea.
+    ActualizarMapa(sensores);
+
+    static int dest_f = -1;
+    static int dest_c = -1;
+
+    // Parche de inicialización
+    if (sensores.tiempo == 0) {
+        estado_obra_tec = TEC_ESPERAR_AVISO;
+        ruta_actual_tec.clear();
+        dest_f = -1;
+        dest_c = -1;
+        cout << "Operario: ¡Modo a ciegas activado! Esperando señal..." << endl;
+    }
+
+    // 2. ¡EL RADAR DE CHOQUES! 
+    // Si nos hemos chocado contra algo que A* pensaba que estaba libre ('?'),
+    // reseteamos la ruta para que el A* vuelva a calcular esquivando el nuevo muro.
+    if (sensores.choque) {
+        cout << "Operario: ¡Muro oculto detectado! Recalculando ruta..." << endl;
+        ruta_actual_tec.clear();
+    }
+
+    // 3. El radar del Jefe (igual que en Nivel 5)
+    if (sensores.venpaca) {
+        if (dest_f != sensores.GotoF || dest_c != sensores.GotoC) {
+            dest_f = sensores.GotoF;
+            dest_c = sensores.GotoC;
+            estado_obra_tec = TEC_IR_CASILLA;
+            ruta_actual_tec.clear(); 
+        }
+    }
+
+    // 4. MÁQUINA DE ESTADOS
+    switch(estado_obra_tec) {
+
+        case TEC_ESPERAR_AVISO:
+            return IDLE; 
+
+        case TEC_IR_CASILLA:
+            if (abs(sensores.posF - dest_f) + abs(sensores.posC - dest_c) <= 1) {
+                estado_obra_tec = TEC_ALINEARSE;
+                return IDLE;
+            }
+
+            // Si no tenemos ruta, tiramos de A* optimista
+            if (ruta_actual_tec.empty()) {
+                estado origen; 
+                origen.fila = sensores.posF; 
+                origen.columna = sensores.posC; 
+                origen.orientacion = sensores.rumbo;
+                
+                estado destino; 
+                destino.fila = dest_f; 
+                destino.columna = dest_c;
+                
+                ruta_actual_tec = AEstrella(origen, destino);
+                
+                // Si el A* no encuentra nada, damos un pequeño giro para ver terreno nuevo 
+                // y desenquistar la exploración.
+                if (ruta_actual_tec.empty()) {
+                    return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
+                }
+            }
+
+            if (!ruta_actual_tec.empty()) {
+                Action a = ruta_actual_tec.front();
+                ruta_actual_tec.pop_front();
+                return a;
+            }
+            return IDLE;
+
+        case TEC_ALINEARSE:
+            if (sensores.agentes[2] == 'i') {
+                if (sensores.enfrente) {
+                    cout << "Operario: Instalando en Nivel 6." << endl;
+                    estado_obra_tec = TEC_ESPERAR_AVISO;
+                    return INSTALL;
+                } else {
+                    return IDLE; 
+                }
+            } else {
+                return TURN_SR; 
+            }
+    }
+
+    return IDLE;
 }
 
 

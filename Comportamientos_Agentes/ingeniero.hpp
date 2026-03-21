@@ -264,9 +264,23 @@ private:
         ING_INSTALAR
     };
 
+    // Nivel 6
+    enum EstadoObraIng6 {
+        ING6_EXPLORAR,       // <-- ¡El nuevo estado inicial!
+        ING6_PLANIFICAR,
+        ING6_IR_CASILLA,
+        ING6_TERRAFORMAR,
+        ING6_AVISAR_TECNICO,
+        ING6_ESPERAR_TECNICO,
+        ING6_INSTALAR
+    };
+    EstadoObraIng6 estado_obra_ing_6;
+
     EstadoObraIng estado_obra_ing;
     Paso paso_actual;            // La tubería que estamos instalando ahora mismo
     list<Action> ruta_actual; // La ruta paso a paso para llegar a la casilla
 };
+
+
 
 #endif

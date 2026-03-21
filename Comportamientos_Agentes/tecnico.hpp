@@ -239,6 +239,18 @@ private:
 
     EstadoObraTec estado_obra_tec;
     std::list<Action> ruta_actual_tec; // Ruta del técnico hacia el ingeniero
+
+  // Nivel 6
+    enum EstadoObraIng6 {
+        ING6_EXPLORAR,
+        ING6_PLANIFICAR,
+        ING6_IR_CASILLA,
+        ING6_TERRAFORMAR,
+        ING6_AVISAR_TECNICO,
+        ING6_ESPERAR_TECNICO,
+        ING6_INSTALAR
+    };
+    EstadoObraIng6 estado_obra_ing_6;
 };
 
 #endif
