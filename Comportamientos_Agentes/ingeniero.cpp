@@ -117,13 +117,28 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores
   return accion;
 }
 
-/**
- * @brief Comprueba si una celda es de tipo camino transitable.
- * @param c Carácter que representa el tipo de superficie.
- * @return true si es camino ('C'), zapatillas ('D') o meta ('U').
- */
-bool ComportamientoIngeniero::es_camino(unsigned char c) const
-{
+
+
+
+// --- FUNCIONES AUXILIARES NIVEL 1 (INGENIERO) ---
+bool ComportamientoIngeniero::es_transitable_N1(unsigned char c) const {
+  // Ahora el sendero 'S' y los puestos base 'X' también son válidos para explorar
+  return (c == 'C' || c == 'S' || c == 'D' || c == 'U' || c == 'X');
+}
+
+char ComportamientoIngeniero::ViablePorAltura_N1(char casilla, int dif, bool zap) {
+  if (abs(dif) <= 1 || (zap && abs(dif) <= 2)) return casilla;
+  else return 'P'; 
+}
+
+int ComportamientoIngeniero::VeoCasillaInteresante_N1(char i, char c, char d, bool zap) {
+  if (es_transitable_N1(c)) return 2; // 1º Frente
+  if (es_transitable_N1(i)) return 1; // 2º Izquierda
+  if (es_transitable_N1(d)) return 3; // 3º Derecha
+  return 0;
+}
+
+bool ComportamientoIngeniero::es_camino(unsigned char c) const {
   return (c == 'C' || c == 'D' || c == 'U');
 }
 
@@ -133,35 +148,80 @@ bool ComportamientoIngeniero::es_camino(unsigned char c) const
  * @return Acción a realizar.
 */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores) {
-    Action accion = IDLE;
+  // INICIO DEL MÉTODO ComportamientoIngenieroNivel_1
+  Action accion = IDLE;
+  ActualizarMapa(sensores);
 
-    ActualizarMapa(sensores);
+  if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
-    // Si nos chocamos, giramos aleatoriamente para no quedarnos rebotando en una esquina
-    if (sensores.choque) {
-        accion = (rand() % 2 == 0) ? TURN_SL : TURN_SR;
-        last_action = accion;
-        return accion;
-    }
+  // Si estamos en medio de un giro de 90º, lo terminamos
+  if (giro45Izq > 0) {
+      giro45Izq--;
+      last_action = TURN_SL; // El ingeniero evade por la Izquierda
+      return TURN_SL;
+  }
 
-    char i = ViablePorAlturaI_Nivel1(sensores.superficie[1], sensores.cota[1] - sensores.cota[0]);
-    char c = ViablePorAlturaI_Nivel1(sensores.superficie[2], sensores.cota[2] - sensores.cota[0]);
-    char d = ViablePorAlturaI_Nivel1(sensores.superficie[3], sensores.cota[3] - sensores.cota[0]);
+  // 1. ANOTAMOS QUE ACABAMOS DE PISAR ESTA CASILLA
+  matriz_visitas[sensores.posF][sensores.posC]++;
 
-    int pos = VeoCasillaInteresanteI_Nivel1(i, c, d);
+  // 2. VISIÓN Y ANTICOLISIÓN (Igual que antes)
+  // (Nota: para el técnico, quita tiene_zapatillas de ViablePorAltura_N1)
+  char i = ViablePorAltura_N1(sensores.superficie[1], sensores.cota[1] - sensores.cota[0], tiene_zapatillas);
+  char c = ViablePorAltura_N1(sensores.superficie[2], sensores.cota[2] - sensores.cota[0], tiene_zapatillas);
+  char d = ViablePorAltura_N1(sensores.superficie[3], sensores.cota[3] - sensores.cota[0], tiene_zapatillas);
 
-    switch (pos) {
-        case 2: accion = WALK; break;
-        case 1: accion = TURN_SL; break;
-        case 3: accion = TURN_SR; break;
-        default:
-            // Exploración caótica: si no hay caminos, giramos aleatoriamente
-            accion = (rand() % 2 == 0) ? TURN_SL : TURN_SR;
-            break;
-    }
+  if (sensores.agentes[1] != '_') i = 'P';
+  if (sensores.agentes[2] != '_') c = 'P';
+  if (sensores.agentes[3] != '_') d = 'P';
 
-    last_action = accion;
-    return accion;
+  // 3. CALCULAR COORDENADAS DE LAS CASILLAS ADYACENTES
+  ubicacion actual = {sensores.posF, sensores.posC, sensores.rumbo};
+  ubicacion u_frente = Delante(actual);
+  
+  ubicacion u_izq = actual;
+  u_izq.brujula = (Orientacion)((actual.brujula + 7) % 8);
+  u_izq = Delante(u_izq);
+  
+  ubicacion u_der = actual;
+  u_der.brujula = (Orientacion)((actual.brujula + 1) % 8);
+  u_der = Delante(u_der);
+
+  // 4. LEER EL MAPA DE FEROMONAS (999999 si no es transitable)
+  // (Nota: para el tecnico, añade 'tiene_zapatillas' dentro de es_transitable_N1)
+  int vis_frente = es_transitable_N1(c) ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
+  int vis_izq = es_transitable_N1(i) ? matriz_visitas[u_izq.f][u_izq.c] : 999999;
+  int vis_der = es_transitable_N1(d) ? matriz_visitas[u_der.f][u_der.c] : 999999;
+
+  // 5. ENCONTRAR LA RUTA MENOS PISADA
+  int min_visitas = vis_frente;
+  if (vis_izq < min_visitas) min_visitas = vis_izq;
+  if (vis_der < min_visitas) min_visitas = vis_der;
+
+  int pos = 0;
+  if (min_visitas == 999999) {
+      pos = 0; // Totalmente bloqueados
+  } else if (vis_frente == min_visitas) {
+      pos = 2; // ¡SÚPER CLAVE! En caso de empate, vamos recto para no gastar batería girando.
+  } else if (vis_izq == min_visitas) {
+      pos = 1;
+  } else {
+      pos = 3;
+  }
+
+  // EL SWITCH FINAL 
+  switch (pos) {
+    case 2: accion = WALK; break;
+    case 1: accion = TURN_SL; break;
+    case 3: accion = TURN_SR; break;
+    default: 
+        // Callejón sin salida: damos la vuelta
+        giro45Izq = 3; 
+        accion = TURN_SL; 
+        break; 
+  }
+
+  last_action = accion;
+  return accion;
 }
 
 // Niveles avanzados (Uso de búsqueda)

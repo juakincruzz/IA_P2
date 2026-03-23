@@ -35,6 +35,14 @@ public:
     // Inicializar Variables de Estado
     last_action = IDLE;
     tiene_zapatillas = false;
+    giro45Izq = 0;
+
+    // Dentro del constructor:
+    for(int i = 0; i < 200; i++){
+      for(int j = 0; j < 200; j++){
+          matriz_visitas[i][j] = 0;
+      }
+    }
   }
 
   /**
@@ -221,8 +229,22 @@ private:
   Action last_action;
   bool tiene_zapatillas;
 
+  // Nivel 1
+    int giro45Izq; // Indica el número de giros a la izquierda que quedan por dar
+    int matriz_visitas[200][200];
+
+  // =========================================================================
+  // FUNCIONES AUXILIARES PARA EL NIVEL 0 
+  // =========================================================================
   char ViablePorAltura(char casilla, int dif); // No necesita 'zap'
   int VeoCasillaInteresante(char i, char c, char d);
+
+  // =========================================================================
+  // FUNCIONES AUXILIARES PARA EL NIVEL 1
+  // =========================================================================
+  bool es_transitable_N1(unsigned char c, bool zap) const; // El técnico usa zap para el bosque
+  char ViablePorAltura_N1(char casilla, int dif); 
+  int VeoCasillaInteresante_N1(char i, char c, char d, bool zap);
 
 };
 
