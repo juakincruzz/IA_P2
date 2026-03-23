@@ -35,8 +35,6 @@ public:
     // Inicializar Variables de Estado
     last_action = IDLE;
     tiene_zapatillas = false;
-    hayPlan = false;
-    estado_obra_tec = TEC_ESPERAR_AVISO;
   }
 
   /**
@@ -47,11 +45,6 @@ public:
   ComportamientoTecnico(std::vector<std::vector<unsigned char>> mapaR, 
                        std::vector<std::vector<unsigned char>> mapaC): 
                        Comportamiento(mapaR, mapaC) {
-    // Inicializar Variables de Estado
-    last_action = IDLE ;
-    tiene_zapatillas = false;
-
-    estado_obra_tec = TEC_ESPERAR_AVISO ;
   }
 
   ComportamientoTecnico(const ComportamientoTecnico &comport): Comportamiento(comport) {}
@@ -225,43 +218,12 @@ private:
   // =========================================================================
   // VARIABLES DE ESTADO (PUEDEN SER EXTENDIDAS POR EL ALUMNO)
   // =========================================================================
-  Action last_action; // Guarda la última acción tomada (útil para planificación)
-  
+  Action last_action;
   bool tiene_zapatillas;
-  bool hayPlan;
-  list<Action> plan;
-  list<Action> AEstrella(const estado& origen, const estado& destino);
-  list<Action> AEstrellaN6(const estado& origen, const estado& destino);
 
-  // Nivel 5
-  // --- Variables Nivel 5 (Máquina de Estados) ---
-    enum EstadoObraTec {
-        TEC_ESPERAR_AVISO,
-        TEC_IR_CASILLA,
-        TEC_ALINEARSE,
-        TEC_INSTALAR
-    };
+  char ViablePorAltura(char casilla, int dif); // No necesita 'zap'
+  int VeoCasillaInteresante(char i, char c, char d);
 
-    EstadoObraTec estado_obra_tec;
-    std::list<Action> ruta_actual_tec; // Ruta del técnico hacia el ingeniero
-
-    // Añade estas dos líneas:
-    int destino_f = -1;
-    int destino_c = -1;
-
-  // Nivel 6
-    enum EstadoObraIng6 {
-        ING6_EXPLORAR,
-        ING6_PLANIFICAR,
-        ING6_IR_CASILLA,
-        ING6_TERRAFORMAR,
-        ING6_AVISAR_TECNICO,
-        ING6_ESPERAR_TECNICO,
-        ING6_INSTALAR
-    };
-    EstadoObraIng6 estado_obra_ing_6;
-
-    
 };
 
 #endif

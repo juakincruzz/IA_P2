@@ -32,13 +32,21 @@ Action ComportamientoTecnico::think(Sensores sensores) {
   return accion;
 }
 
-// El Técnico solo puede superar desniveles de máximo 1
-char ViablePorAlturaT(char casilla, int dif) {
-    if (abs(dif) <= 1) {
-        return casilla;
-    } else {
-        return 'P';
-    }
+char ComportamientoTecnico::ViablePorAltura(char casilla, int dif) {
+  // El técnico solo supera desniveles de 1, tenga o no zapatillas
+  if (abs(dif) <= 1) return casilla;
+  else return 'P';
+}
+
+int ComportamientoTecnico::VeoCasillaInteresante(char i, char c, char d) {
+  if (c == 'U') return 2;
+  else if (i == 'U') return 1;
+  else if (d == 'U') return 3;
+  // En el nivel 0, las zapatillas no le sirven para nada especial al técnico
+  if (c == 'C') return 2;
+  else if (i == 'C') return 1;
+  else if (d == 'C') return 3;
+  else return 0;
 }
 
 // Nivel 1: Filtro de viabilidad (Terreno + Altura para el Ingeniero)
@@ -46,19 +54,6 @@ char ViablePorAlturaT_Nivel1(char casilla, int dif) {
     if (casilla == 'P' || casilla == 'M' || casilla == 'B' || casilla == 'A' || casilla == 'H') return 'P';
     if (abs(dif) <= 1) return casilla;
     return 'P';
-}
-
-// Evaluamos qué hay delante (ignoramos las zapatillas para el Técnico en este nivel)
-int VeoCasillaInteresanteT(char i, char c, char d) {
-    if (c == 'U') return 2;
-    else if (i == 'U') return 1;
-    else if (d == 'U') return 3;
-    
-    if (c == 'C') return 2;
-    else if (i == 'C') return 1;
-    else if (d == 'C') return 3;
-    
-    else return 0;
 }
 
 // Nivel 1: Evaluamos qué es más interesante para explorar
@@ -71,32 +66,33 @@ int VeoCasillaInteresanteT_Nivel1(char i, char c, char d) {
 
 // Niveles del técnico
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
-    Action accion = IDLE;
+  Action accion = IDLE;
 
-    // Fase 1: Actualizar mapa
-    ActualizarMapa(sensores);
+  ActualizarMapa(sensores);
 
-    // Fase 2: Comportamiento
-    if (sensores.superficie[0] == 'U') {
-        return IDLE; // Llegó a la meta
-    }
+  if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
-    // Comprobamos viabilidad de altura (sin zapatillas)
-    char i = ViablePorAlturaT(sensores.superficie[1], sensores.cota[1] - sensores.cota[0]);
-    char c = ViablePorAlturaT(sensores.superficie[2], sensores.cota[2] - sensores.cota[0]);
-    char d = ViablePorAlturaT(sensores.superficie[3], sensores.cota[3] - sensores.cota[0]);
+  if (sensores.superficie[0] == 'U') { 
+    return IDLE; 
+  }
 
-    int pos = VeoCasillaInteresanteT(i, c, d);
+  char i = ViablePorAltura(sensores.superficie[1], sensores.cota[1] - sensores.cota[0]);
+  char c = ViablePorAltura(sensores.superficie[2], sensores.cota[2] - sensores.cota[0]);
+  char d = ViablePorAltura(sensores.superficie[3], sensores.cota[3] - sensores.cota[0]);
 
-    switch (pos) {
-        case 2: accion = WALK; break;
-        case 1: accion = TURN_SL; break;
-        case 3: accion = TURN_SR; break;
-        default: accion = TURN_SL; break; // Buscar nuevo camino
-    }
+  int pos = VeoCasillaInteresante(i, c, d);
 
-    last_action = accion;
-    return accion;
+  // ELIMINAMOS la lógica anticolisión del Técnico. Él no esquiva.
+
+  switch (pos) {
+    case 2: accion = WALK; break;
+    case 1: accion = TURN_SL; break;
+    case 3: accion = TURN_SR; break;
+    default: accion = TURN_SL; break;
+  }
+
+  last_action = accion;
+  return accion;
 }
 
 
@@ -152,40 +148,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_2(Sensores sensores) {
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_3(Sensores sensores) {
-  ActualizarMapa(sensores);
-    if (sensores.tiempo == 0) ruta_actual_tec.clear();
-    
-    // Si llegamos a la Belkanita, paramos
-    if (sensores.posF == sensores.BelPosF && sensores.posC == sensores.BelPosC) return IDLE;
-    
-    if (sensores.choque) ruta_actual_tec.clear();
-
-    if (ruta_actual_tec.empty()) {
-        estado origen;
-        origen.fila = sensores.posF;
-        origen.columna = sensores.posC;
-        origen.orientacion = sensores.rumbo;
-        
-        estado destino;
-        destino.fila = sensores.BelPosF;
-        destino.columna = sensores.BelPosC;
-        destino.orientacion = 0;
-
-        // Usamos la búsqueda optimista del técnico (A*)
-        ruta_actual_tec = AEstrellaN6(origen, destino);
-        if (ruta_actual_tec.empty()) return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
-    }
-
-    if (!ruta_actual_tec.empty()) {
-        Action a = ruta_actual_tec.front();
-        ruta_actual_tec.pop_front();
-        // Antichoques
-        if (a == WALK && (sensores.superficie[2] == 'M' || sensores.superficie[2] == 'P')) {
-            ruta_actual_tec.clear();
-            return IDLE;
-        }
-        return a;
-    }
     return IDLE;
 }
 
@@ -204,82 +166,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_4(Sensores sensores) {
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
-  static int dest_f = -1;
-    static int dest_c = -1;
-
-    if (sensores.tiempo == 0) {
-        estado_obra_tec = TEC_ESPERAR_AVISO;
-        ruta_actual_tec.clear();
-        dest_f = -1;
-        dest_c = -1;
-    }
-
-    // ¡NUEVO!: El Técnico siempre escucha al Jefe, pase lo que pase.
-    // Si el Jefe se mueve al siguiente tubo, actualizamos el destino al vuelo.
-    if (sensores.venpaca) {
-        if (dest_f != sensores.GotoF || dest_c != sensores.GotoC) {
-            dest_f = sensores.GotoF;
-            dest_c = sensores.GotoC;
-            cout << "Operario: ¡El Jefe se ha movido! Persiguiendo hacia: " << dest_f << "," << dest_c << endl;
-            estado_obra_tec = TEC_IR_CASILLA;
-            ruta_actual_tec.clear(); // Borramos la ruta vieja
-        }
-    }
-
-    switch(estado_obra_tec) {
-
-        case TEC_ESPERAR_AVISO:
-            return IDLE; 
-
-        case TEC_IR_CASILLA:
-            // Si estamos a distancia 1 (adyacentes), paramos y nos alineamos
-            if (abs(sensores.posF - dest_f) + abs(sensores.posC - dest_c) <= 1) {
-                cout << "Operario: ¡Estoy al lado! Empezando maniobra de alineación." << endl;
-                estado_obra_tec = TEC_ALINEARSE;
-                return IDLE;
-            }
-
-            // Si no tenemos ruta, calculamos con A*
-            if (ruta_actual_tec.empty()) {
-                estado origen; 
-                origen.fila = sensores.posF; 
-                origen.columna = sensores.posC; 
-                origen.orientacion = sensores.rumbo;
-                
-                estado destino; 
-                destino.fila = dest_f; 
-                destino.columna = dest_c;
-                
-                ruta_actual_tec = AEstrella(origen, destino);
-                
-                // Si falla el A* (quizás el jefe está abriendo camino con DIG/RAISE)
-                // Nos quedamos quietos este instante sin atascar la consola
-                if (ruta_actual_tec.empty()) return IDLE;
-            }
-
-            // Damos el siguiente paso
-            if (!ruta_actual_tec.empty()) {
-                Action a = ruta_actual_tec.front();
-                ruta_actual_tec.pop_front();
-                return a;
-            }
-            return IDLE;
-
-        case TEC_ALINEARSE:
-            // Buscamos al Ingeniero ('i')
-            if (sensores.agentes[2] == 'i') {
-                if (sensores.enfrente) {
-                    cout << "Operario: ¡Contacto visual perfecto! INSTALANDO TUBERÍA." << endl;
-                    estado_obra_tec = TEC_ESPERAR_AVISO;
-                    return INSTALL;
-                } else {
-                    return IDLE; 
-                }
-            } else {
-                return TURN_SR; // Giramos buscando al jefe
-            }
-    }
-
     return IDLE;
 }
 
@@ -289,162 +175,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
-    // 1. El Técnico abre los ojos y mapea en Nivel 6
-    ActualizarMapa(sensores);
-
-    // ========================================================
-    // PANEL DE DEBUG TEMPORAL - TECNICO
-    // ========================================================
-    if ((int)sensores.tiempo % 50 == 0) {
-        cout << "[DEBUG TEC] Tick: " << sensores.tiempo 
-             << " | Pos: (" << sensores.posF << "," << sensores.posC << ")"
-             << " | Bateria: " << sensores.energia 
-             << " | EstadoMente: " << estado_obra_tec 
-             << " | Pasos Ruta: " << ruta_actual_tec.size() 
-             << " | Escucha Llamada?: " << (sensores.venpaca ? "SI" : "NO") 
-             << " | DestinoJefe: (" << sensores.GotoF << "," << sensores.GotoC << ")" << endl;
-    }
-    // ========================================================
-
-    if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
-
-    static int dest_f = -1;
-    static int dest_c = -1;
-
-    // Inicialización
-    if (sensores.tiempo == 0) {
-        estado_obra_tec = TEC_ESPERAR_AVISO;
-        ruta_actual_tec.clear();
-        dest_f = -1;
-        dest_c = -1;
-    }
-
-    // Si nos hemos chocado, reseteamos la ruta para recalcular
-    if (sensores.choque) {
-        ruta_actual_tec.clear();
-    }
-
-    // Escuchar al Jefe: si nos llama, actualizamos destino
-    if (sensores.venpaca) {
-        if (dest_f != sensores.GotoF || dest_c != sensores.GotoC) {
-            dest_f = sensores.GotoF;
-            dest_c = sensores.GotoC;
-            estado_obra_tec = TEC_IR_CASILLA;
-            ruta_actual_tec.clear();
-        }
-    }
-
-    switch(estado_obra_tec) {
-        case TEC_ESPERAR_AVISO:
-            if (sensores.venpaca) {
-                estado_obra_tec = TEC_IR_CASILLA;
-                destino_f = sensores.GotoF;
-                destino_c = sensores.GotoC;
-                ruta_actual_tec.clear();
-                return IDLE;
-            } else {
-                // EL TÉCNICO SE RETIRA A LA BASE PARA NO ESTORBAR AL INGENIERO
-                int dist_base = abs(sensores.posF - 11) + abs(sensores.posC - 18);
-                if (dist_base <= 2) return IDLE; // Si ya estamos cerca de la base, descansamos
-
-                if (ruta_actual_tec.empty()) {
-                    estado origen = {sensores.posF, sensores.posC, sensores.rumbo};
-                    estado destino = {11, 18, 0}; // Coordenadas seguras de inicio
-                    ruta_actual_tec = AEstrellaN6(origen, destino);
-                    if (ruta_actual_tec.empty()) return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
-                }
-                
-                Action a = ruta_actual_tec.front();
-                ruta_actual_tec.pop_front();
-                
-                // Radar antichoques mientras huye
-                if (a == WALK && (sensores.superficie[2] == 'M' || sensores.superficie[2] == 'P' || sensores.agentes[2] != '_')) {
-                    ruta_actual_tec.clear();
-                    return IDLE;
-                }
-                return a;
-            } 
-
-        case TEC_IR_CASILLA:
-        {
-            ActualizarMapa(sensores);
-            
-            // NUEVO: Verificación de adyacencia usando distancia Manhattan (ORTOGONAL)
-            int dist = abs(sensores.posF - destino_f) + abs(sensores.posC - destino_c);
-            if (dist == 1) {
-                cout << "Operario: ¡Estoy al lado! Empezando maniobra de alineación." << endl;
-                estado_obra_tec = TEC_ALINEARSE;
-                ruta_actual_tec.clear();
-                return IDLE;
-            }
-
-            // Si el jefe avanza al siguiente tubo, actualizamos destino
-            if (sensores.venpaca && (destino_f != sensores.GotoF || destino_c != sensores.GotoC)) {
-                destino_f = sensores.GotoF;
-                destino_c = sensores.GotoC;
-                ruta_actual_tec.clear();
-            }
-            
-            if (ruta_actual_tec.empty()) {
-                estado origen = {sensores.posF, sensores.posC, sensores.rumbo};
-                estado destino = {destino_f, destino_c, 0};
-                ruta_actual_tec = AEstrellaN6(origen, destino);
-                
-                if (ruta_actual_tec.empty()) return (rand() % 2 == 0) ? TURN_SL : TURN_SR; 
-            }
-            
-            if (!ruta_actual_tec.empty()) {
-                Action a = ruta_actual_tec.front();
-                
-                if (a == WALK) {
-                    char enf = sensores.superficie[2];
-                    if (enf == 'M' || enf == 'P') {
-                        ruta_actual_tec.clear();
-                        return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
-                    }
-                    int dif_h = sensores.cota[2] - sensores.cota[0];
-                    int max_d = tiene_zapatillas ? 2 : 1;
-                    if (abs(dif_h) > max_d) {
-                        ruta_actual_tec.clear();
-                        return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
-                    }
-                    // Radar de colisiones
-                    if (sensores.agentes[2] != '_') {
-                        ruta_actual_tec.clear();
-                        return IDLE;
-                    }
-                }
-                
-                ruta_actual_tec.pop_front();
-                return a;
-            }
-            return IDLE;
-        }
-
-        case TEC_ALINEARSE:
-        {
-            // Si tenemos al Jefe justo en la casilla de enfrente
-            if (sensores.agentes[2] == 'i') {
-                // Si él también nos mira, ¡bingo!
-                if (sensores.enfrente) {
-                    cout << "Operario: ¡Contacto visual perfecto! INSTALANDO TUBERÍA." << endl;
-                    estado_obra_tec = TEC_INSTALAR;
-                    return IDLE;
-                } else {
-                    // Si le vemos pero él está de lado o de espaldas, NOS QUEDAMOS QUIETOS mirándole fijamente
-                    return IDLE; 
-                }
-            }
-            // Si no vemos al jefe enfrente, seguimos girando para buscarle
-            return TURN_SR;
-        }
-
-        case TEC_INSTALAR:
-            // Ponemos el tubo y volvemos a la base/esperar
-            estado_obra_tec = TEC_ESPERAR_AVISO;
-            return INSTALL;
-    }
-
     return IDLE;
 }
 
@@ -851,235 +581,4 @@ int heuristica(const ComportamientoTecnico::estado& actual, const Comportamiento
     // Lo multiplicamos por 3 porque es el coste de energía más bajo posible al avanzar (1 casilla normal = 3 de energía).
     // Así garantizamos que NUNCA sobreestimamos el coste real (heurística admisible).
     return std::max(abs(actual.fila - meta.fila), abs(actual.columna - meta.columna)) * 3;
-}
-
-list<Action> ComportamientoTecnico::AEstrella(const estado& origen, const estado& destino) {
-    // La cola de prioridad: Ordena automáticamente sacando primero los nodos con menor 'f'
-    priority_queue<nodo, vector<nodo>, greater<nodo>> abierta;
-    
-    // Diccionario de los mejores costes 'g' encontrados para cada estado
-    map<estado, int> g_costes;
-
-    nodo inicial;
-    inicial.st = origen;
-    inicial.coste_g = 0;
-    inicial.heuristica_h = heuristica(origen, destino);
-    inicial.f = inicial.coste_g + inicial.heuristica_h;
-
-    abierta.push(inicial);
-    g_costes[origen] = 0;
-
-    while (!abierta.empty()) {
-        nodo actual = abierta.top();
-        abierta.pop();
-
-        // ¿Llegamos al destino o estamos en una casilla adyacente (ORTOGONAL)?
-        int dist_manhattan = abs(actual.st.fila - destino.fila) + abs(actual.st.columna - destino.columna);
-        if (dist_manhattan == 1) {
-            return actual.secuencia; // ¡Nos vale con llegar al lado del Jefe!
-        }
-
-        // 2. Si este nodo es una versión vieja y más cara de un estado que ya mejoramos, lo saltamos
-        if (actual.coste_g > g_costes[actual.st]) continue;
-
-        char superficie_actual = mapaResultado[actual.st.fila][actual.st.columna];
-        int coste_giro = costeGIROTecnico(superficie_actual);
-
-        // --- HIJO 1: GIRAR IZQUIERDA (TURN_SL) ---
-        nodo hijo_sl = actual;
-        hijo_sl.st.orientacion = (actual.st.orientacion + 7) % 8;
-        hijo_sl.coste_g = actual.coste_g + coste_giro;
-        
-        // Solo lo exploramos si es la primera vez que llegamos a este estado o si es un camino más barato
-        if (g_costes.find(hijo_sl.st) == g_costes.end() || hijo_sl.coste_g < g_costes[hijo_sl.st]) {
-            hijo_sl.secuencia.push_back(TURN_SL);
-            hijo_sl.heuristica_h = heuristica(hijo_sl.st, destino);
-            hijo_sl.f = hijo_sl.coste_g + hijo_sl.heuristica_h;
-            g_costes[hijo_sl.st] = hijo_sl.coste_g;
-            abierta.push(hijo_sl);
-        }
-
-        // --- HIJO 2: GIRAR DERECHA (TURN_SR) ---
-        nodo hijo_sr = actual;
-        hijo_sr.st.orientacion = (actual.st.orientacion + 1) % 8;
-        hijo_sr.coste_g = actual.coste_g + coste_giro;
-        
-        if (g_costes.find(hijo_sr.st) == g_costes.end() || hijo_sr.coste_g < g_costes[hijo_sr.st]) {
-            hijo_sr.secuencia.push_back(TURN_SR);
-            hijo_sr.heuristica_h = heuristica(hijo_sr.st, destino);
-            hijo_sr.f = hijo_sr.coste_g + hijo_sr.heuristica_h;
-            g_costes[hijo_sr.st] = hijo_sr.coste_g;
-            abierta.push(hijo_sr);
-        }
-
-        // --- HIJO 3: AVANZAR (WALK) ---
-        int nf = actual.st.fila;
-        int nc = actual.st.columna;
-
-        switch(actual.st.orientacion) {
-            case 0: nf--; break;           // Norte
-            case 1: nf--; nc++; break;     // Noreste
-            case 2: nc++; break;           // Este
-            case 3: nf++; nc++; break;     // Sureste
-            case 4: nf++; break;           // Sur
-            case 5: nf++; nc--; break;     // Suroeste
-            case 6: nc--; break;           // Oeste
-            case 7: nf--; nc--; break;     // Noroeste
-        }
-
-        // Comprobamos límites del mapa
-        if (nf >= 0 && nf < (int)mapaResultado.size() && nc >= 0 && nc < (int)mapaResultado[0].size()) {
-            char sup_destino = mapaResultado[nf][nc];
-            
-            // Tratamos '?' como transitable. Los únicos obstáculos duros son Precipicios y Muros.
-            if (sup_destino != 'P' && sup_destino != 'M') {
-                bool es_viable = true;
-                int coste_avance = 3; // Coste por defecto
-
-                if (sup_destino != '?') {
-                    // ¡EL TÉCNICO YA NO LE TIENE MIEDO AL BOSQUE!
-                    // Solo evitamos los desniveles mortales (mayor a 1)
-                    int dif_cota = mapaCotas[nf][nc] - mapaCotas[actual.st.fila][actual.st.columna];
-                    if (abs(dif_cota) > 1) {
-                        es_viable = false;
-                    } else {
-                        coste_avance = costeWALKTecnico(superficie_actual);
-                    }
-                }
-                
-                if (es_viable) {
-                    nodo hijo_walk = actual;
-                    hijo_walk.st.fila = nf;
-                    hijo_walk.st.columna = nc;
-                    hijo_walk.coste_g = actual.coste_g + coste_avance;
-                    
-                    if (g_costes.find(hijo_walk.st) == g_costes.end() || hijo_walk.coste_g < g_costes[hijo_walk.st]) {
-                        hijo_walk.secuencia.push_back(WALK);
-                        hijo_walk.heuristica_h = heuristica(hijo_walk.st, destino);
-                        hijo_walk.f = hijo_walk.coste_g + hijo_walk.heuristica_h;
-                        g_costes[hijo_walk.st] = hijo_walk.coste_g;
-                        abierta.push(hijo_walk);
-                    }
-                }
-            }
-        }
-    }
-    return list<Action>(); // Si se vacía la cola y no hay ruta
-}
-
-// =========================================================================
-// A* PARA NIVEL 6 (trata '?' como casilla transitable tipo camino)
-// =========================================================================
-list<Action> ComportamientoTecnico::AEstrellaN6(const estado& origen, const estado& destino) {
-    priority_queue<nodo, vector<nodo>, greater<nodo>> abierta;
-    map<estado, int> g_costes;
-
-    nodo inicial;
-    inicial.st = origen;
-    inicial.coste_g = 0;
-    inicial.heuristica_h = heuristica(origen, destino);
-    inicial.f = inicial.coste_g + inicial.heuristica_h;
-
-    abierta.push(inicial);
-    g_costes[origen] = 0;
-
-    while (!abierta.empty()) {
-        nodo actual = abierta.top();
-        abierta.pop();
-
-        // ¿Llegamos al destino o estamos en una casilla adyacente (ORTOGONAL)?
-        int dist_manhattan = abs(actual.st.fila - destino.fila) + abs(actual.st.columna - destino.columna);
-        if (dist_manhattan == 1) {
-            return actual.secuencia; // ¡Nos vale con llegar al lado del Jefe!
-        }
-
-        if (actual.coste_g > g_costes[actual.st]) continue;
-
-        // Determinar coste de giro: si es '?' usamos coste mínimo (1)
-        char superficie_actual = mapaResultado[actual.st.fila][actual.st.columna];
-        int coste_giro = (superficie_actual == '?') ? 1 : costeGIROTecnico(superficie_actual);
-
-        // --- HIJO 1: GIRAR IZQUIERDA ---
-        nodo hijo_sl = actual;
-        hijo_sl.st.orientacion = (actual.st.orientacion + 7) % 8;
-        hijo_sl.coste_g = actual.coste_g + coste_giro;
-        
-        if (g_costes.find(hijo_sl.st) == g_costes.end() || hijo_sl.coste_g < g_costes[hijo_sl.st]) {
-            hijo_sl.secuencia.push_back(TURN_SL);
-            hijo_sl.heuristica_h = heuristica(hijo_sl.st, destino);
-            hijo_sl.f = hijo_sl.coste_g + hijo_sl.heuristica_h;
-            g_costes[hijo_sl.st] = hijo_sl.coste_g;
-            abierta.push(hijo_sl);
-        }
-
-        // --- HIJO 2: GIRAR DERECHA ---
-        nodo hijo_sr = actual;
-        hijo_sr.st.orientacion = (actual.st.orientacion + 1) % 8;
-        hijo_sr.coste_g = actual.coste_g + coste_giro;
-        
-        if (g_costes.find(hijo_sr.st) == g_costes.end() || hijo_sr.coste_g < g_costes[hijo_sr.st]) {
-            hijo_sr.secuencia.push_back(TURN_SR);
-            hijo_sr.heuristica_h = heuristica(hijo_sr.st, destino);
-            hijo_sr.f = hijo_sr.coste_g + hijo_sr.heuristica_h;
-            g_costes[hijo_sr.st] = hijo_sr.coste_g;
-            abierta.push(hijo_sr);
-        }
-
-        // --- HIJO 3: AVANZAR (WALK) ---
-        int nf = actual.st.fila;
-        int nc = actual.st.columna;
-
-        switch(actual.st.orientacion) {
-            case 0: nf--; break;
-            case 1: nf--; nc++; break;
-            case 2: nc++; break;
-            case 3: nf++; nc++; break;
-            case 4: nf++; break;
-            case 5: nf++; nc--; break;
-            case 6: nc--; break;
-            case 7: nf--; nc--; break;
-        }
-
-        if (nf >= 0 && nf < (int)mapaResultado.size() && nc >= 0 && nc < (int)mapaResultado[0].size()) {
-            char sup_destino = mapaResultado[nf][nc];
-            
-            // En Nivel 6: '?' se trata como transitable (optimista)
-            if (sup_destino != 'P' && sup_destino != 'M') {
-                bool es_viable = true;
-                int coste_avance = 3; // Coste por defecto (como camino)
-
-                if (sup_destino != '?') {
-                    // Celda conocida: comprobamos todo
-                    bool es_obstaculo = false;
-                    if (sup_destino == 'B' && !tiene_zapatillas) es_obstaculo = true;
-                    
-                    if (!es_obstaculo) {
-                        int dif_cota = mapaCotas[nf][nc] - mapaCotas[actual.st.fila][actual.st.columna];
-                        int max_desnivel = 1; // Técnico siempre max 1
-                        if (abs(dif_cota) > max_desnivel) es_viable = false;
-                        else coste_avance = costeWALKTecnico(superficie_actual);
-                    } else {
-                        es_viable = false;
-                    }
-                }
-                // Si es '?' asumimos transitable con coste mínimo
-                
-                if (es_viable) {
-                    nodo hijo_walk = actual;
-                    hijo_walk.st.fila = nf;
-                    hijo_walk.st.columna = nc;
-                    hijo_walk.coste_g = actual.coste_g + coste_avance;
-                    
-                    if (g_costes.find(hijo_walk.st) == g_costes.end() || hijo_walk.coste_g < g_costes[hijo_walk.st]) {
-                        hijo_walk.secuencia.push_back(WALK);
-                        hijo_walk.heuristica_h = heuristica(hijo_walk.st, destino);
-                        hijo_walk.f = hijo_walk.coste_g + hijo_walk.heuristica_h;
-                        g_costes[hijo_walk.st] = hijo_walk.coste_g;
-                        abierta.push(hijo_walk);
-                    }
-                }
-            }
-        }
-    }
-    return list<Action>();
 }

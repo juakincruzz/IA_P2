@@ -44,13 +44,24 @@ Action ComportamientoIngeniero::think(Sensores sensores)
   return accion;
 }
 
-// Devuelve la casilla si es transitable por altura, o 'P' (precipicio) si es un muro infranqueable
-char ViablePorAlturaI(char casilla, int dif, bool zap) {
-    if (abs(dif) <= 1 or (zap and abs(dif) <= 2)) {
-        return casilla;
-    } else {
-        return 'P';
-    }
+char ComportamientoIngeniero::ViablePorAltura(char casilla, int dif, bool zap) {
+  if (abs(dif) <= 1 || (zap && abs(dif) <= 2)) return casilla;
+  else return 'P'; // Si no es viable, la tratamos como un precipicio
+}
+
+int ComportamientoIngeniero::VeoCasillaInteresante(char i, char c, char d, bool zap) {
+  if (c == 'U') return 2;
+  else if (i == 'U') return 1;
+  else if (d == 'U') return 3;
+  else if (!zap) {
+    if (c == 'D') return 2;
+    else if (i == 'D') return 1;
+    else if (d == 'D') return 3;
+  }
+  if (c == 'C') return 2;
+  else if (i == 'C') return 1;
+  else if (d == 'C') return 3;
+  else return 0;
 }
 
 // Filtro Nivel 1 Ingeniero
@@ -58,41 +69,6 @@ char ViablePorAlturaI_Nivel1(char casilla, int dif) {
     if (casilla == 'P' || casilla == 'M' || casilla == 'B' || casilla == 'A' || casilla == 'H') return 'P';
     if (abs(dif) <= 1) return casilla;
     return 'P';
-}
-
-// Devuelve 2 (WALK), 1 (TURN_SL), 3 (TURN_SR) o 0 (nada interesante)
-int VeoCasillaInteresanteI(char i, char c, char d, bool zap) {
-    bool izq = (i == 'C' || i == 'S');
-    bool rec = (c == 'C' || c == 'S');
-    bool der = (d == 'C' || d == 'S');
-
-    // 1. EL SECRETO: Si estamos en una bifurcación (varios caminos posibles), elegimos al azar
-    if (izq && der && rec) {
-        int r = rand() % 3;
-        if (r == 0) return 1;
-        if (r == 1) return 2;
-        return 3;
-    }
-    if (izq && der && !rec) return (rand() % 2 == 0) ? 1 : 3; // Cruce en T
-    if (izq && !der && rec) return (rand() % 2 == 0) ? 1 : 2; // Desvío a la izquierda
-    if (!izq && der && rec) return (rand() % 2 == 0) ? 2 : 3; // Desvío a la derecha
-
-    // 2. Si no hay cruces, simplemente seguimos el camino
-    if (rec) return 2;
-    if (izq) return 1;
-    if (der) return 3;
-
-    // 3. PLAN B: Si no hay caminos, nos metemos por la hierba ('H')
-    bool izq_h = (i == 'H');
-    bool rec_h = (c == 'H');
-    bool der_h = (d == 'H');
-
-    if (rec_h) return 2;
-    if (izq_h && der_h) return (rand() % 2 == 0) ? 1 : 3;
-    if (izq_h) return 1;
-    if (der_h) return 3;
-
-    return 0; // Callejón sin salida total
 }
 
 // Curiosidad Nivel 1 Ingeniero
@@ -104,43 +80,41 @@ int VeoCasillaInteresanteI_Nivel1(char i, char c, char d) {
 }
 
 // Niveles iniciales (Comportamientos reactivos simples)
-Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores)
-{
-  // 1. Condición de éxito: Si pisamos la Belkanita, nos quedamos quietos.
-    if (sensores.superficie[0] == 'U') {
-        return IDLE;
-    }
+Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores) {
+  Action accion = IDLE;
 
-    // 2. Recolección pasiva: Si pisamos zapatillas, las guardamos.
-    if (sensores.superficie[0] == 'D') {
-        tiene_zapatillas = true;
-    }
+  ActualizarMapa(sensores);
 
-    // 3. Análisis del entorno inmediato (Casilla 2 = justo enfrente)
-    char enf = sensores.superficie[2];
-    int dif = sensores.cota[2] - sensores.cota[0];
+  // Actualización de variables de estado
+  if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
-    // 4. Filtro de Supervivencia: Detectar cualquier cosa que nos pueda matar o bloquear
-    bool peligro = false;
-    
-    // Obstáculos físicos
-    if (enf == 'M' || enf == 'P') peligro = true; 
-    if (abs(dif) > 1) peligro = true; 
-    if (sensores.agentes[2] != '_') peligro = true; 
-    
-    // Trampas de entorno (Esenciales en el mapa 75)
-    if (enf == 'A') peligro = true; // El agua fulmina la batería
-    if (enf == 'B' && !tiene_zapatillas) peligro = true; // El bosque descalzo agota la energía
+  // Definición del comportamiento
+  if (sensores.superficie[0] == 'U') { 
+    return IDLE; // Llegué a la meta
+  }
 
-    // 5. Motor Reactivo Puro (Determinista)
-    if (peligro || sensores.choque) {
-        // Giramos SIEMPRE a la derecha. Esto implementa la regla de "seguir la pared"
-        // y es matemáticamente imposible que se quede vibrando en bucle en una esquina.
-        return TURN_SR;
-    } else {
-        // Si el camino está despejado y es seguro, avanzamos.
-        return WALK;
-    }
+  // Comprobar viabilidad de las casillas frontales
+  char i = ViablePorAltura(sensores.superficie[1], sensores.cota[1] - sensores.cota[0], tiene_zapatillas);
+  char c = ViablePorAltura(sensores.superficie[2], sensores.cota[2] - sensores.cota[0], tiene_zapatillas);
+  char d = ViablePorAltura(sensores.superficie[3], sensores.cota[3] - sensores.cota[0], tiene_zapatillas);
+
+  // Lógica anticolisión: El Ingeniero es educado. 
+  // Si ve al Técnico en alguna de esas casillas, la trata como si fuera un precipicio/muro ('P')
+  if (sensores.agentes[1] == 't') i = 'P';
+  if (sensores.agentes[2] == 't') c = 'P';
+  if (sensores.agentes[3] == 't') d = 'P';
+
+  int pos = VeoCasillaInteresante(i, c, d, tiene_zapatillas);
+
+  switch (pos) {
+    case 2: accion = WALK; break;
+    case 1: accion = TURN_SL; break;
+    case 3: accion = TURN_SR; break;
+    default: accion = TURN_SL; break; // Al no ver camino (porque el técnico lo tapa), girará
+  }
+
+  last_action = accion;
+  return accion;
 }
 
 /**
@@ -198,32 +172,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_2(Sensores sensores)
 {
-  Action accion = IDLE;
-
-  // 1. Si no hay plan, es el primer instante: ¡Toca pensar!
-  if (!hayPlan) {
-      estado origen;
-      origen.fila = sensores.posF;
-      origen.columna = sensores.posC;
-      origen.orientacion = sensores.rumbo;
-
-      estado destino;
-      destino.fila = sensores.BelPosF;
-      destino.columna = sensores.BelPosC;
-
-      // Llamamos al algoritmo para que nos devuelva la lista de acciones óptima
-      plan = BusquedaEnAnchura(origen, destino);
-      
-      hayPlan = true;
-    }
-
-  // 2. Ejecutar el plan paso a paso
-  if (hayPlan && !plan.empty()) {
-      accion = plan.front(); // Miramos la siguiente acción
-      plan.pop_front();      // La sacamos de la lista porque la vamos a ejecutar ahora mismo
-  }
-
-  return accion;
+  return IDLE; // Por implementar: Aquí se debería llamar a la función de búsqueda para planificar una ruta hacia la meta
 }
 
 /**
@@ -233,32 +182,6 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_2(Sensores sensores
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_3(Sensores sensores)
 {
-  ActualizarMapa(sensores);
-    if (sensores.tiempo == 0) ruta_actual.clear();
-    
-    // Si llegamos a la Belkanita, paramos
-    if (sensores.posF == sensores.BelPosF && sensores.posC == sensores.BelPosC) return IDLE;
-    
-    if (sensores.choque) ruta_actual.clear();
-
-    if (ruta_actual.empty()) {
-        estado origen = {sensores.posF, sensores.posC, sensores.rumbo};
-        estado destino = {sensores.BelPosF, sensores.BelPosC, 0};
-        // Usamos tu búsqueda optimista
-        ruta_actual = BusquedaEnAnchuraN6(origen, destino);
-        if (ruta_actual.empty()) return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
-    }
-
-    if (!ruta_actual.empty()) {
-        Action a = ruta_actual.front();
-        ruta_actual.pop_front();
-        // Antichoques
-        if (a == WALK && (sensores.superficie[2] == 'M' || sensores.superficie[2] == 'P')) {
-            ruta_actual.clear();
-            return IDLE;
-        }
-        return a;
-    }
     return IDLE;
 }
 
@@ -269,18 +192,6 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_3(Sensores sensores
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_4(Sensores sensores)
 {
-  if (!hayPlanTuberias) {
-        // Planificamos desde la posición de la Belkanita
-        planTuberias = PlanificaTuberias(sensores.BelPosF, sensores.BelPosC);
-        
-        if (!planTuberias.empty()) {
-            // Le pasamos el plan al motor gráfico para que lo dibuje
-            VisualizaRedTuberias(planTuberias);
-        }
-        hayPlanTuberias = true;
-    }
-    
-  // El nivel 4 es solo teórico, no nos movemos.
   return IDLE;
 }
 
@@ -291,117 +202,6 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_4(Sensores sensores
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores)
 {
-  // Detectar zapatillas
-  if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
-
-  // ---------------------------------------------------------------------
-    // PARCHE DE SEGURIDAD: Forzamos la inicialización en el instante 0
-    // ---------------------------------------------------------------------
-    if (sensores.tiempo == 0) {
-        hayPlanTuberias = false;
-        estado_obra_ing = ING_PLANIFICAR;
-        ruta_actual.clear(); 
-    }
-
-    // ---------------------------------------------------------------------
-    // MÁQUINA DE ESTADOS DEL INGENIERO (JEFE DE OBRA)
-    // ---------------------------------------------------------------------
-    switch(estado_obra_ing) {
-        
-        case ING_PLANIFICAR:
-            // 1. Calculamos la red de tuberías entera la primera vez
-            if (!hayPlanTuberias) {
-                planTuberias = PlanificaTuberias(sensores.BelPosF, sensores.BelPosC);
-                hayPlanTuberias = true;
-                
-                if (!planTuberias.empty()) {
-                    VisualizaRedTuberias(planTuberias); // Dibujamos el plan
-                    
-                    cout << "¡Plan calculado ! Tuberías a instalar: " << planTuberias.size() << endl;
-                } else {
-                    cout << "¡ERROR! PlanificaTuberias ha devuelto una lista vacía." << endl;
-                }
-            }
-            
-            // 2. Si ya no quedan tubos, hemos terminado el nivel
-            if (planTuberias.empty()) return IDLE; 
-
-            // 3. Sacamos el siguiente tubo a instalar de la lista
-            paso_actual = planTuberias.front();
-            planTuberias.pop_front();
-            estado_obra_ing = ING_IR_CASILLA;
-            
-            cout << "Jefe de obra: Vamos a poner tubo en " << paso_actual.fil << "," << paso_actual.col << endl;
-            return IDLE;
-
-        case ING_IR_CASILLA:
-            // 1. ¿Ya estamos en la casilla donde va el tubo?
-            if (sensores.posF == paso_actual.fil && sensores.posC == paso_actual.col) {
-                estado_obra_ing = ING_TERRAFORMAR;
-                return IDLE;
-            }
-            
-            // 2. Si no tenemos ruta hacia esa casilla, la calculamos con nuestro BFS
-            if (ruta_actual.empty()) {
-                estado origen; 
-                origen.fila = sensores.posF; 
-                origen.columna = sensores.posC; 
-                origen.orientacion = sensores.rumbo;
-                
-                estado destino; 
-                destino.fila = paso_actual.fil; 
-                destino.columna = paso_actual.col;
-                
-                ruta_actual = BusquedaEnAnchura(origen, destino);
-                
-                if (ruta_actual.empty()) {
-                    cout << "¡ATASCO! El Ingeniero no encuentra ruta a la casilla " << destino.fila << "," << destino.columna << endl;
-                }
-            }
-            
-            // 3. Si tenemos ruta, damos el siguiente paso
-            if (!ruta_actual.empty()) {
-                Action a = ruta_actual.front();
-                ruta_actual.pop_front();
-                return a;
-            }
-            return IDLE; // Por si nos atascamos momentáneamente
-
-        case ING_TERRAFORMAR:
-            // Aplicamos la modificación si el terreno lo requiere
-            if (paso_actual.op == 1) {
-                paso_actual.op = 0; // Lo ponemos a 0 para no repetir la acción en el siguiente tick
-                return RAISE;
-            } else if (paso_actual.op == -1) {
-                paso_actual.op = 0; 
-                return DIG;
-            }
-            // Si no hay que hacer nada (op == 0), pasamos a avisar al Técnico
-            estado_obra_ing = ING_AVISAR_TECNICO;
-            return IDLE;
-
-        case ING_AVISAR_TECNICO:
-            estado_obra_ing = ING_ESPERAR_TECNICO;
-            return COME; // ¡Llamamos al Técnico! Sus sensores venpaca, GotoF y GotoC se encenderán
-
-        case ING_ESPERAR_TECNICO:
-            // ¡DOBLE COMPROBACIÓN! Vemos al técnico ('t') Y él nos está mirando ('enfrente')
-            if (sensores.agentes[2] == 't' && sensores.enfrente) {
-                estado_obra_ing = ING_INSTALAR;
-                return INSTALL; 
-            }
-            return TURN_SR; // Giramos como un radar
-
-        case ING_INSTALAR:
-            // El tubo ya está puesto. Volvemos al estado inicial para sacar el siguiente tubo
-            estado_obra_ing = ING_PLANIFICAR;
-            return COME;
-    } // Fin del switch
-
-    // ---------------------------------------------------------------------
-    // RETORNO FINAL DE SEGURIDAD
-    // (Soluciona el warning del compilador "control reaches end of non-void function")
-    // ---------------------------------------------------------------------
     return IDLE;
 }
 /**
@@ -411,217 +211,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores)
 {
-    ActualizarMapa(sensores);
-
-    // ========================================================
-    // PANEL DE DEBUG TEMPORAL - INGENIERO
-    // ========================================================
-    if ((int)sensores.tiempo % 50 == 0) {
-        cout << "[DEBUG ING] Tick: " << sensores.tiempo 
-             << " | Pos: (" << sensores.posF << "," << sensores.posC << ")"
-             << " | Bateria: " << sensores.energia 
-             << " | EstadoMente: " << estado_obra_ing_6 
-             << " | Pasos Ruta: " << ruta_actual.size() << endl;
-    }
-    // ========================================================
-    
-    if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
-
-    // Inicialización en el primer instante
-    if (sensores.tiempo == 0) {
-        hayPlanTuberias = false;
-        fase_construccion = false;
-        estado_obra_ing_6 = ING6_EXPLORAR;
-        ruta_actual.clear();
-        intentos_exploracion = 0;
-    }
-
-    switch(estado_obra_ing_6) {
-
-        case ING6_EXPLORAR:
-        {
-            // --- 1. INTENTAR PLANIFICAR TUBERIAS ---
-            if (sensores.BelPosF != -1 && sensores.BelPosC != -1) {
-                bool hay_U = false;
-                for (int r = 0; r < (int)mapaResultado.size() && !hay_U; r++)
-                    for (int c2 = 0; c2 < (int)mapaResultado[0].size() && !hay_U; c2++)
-                        if (mapaResultado[r][c2] == 'U') hay_U = true;
-                if (hay_U) {
-                    list<Paso> plan_candidato = PlanificaTuberias(sensores.BelPosF, sensores.BelPosC);
-                    if (!plan_candidato.empty()) {
-                        // Comprobamos si podemos caminar hasta el inicio
-                        estado origen = {sensores.posF, sensores.posC, sensores.rumbo};
-                        estado destino = {sensores.BelPosF, sensores.BelPosC, 0};
-                        list<Action> ruta_al_inicio = BusquedaEnAnchuraN6(origen, destino);
-                        
-                        if (!ruta_al_inicio.empty() || (sensores.posF == sensores.BelPosF && sensores.posC == sensores.BelPosC)) {
-                            planTuberias = plan_candidato;
-                            hayPlanTuberias = true;
-                            fase_construccion = true;
-                            VisualizaRedTuberias(planTuberias);
-                            
-                            // ¡CORRECCIÓN VITAL! Vamos a PLANIFICAR para sacar el primer tubo de la lista
-                            ruta_actual.clear();
-                            estado_obra_ing_6 = ING6_PLANIFICAR; 
-                            
-                            cout << "Jefe de obra: ¡PLAN MAESTRO ENCONTRADO! Tubos a instalar: " << planTuberias.size() << endl;
-                            return IDLE;
-                        }
-                    }
-                }
-            }
-
-            // --- 2. PROTECCION DE ENERGIA ---
-            if (sensores.energia < 100) return IDLE;
-
-            // --- 3. EXPLORACION INTELIGENTE ---
-            if (ruta_actual.empty()) {
-                int dest_f = -1, dest_c = -1;
-                int min_dist = 999999;
-                
-                for (int r = 0; r < (int)mapaResultado.size(); r += 2) {
-                    for (int c = 0; c < (int)mapaResultado[0].size(); c += 2) {
-                        if (mapaResultado[r][c] == '?') {
-                            int dist = abs(sensores.posF - r) + abs(sensores.posC - c);
-                            if (dist < min_dist) {
-                                min_dist = dist; dest_f = r; dest_c = c;
-                            }
-                        }
-                    }
-                }
-
-                if (dest_f != -1) {
-                    estado origen = {sensores.posF, sensores.posC, sensores.rumbo};
-                    estado destino = {dest_f, dest_c, 0};
-                    ruta_actual = BusquedaEnAnchuraN6(origen, destino);
-                    
-                    if (ruta_actual.empty()) {
-                        mapaResultado[dest_f][dest_c] = 'M'; // Poda
-                        return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
-                    }
-                } else {
-                    return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
-                }
-            }
-
-            if (!ruta_actual.empty()) {
-                Action a = ruta_actual.front();
-                ruta_actual.pop_front();
-                
-                if (a == WALK) {
-                    char enf = sensores.superficie[2];
-                    if (enf == 'M' || enf == 'P') {
-                        ruta_actual.clear();
-                        return (rand() % 2 == 0) ? TURN_SL : TURN_SR; // Evita bucles al chocar
-                    }
-                    int dif_h = sensores.cota[2] - sensores.cota[0];
-                    int max_d = tiene_zapatillas ? 2 : 1;
-                    if (abs(dif_h) > max_d) {
-                        ruta_actual.clear();
-                        return (rand() % 2 == 0) ? TURN_SL : TURN_SR; // Evita bucles
-                    }
-                }
-                return a;
-            }
-            return IDLE;
-        }
-
-        case ING6_PLANIFICAR:
-        {
-            if (planTuberias.empty()) {
-                return IDLE;
-            }
-
-            // AHORA SÍ: Inicializamos paso_actual antes de ir a caminar
-            paso_actual = planTuberias.front();
-            planTuberias.pop_front();
-            estado_obra_ing_6 = ING6_IR_CASILLA;
-            ruta_actual.clear();
-            return IDLE;
-        }
-
-        case ING6_IR_CASILLA:
-        {
-            ActualizarMapa(sensores); 
-            
-            // Si ya estamos sobre la casilla del tubo, a terraformar
-            if (sensores.posF == paso_actual.fil && sensores.posC == paso_actual.col) {
-                estado_obra_ing_6 = ING6_TERRAFORMAR;
-                return IDLE;
-            }
-            
-            if (ruta_actual.empty()) {
-                estado origen = {sensores.posF, sensores.posC, sensores.rumbo};
-                estado destino = {paso_actual.fil, paso_actual.col, 0};
-                
-                ruta_actual = BusquedaEnAnchura(origen, destino);
-                if (ruta_actual.empty()) ruta_actual = BusquedaEnAnchuraN6(origen, destino);
-                
-                if (ruta_actual.empty()) {
-                    // ¡PROHIBIDO BORRAR EL PLAN MAESTRO! 
-                    // Damos un pequeño giro para actualizar los sensores y lo intentamos en el siguiente tick.
-                    return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
-                }
-            }
-            
-            if (!ruta_actual.empty()) {
-                Action a = ruta_actual.front();
-                
-                if (a == WALK) {
-                    char enf = sensores.superficie[2];
-                    if (enf == 'M' || enf == 'P') {
-                        ruta_actual.clear();
-                        return (rand() % 2 == 0) ? TURN_SL : TURN_SR; 
-                    }
-                    int dif_h = sensores.cota[2] - sensores.cota[0];
-                    int max_d = tiene_zapatillas ? 2 : 1;
-                    if (abs(dif_h) > max_d) {
-                        ruta_actual.clear();
-                        return (rand() % 2 == 0) ? TURN_SL : TURN_SR; 
-                    }
-                    // ¡NUEVO!: Radar anticolesiones con el Técnico
-                    if (sensores.agentes[2] != '_') {
-                        ruta_actual.clear();
-                        return IDLE; // Nos quedamos quietos esperando a que se aparte
-                    }
-                }
-                
-                ruta_actual.pop_front();
-                return a;
-            }
-            return IDLE;
-        }
-
-        case ING6_TERRAFORMAR:
-            if (paso_actual.op == 1) {
-                paso_actual.op = 0;
-                return RAISE;
-            } else if (paso_actual.op == -1) {
-                paso_actual.op = 0;
-                return DIG;
-            }
-            estado_obra_ing_6 = ING6_AVISAR_TECNICO;
-            return IDLE;
-
-        case ING6_AVISAR_TECNICO:
-            estado_obra_ing_6 = ING6_ESPERAR_TECNICO;
-            return COME;
-
-        case ING6_ESPERAR_TECNICO:
-            // ¡RADAR ACTIVADO! Giramos continuamente para no darle la espalda al Operario.
-            // Sobra muchísima batería, así que el coste de girar nos da igual.
-            if (sensores.agentes[2] == 't' && sensores.enfrente) {
-                estado_obra_ing_6 = ING6_INSTALAR;
-                return INSTALL;
-            }
-            return TURN_SR;
-
-        case ING6_INSTALAR:
-            estado_obra_ing_6 = ING6_PLANIFICAR;
-            return COME;
-    }
-
-    return IDLE;
+  return IDLE;
 }
 
 // =========================================================================
@@ -1059,275 +649,3 @@ void ComportamientoIngeniero::VisualizaRedTuberias(const list<Paso> &plan)
   }
 }
 
-// =========================================================================
-// ALGORITMOS DE BÚSQUEDA (NIVEL 2)
-// =========================================================================
-
-list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, const estado& destino) {
-    // La cola de estados por explorar (Abierta) y la memoria de estados ya visitados (Cerrados)
-    queue<nodo> abierta;
-    set<estado> cerrados;
-
-    // Metemos el estado inicial en la cola y lo marcamos como visitado
-    nodo inicial;
-    inicial.st = origen;
-    abierta.push(inicial);
-    cerrados.insert(origen);
-
-    while (!abierta.empty()) {
-        // Sacamos el primer nodo de la cola para evaluarlo
-        nodo actual = abierta.front();
-        abierta.pop();
-
-        // 1. ¿HEMOS LLEGADO A LA META?
-        // Gracias a que sobrecargamos el operador == en el .hpp, esto solo comprueba fila y columna
-        // 1. ¿Llegamos a la meta?
-        if (actual.st == destino) { 
-          return actual.secuencia; 
-        }
-
-        // 2. GENERAMOS LOS HIJOS (Posibles siguientes acciones)
-
-        // --- HIJO 1: GIRAR A LA IZQUIERDA (TURN_SL) ---
-        nodo hijo_sl = actual;
-        // Girar a la izquierda es restar 1 a la orientación (o sumar 7) en un reloj de 8 horas
-        hijo_sl.st.orientacion = (actual.st.orientacion + 7) % 8;
-        if (cerrados.find(hijo_sl.st) == cerrados.end()) {
-            hijo_sl.secuencia.push_back(TURN_SL);
-            cerrados.insert(hijo_sl.st);
-            abierta.push(hijo_sl);
-        }
-
-        // --- HIJO 2: GIRAR A LA DERECHA (TURN_SR) ---
-        nodo hijo_sr = actual;
-        // Girar a la derecha es sumar 1 a la orientación
-        hijo_sr.st.orientacion = (actual.st.orientacion + 1) % 8;
-        if (cerrados.find(hijo_sr.st) == cerrados.end()) {
-            hijo_sr.secuencia.push_back(TURN_SR);
-            cerrados.insert(hijo_sr.st);
-            abierta.push(hijo_sr);
-        }
-
-        // --- HIJO 3: AVANZAR (WALK) ---
-        nodo hijo_walk = actual;
-        int nf = actual.st.fila;
-        int nc = actual.st.columna;
-
-        // Calculamos dónde caeríamos si avanzamos según hacia dónde miramos
-        switch(actual.st.orientacion) {
-            case 0: nf--; break;           // Norte
-            case 1: nf--; nc++; break;     // Noreste
-            case 2: nc++; break;           // Este
-            case 3: nf++; nc++; break;     // Sureste
-            case 4: nf++; break;           // Sur
-            case 5: nf++; nc--; break;     // Suroeste
-            case 6: nc--; break;           // Oeste
-            case 7: nf--; nc--; break;     // Noroeste
-        }
-
-        // Comprobamos si el paso es legal (dentro del mapa)
-        if (nf >= 0 && nf < (int)mapaResultado.size() && nc >= 0 && nc < (int)mapaResultado[0].size()) {
-            unsigned char celda = mapaResultado[nf][nc];
-            
-            // Filtro de viabilidad: No muros, no precipicios
-            // Bosque solo transitable con zapatillas (para el Ingeniero)
-            // Agua SÍ es transitable para el Ingeniero (cuesta mucha energía pero es legal)
-            bool transitable_terreno = (celda != 'P' && celda != 'M' && celda != '?');
-            if (celda == 'B' && !tiene_zapatillas) transitable_terreno = false;
-            
-            if (transitable_terreno) {                
-                // Filtro de altura: Desnivel máximo 1 sin zapatillas, 2 con zapatillas
-                int dif_cota = mapaCotas[nf][nc] - mapaCotas[actual.st.fila][actual.st.columna];
-                int max_desnivel = tiene_zapatillas ? 2 : 1;
-                if (abs(dif_cota) <= max_desnivel) {
-                    
-                    hijo_walk.st.fila = nf;
-                    hijo_walk.st.columna = nc;
-                    
-                    // Si nunca hemos estado en esta casilla mirando hacia allá, la añadimos
-                    if (cerrados.find(hijo_walk.st) == cerrados.end()) {
-                        hijo_walk.secuencia.push_back(WALK);
-                        cerrados.insert(hijo_walk.st);
-                        abierta.push(hijo_walk);
-                    }
-                }
-            }
-        }
-    }
-
-    // Si la cola se vacía y no encontramos la meta, devolvemos una lista vacía (no hay camino)
-    return list<Action>(); 
-}
-
-// =========================================================================
-// BFS PARA NIVEL 6 (trata '?' como casilla transitable tipo camino)
-// =========================================================================
-list<Action> ComportamientoIngeniero::BusquedaEnAnchuraN6(const estado& origen, const estado& destino) {
-    queue<nodo> abierta;
-    set<estado> cerrados;
-
-    nodo inicial;
-    inicial.st = origen;
-    abierta.push(inicial);
-    cerrados.insert(origen);
-
-    while (!abierta.empty()) {
-        nodo actual = abierta.front();
-        abierta.pop();
-
-        if (actual.st == destino) { 
-            return actual.secuencia; 
-        }
-
-        // HIJO 1: GIRAR IZQUIERDA
-        nodo hijo_sl = actual;
-        hijo_sl.st.orientacion = (actual.st.orientacion + 7) % 8;
-        if (cerrados.find(hijo_sl.st) == cerrados.end()) {
-            hijo_sl.secuencia.push_back(TURN_SL);
-            cerrados.insert(hijo_sl.st);
-            abierta.push(hijo_sl);
-        }
-
-        // HIJO 2: GIRAR DERECHA
-        nodo hijo_sr = actual;
-        hijo_sr.st.orientacion = (actual.st.orientacion + 1) % 8;
-        if (cerrados.find(hijo_sr.st) == cerrados.end()) {
-            hijo_sr.secuencia.push_back(TURN_SR);
-            cerrados.insert(hijo_sr.st);
-            abierta.push(hijo_sr);
-        }
-
-        // HIJO 3: AVANZAR (WALK)
-        nodo hijo_walk = actual;
-        int nf = actual.st.fila;
-        int nc = actual.st.columna;
-
-        switch(actual.st.orientacion) {
-            case 0: nf--; break;
-            case 1: nf--; nc++; break;
-            case 2: nc++; break;
-            case 3: nf++; nc++; break;
-            case 4: nf++; break;
-            case 5: nf++; nc--; break;
-            case 6: nc--; break;
-            case 7: nf--; nc--; break;
-        }
-
-        if (nf >= 0 && nf < (int)mapaResultado.size() && nc >= 0 && nc < (int)mapaResultado[0].size()) {
-            unsigned char celda = mapaResultado[nf][nc];
-            
-            // En Nivel 6: '?' se trata como transitable (optimista)
-            // No pasamos por Muros ni Precipicios
-            if (celda != 'P' && celda != 'M') {
-                bool transitable = true;
-                
-                // Si la celda es conocida, comprobamos altura
-                if (celda != '?') {
-                    int dif_cota = mapaCotas[nf][nc] - mapaCotas[actual.st.fila][actual.st.columna];
-                    int max_desnivel = tiene_zapatillas ? 2 : 1;
-                    if (abs(dif_cota) > max_desnivel) transitable = false;
-                    // Bosque no transitable sin zapatillas
-                    if (celda == 'B' && !tiene_zapatillas) transitable = false;
-                }
-                // Si es '?' asumimos cota similar (optimista) => transitable
-                
-                if (transitable) {
-                    hijo_walk.st.fila = nf;
-                    hijo_walk.st.columna = nc;
-                    
-                    if (cerrados.find(hijo_walk.st) == cerrados.end()) {
-                        hijo_walk.secuencia.push_back(WALK);
-                        cerrados.insert(hijo_walk.st);
-                        abierta.push(hijo_walk);
-                    }
-                }
-            }
-        }
-    }
-
-    return list<Action>();
-}
-
-list<Paso> ComportamientoIngeniero::PlanificaTuberias(int f_inicio, int c_inicio) {
-    queue<nodo_tuberia> abierta;
-    set<estado_tuberia> cerrados;
-
-    // Metemos el inicio probando las 3 opciones posibles de excavación en la Belkanita
-    for (int mod_inicio = -1; mod_inicio <= 1; ++mod_inicio) {
-        nodo_tuberia inicial;
-        inicial.st.fila = f_inicio;
-        inicial.st.columna = c_inicio;
-        inicial.st.mod = mod_inicio; 
-        
-        Paso p;
-        p.fil = f_inicio;
-        p.col = c_inicio;
-        p.op = mod_inicio;
-        inicial.secuencia.push_back(p);
-
-        abierta.push(inicial);
-        cerrados.insert(inicial.st);
-    }
-
-    // Direcciones ortogonales (Norte, Sur, Este, Oeste)
-    int df[] = {-1, 1, 0, 0};
-    int dc[] = {0, 0, 1, -1};
-
-    while (!abierta.empty()) {
-        nodo_tuberia actual = abierta.front();
-        abierta.pop();
-
-        int f = actual.st.fila;
-        int c = actual.st.columna;
-
-        // ¿Llegamos a una Planta de Tratamiento?
-        if (mapaResultado[f][c] == 'U') {
-            return actual.secuencia; // ¡Ruta encontrada!
-        }
-
-        // Calculamos la altura real a la que está el agua en nuestra tubería actual
-        int h_actual = mapaCotas[f][c] + actual.st.mod;
-
-        // Explorar vecinos ortogonales
-        for (int i = 0; i < 4; ++i) {
-            int nf = f + df[i];
-            int nc = c + dc[i];
-
-            // Comprobamos límites del mapa
-            if (nf >= 0 && nf < mapaResultado.size() && nc >= 0 && nc < mapaResultado[0].size()) {
-                char sup = mapaResultado[nf][nc];
-                
-                // Las tuberías no pueden atravesar Muros ni Precipicios
-                if (sup == 'M' || sup == 'P') continue;
-
-                int h_vecino_base = mapaCotas[nf][nc];
-
-                // Probamos a poner la tubería en el vecino con las 3 modificaciones posibles
-                for (int mod_vecino = -1; mod_vecino <= 1; ++mod_vecino) {
-                    int h_vecino_final = h_vecino_base + mod_vecino;
-
-                    // REGLA DE GRAVEDAD: El agua no sube cuestas (h_actual >= h_vecino_final)
-                    if (h_actual >= h_vecino_final) {
-                        estado_tuberia st_hijo = {nf, nc, mod_vecino};
-
-                        // Si es una configuración nueva, la exploramos
-                        if (cerrados.find(st_hijo) == cerrados.end()) {
-                            nodo_tuberia hijo = actual;
-                            hijo.st = st_hijo;
-                            
-                            Paso p;
-                            p.fil = nf;
-                            p.col = nc;
-                            p.op = mod_vecino;
-                            hijo.secuencia.push_back(p);
-                            
-                            cerrados.insert(st_hijo);
-                            abierta.push(hijo);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    return list<Paso>(); // No hay ruta posible
-}

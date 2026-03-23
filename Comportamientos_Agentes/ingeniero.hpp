@@ -23,13 +23,8 @@ public:
    */
   ComportamientoIngeniero(unsigned int size = 0) : Comportamiento(size) {
     // Inicializar Variables de Estado
-    // Inicializar Variables de Estado
-    last_action = IDLE ;
-    tiene_zapatillas = false ;
-    giro45Izq = 0 ; 
-    intentos_exploracion = 0;
-    fase_construccion = false;
-    estado_obra_ing_6 = ING6_EXPLORAR;
+    last_action = IDLE;
+    tiene_zapatillas = false;
   }
 
   /**
@@ -40,17 +35,9 @@ public:
   ComportamientoIngeniero(std::vector<std::vector<unsigned char>> mapaR, 
                          std::vector<std::vector<unsigned char>> mapaC): 
                          Comportamiento(mapaR, mapaC) {
-    hayPlan = false ;
-    hayPlanTuberias = false ;
-    tiene_zapatillas = false ;
-    last_action = IDLE ;
-    giro45Izq = 0 ;
-    intentos_exploracion = 0;
-    fase_construccion = false;
-
-    estado_obra_ing = ING_PLANIFICAR ;
+    // Inicializar Variables de Estado
   }
-
+    
   ComportamientoIngeniero(const ComportamientoIngeniero &comport)
       : Comportamiento(comport) {}
   ~ComportamientoIngeniero() {}
@@ -249,49 +236,12 @@ private:
   // VARIABLES DE ESTADO (PUEDEN SER EXTENDIDAS POR EL ALUMNO)
   // =========================================================================
   Action last_action ;
-  bool tiene_zapatillas ; 
-  int giro45Izq ;
+  bool tiene_zapatillas ;
 
-  bool hayPlan ;        // Para saber si ya he calculado la ruta o no
-  list<Action> plan ;   // Aquí guardo las instrucciones a seguir
-  list<Action> BusquedaEnAnchura(const estado& origen, const estado& destino); // Función del algoritmo de búsqueda.
+  // MÉTODOS AUXILIARES PARA EL NIVEL 0
+  char ViablePorAltura(char casilla, int dif, bool zap);
+  int VeoCasillaInteresante(char i, char c, char d, bool zap);
 
-  bool hayPlanTuberias;
-  list<Paso> planTuberias;
-  list<Paso> PlanificaTuberias(int f_inicio, int c_inicio);
-
-  // Nivel 5
-  // --- Variables Nivel 5 (Máquina de Estados) ---
-    enum EstadoObraIng {
-        ING_PLANIFICAR,
-        ING_IR_CASILLA,
-        ING_TERRAFORMAR,
-        ING_POSICIONARSE, 
-        ING_AVISAR_TECNICO,
-        ING_ESPERAR_TECNICO,
-        ING_INSTALAR
-    };
-
-    // Nivel 6
-    enum EstadoObraIng6 {
-        ING6_EXPLORAR,       // <-- ¡El nuevo estado inicial!
-        ING6_PLANIFICAR,
-        ING6_IR_CASILLA,
-        ING6_TERRAFORMAR,
-        ING6_AVISAR_TECNICO,
-        ING6_ESPERAR_TECNICO,
-        ING6_INSTALAR
-    };
-    EstadoObraIng6 estado_obra_ing_6;
-
-    EstadoObraIng estado_obra_ing;
-    Paso paso_actual;            // La tubería que estamos instalando ahora mismo
-    list<Action> ruta_actual; // La ruta paso a paso para llegar a la casilla
-
-    // Nivel 6 - variables adicionales
-    list<Action> BusquedaEnAnchuraN6(const estado& origen, const estado& destino);
-    int intentos_exploracion;   // Contador de intentos fallidos de exploración
-    bool fase_construccion;     // true cuando ya tenemos plan de tuberías y estamos construyendo
 };
 
 
