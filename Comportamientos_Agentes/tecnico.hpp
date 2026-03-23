@@ -53,6 +53,7 @@ public:
   ComportamientoTecnico(std::vector<std::vector<unsigned char>> mapaR, 
                        std::vector<std::vector<unsigned char>> mapaC): 
                        Comportamiento(mapaR, mapaC) {
+    hay_plan = false;
   }
 
   ComportamientoTecnico(const ComportamientoTecnico &comport): Comportamiento(comport) {}
@@ -245,6 +246,41 @@ private:
   bool es_transitable_N1(unsigned char c, bool zap) const; // El técnico usa zap para el bosque
   char ViablePorAltura_N1(char casilla, int dif); 
   int VeoCasillaInteresante_N1(char i, char c, char d, bool zap);
+
+  // =========================================================
+  // === VARIABLES Y ESTRUCTURAS NIVEL 2 (DELIBERATIVO) ===
+  // =========================================================
+  
+  bool hay_plan;
+  std::list<Action> plan;
+
+  // Representa la situación exacta del agente en el mundo
+  struct Estado {
+      int f;
+      int c;
+      Orientacion brujula;
+      
+      // Sobrecargamos el operador < para poder guardar Estados en un std::set (Cerrados)
+      bool operator<(const Estado& otro) const {
+          if (f != otro.f) return f < otro.f;
+          if (c != otro.c) return c < otro.c;
+          return brujula < otro.brujula;
+      }
+      // Sobrecargamos el operador == para comparar si hemos llegado a la meta
+      bool operator==(const Estado& otro) const {
+          return f == otro.f && c == otro.c && brujula == otro.brujula;
+      }
+  };
+
+  // Representa un nodo en nuestro árbol de búsqueda
+  struct Nodo {
+      Estado st;
+      std::list<Action> secuencia; // Lista de acciones para llegar a este estado
+      // int coste_acumulado; // Lo usaremos más adelante si implementamos Dijkstra o A*
+  };
+
+  // Función principal de búsqueda
+  bool EncontrarPlan_N2(const Estado& inicio, std::list<Action>& plan_resultante);
 
 };
 

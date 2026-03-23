@@ -189,13 +189,50 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_1(Sensores sensores) {
   return accion;
 }
 
+
+
+
+
+bool ComportamientoTecnico::EncontrarPlan_N2(const Estado& inicio, std::list<Action>& plan_resultante) {
+  plan_resultante.clear();
+  
+  // AQUÍ PROGRAMAREMOS LA MAGIA DE LA BÚSQUEDA (BFS, Dijkstra, A*)
+
+  return false; 
+}
+
 /**
  * @brief Comportamiento del técnico para el Nivel 2.
  * @param sensores Datos actuales de los sensores.
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_2(Sensores sensores) {
-  return IDLE;
+  Action accion = IDLE;
+
+  // FASE 1: DELIBERACIÓN (Generar el plan)
+  if (!hay_plan) {
+      // 1. Instanciamos nuestro estado actual
+      Estado estado_inicial;
+      estado_inicial.f = sensores.posF;
+      estado_inicial.c = sensores.posC;
+      estado_inicial.brujula = sensores.rumbo;
+
+      // 2. Llamamos al algoritmo de búsqueda
+      hay_plan = EncontrarPlan_N2(estado_inicial, plan);
+
+      // Si no ha encontrado ningún plan posible, nos quedamos parados
+      if (!hay_plan) {
+          return IDLE;
+      }
+  }
+
+  // FASE 2: EJECUCIÓN (Consumir el plan paso a paso)
+  if (hay_plan && !plan.empty()) {
+      accion = plan.front(); // Miramos la primera acción
+      plan.pop_front();      // La borramos de la lista para no repetirla
+  }
+
+  return accion;
 }
 
 /**

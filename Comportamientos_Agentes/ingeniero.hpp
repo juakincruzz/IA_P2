@@ -45,6 +45,7 @@ public:
                          std::vector<std::vector<unsigned char>> mapaC): 
                          Comportamiento(mapaR, mapaC) {
     // Inicializar Variables de Estado
+    hay_plan = false;
   }
     
   ComportamientoIngeniero(const ComportamientoIngeniero &comport)
@@ -260,6 +261,45 @@ private:
   bool es_transitable_N1(unsigned char c) const;
   char ViablePorAltura_N1(char casilla, int dif, bool zap);
   int VeoCasillaInteresante_N1(char i, char c, char d, bool zap);
+
+  // =========================================================
+  // === VARIABLES Y ESTRUCTURAS NIVEL 2 (DELIBERATIVO) ===
+  // =========================================================
+  
+  bool hay_plan;
+  std::list<Action> plan;
+
+  // Representa la situación exacta del agente en el mundo
+  struct Estado {
+      int f;
+      int c;
+      Orientacion brujula;
+      
+      // Sobrecargamos el operador < para poder guardar Estados en un std::set (Cerrados)
+      bool operator<(const Estado& otro) const {
+          if (f != otro.f) return f < otro.f;
+          if (c != otro.c) return c < otro.c;
+          return brujula < otro.brujula;
+      }
+      // Sobrecargamos el operador == para comparar si hemos llegado a la meta
+      bool operator==(const Estado& otro) const {
+          return f == otro.f && c == otro.c && brujula == otro.brujula;
+      }
+  };
+
+  // Representa un nodo en nuestro árbol de búsqueda
+  struct Nodo {
+      Estado st;
+      std::list<Action> secuencia; // Lista de acciones para llegar a este estado
+      // int coste_acumulado; // Lo usaremos más adelante si implementamos Dijkstra o A*
+  };
+
+  // Función principal de búsqueda
+  bool EncontrarPlan_N2(const Estado& inicio, int dest_f, int dest_c, std::list<Action>& plan_resultante);
+
+  // Funciones para la Búsqueda Deliberativa
+  Estado AplicaAccion_N2(const Estado& st, Action act);
+  bool EsValida_N2(const Estado& st, Action act);
 
 };
 
