@@ -55,8 +55,7 @@ char ViablePorAlturaI(char casilla, int dif, bool zap) {
 
 // Filtro Nivel 1 Ingeniero
 char ViablePorAlturaI_Nivel1(char casilla, int dif) {
-    // Permitimos la hierba ('H') como último recurso para el Ingeniero
-    if (casilla == 'P' || casilla == 'M' || casilla == 'B' || casilla == 'A') return 'P';
+    if (casilla == 'P' || casilla == 'M' || casilla == 'B' || casilla == 'A' || casilla == 'H') return 'P';
     if (abs(dif) <= 1) return casilla;
     return 'P';
 }
@@ -160,29 +159,35 @@ bool ComportamientoIngeniero::es_camino(unsigned char c) const
  * @return Acción a realizar.
 */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores) {
-    if (sensores.superficie[0] == 'U') return IDLE;
-    
-    // Coger zapatillas si las pisamos
-    if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
-    
-    // ¡SUPERVIVENCIA! Si estamos sobre una recarga y con menos de la mitad de batería, recargamos
-    if (sensores.superficie[0] == 'X' && sensores.energia < 1500) return IDLE;
+    Action accion = IDLE;
 
-    char enf = sensores.superficie[2];
-    int dif = sensores.cota[2] - sensores.cota[0];
-    
-    bool obstaculo = (enf == 'M' || enf == 'P' || abs(dif) > 1 || sensores.agentes[2] != '_');
-    
-    // En Nivel 1 evitamos morir tontamente por el entorno:
-    if (enf == 'A') obstaculo = true; // Evitamos el agua
-    if (enf == 'B' && !tiene_zapatillas) obstaculo = true; // Evitamos el bosque si vamos descalzos
+    ActualizarMapa(sensores);
 
-    if (sensores.choque || obstaculo) {
-        // Giro asimétrico para salir de laberintos naturales
-        return (rand() % 100 < 70) ? TURN_SR : TURN_SL;
+    // Si nos chocamos, giramos aleatoriamente para no quedarnos rebotando en una esquina
+    if (sensores.choque) {
+        accion = (rand() % 2 == 0) ? TURN_SL : TURN_SR;
+        last_action = accion;
+        return accion;
     }
-    
-    return WALK;
+
+    char i = ViablePorAlturaI_Nivel1(sensores.superficie[1], sensores.cota[1] - sensores.cota[0]);
+    char c = ViablePorAlturaI_Nivel1(sensores.superficie[2], sensores.cota[2] - sensores.cota[0]);
+    char d = ViablePorAlturaI_Nivel1(sensores.superficie[3], sensores.cota[3] - sensores.cota[0]);
+
+    int pos = VeoCasillaInteresanteI_Nivel1(i, c, d);
+
+    switch (pos) {
+        case 2: accion = WALK; break;
+        case 1: accion = TURN_SL; break;
+        case 3: accion = TURN_SR; break;
+        default:
+            // Exploración caótica: si no hay caminos, giramos aleatoriamente
+            accion = (rand() % 2 == 0) ? TURN_SL : TURN_SR;
+            break;
+    }
+
+    last_action = accion;
+    return accion;
 }
 
 // Niveles avanzados (Uso de búsqueda)
