@@ -107,47 +107,41 @@ int VeoCasillaInteresanteI_Nivel1(char i, char c, char d) {
 // Niveles iniciales (Comportamientos reactivos simples)
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores)
 {
-  Action accion = IDLE;
-
-  // Fase 1: Actualización de información.
-  // Pinto el mapa lo que los sensores ven.
-  ActualizarMapa(sensores) ;
-
-  // Si la casilla en la que estoy es índice 0 es una zapatilla ('D'), me la guardo.
-  if (sensores.superficie[0] == 'D') tiene_zapatillas = true ;
-
-  // Fase 2: Definición del comportamiento
-    if (sensores.superficie[0] == 'U') { // Llegué a una 'U'
+  // 1. Condición de éxito: Si pisamos la Belkanita, nos quedamos quietos.
+    if (sensores.superficie[0] == 'U') {
         return IDLE;
     }
 
-    // Calculamos si las tres casillas de delante son viables por altura
-    char i = ViablePorAlturaI(sensores.superficie[1], sensores.cota[1] - sensores.cota[0], tiene_zapatillas);
-    char c = ViablePorAlturaI(sensores.superficie[2], sensores.cota[2] - sensores.cota[0], tiene_zapatillas);
-    char d = ViablePorAlturaI(sensores.superficie[3], sensores.cota[3] - sensores.cota[0], tiene_zapatillas);
-
-    // Evaluamos qué es lo más interesante de lo que SÍ podemos pisar
-    int pos = VeoCasillaInteresanteI(i, c, d, tiene_zapatillas);
-
-    switch (pos) {
-        case 2:
-            accion = WALK;
-            break;
-        case 1:
-            accion = TURN_SL;
-            break;
-        case 3:
-            accion = TURN_SR;
-            break;
-        default:
-            accion = TURN_SL; // Si no hay nada interesante, giro para buscar
-            break;
+    // 2. Recolección pasiva: Si pisamos zapatillas, las guardamos.
+    if (sensores.superficie[0] == 'D') {
+        tiene_zapatillas = true;
     }
 
-    // Guardo la acción que he decidido tomar en mi memoria
-    last_action = accion;
+    // 3. Análisis del entorno inmediato (Casilla 2 = justo enfrente)
+    char enf = sensores.superficie[2];
+    int dif = sensores.cota[2] - sensores.cota[0];
 
-  return accion;
+    // 4. Filtro de Supervivencia: Detectar cualquier cosa que nos pueda matar o bloquear
+    bool peligro = false;
+    
+    // Obstáculos físicos
+    if (enf == 'M' || enf == 'P') peligro = true; 
+    if (abs(dif) > 1) peligro = true; 
+    if (sensores.agentes[2] != '_') peligro = true; 
+    
+    // Trampas de entorno (Esenciales en el mapa 75)
+    if (enf == 'A') peligro = true; // El agua fulmina la batería
+    if (enf == 'B' && !tiene_zapatillas) peligro = true; // El bosque descalzo agota la energía
+
+    // 5. Motor Reactivo Puro (Determinista)
+    if (peligro || sensores.choque) {
+        // Giramos SIEMPRE a la derecha. Esto implementa la regla de "seguir la pared"
+        // y es matemáticamente imposible que se quede vibrando en bucle en una esquina.
+        return TURN_SR;
+    } else {
+        // Si el camino está despejado y es seguro, avanzamos.
+        return WALK;
+    }
 }
 
 /**
@@ -166,37 +160,29 @@ bool ComportamientoIngeniero::es_camino(unsigned char c) const
  * @return Acción a realizar.
 */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores) {
-    ActualizarMapa(sensores);
+    if (sensores.superficie[0] == 'U') return IDLE;
     
-    // Protocolo de supervivencia (nos sentamos si hay poca energía)
-    if (sensores.energia <= 50) return IDLE;
+    // Coger zapatillas si las pisamos
+    if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
+    
+    // ¡SUPERVIVENCIA! Si estamos sobre una recarga y con menos de la mitad de batería, recargamos
+    if (sensores.superficie[0] == 'X' && sensores.energia < 1500) return IDLE;
 
-    Action accion = IDLE;
+    char enf = sensores.superficie[2];
+    int dif = sensores.cota[2] - sensores.cota[0];
+    
+    bool obstaculo = (enf == 'M' || enf == 'P' || abs(dif) > 1 || sensores.agentes[2] != '_');
+    
+    // En Nivel 1 evitamos morir tontamente por el entorno:
+    if (enf == 'A') obstaculo = true; // Evitamos el agua
+    if (enf == 'B' && !tiene_zapatillas) obstaculo = true; // Evitamos el bosque si vamos descalzos
 
-    if (sensores.choque) {
-        accion = (rand() % 2 == 0) ? TURN_SL : TURN_SR;
-        last_action = accion;
-        return accion;
+    if (sensores.choque || obstaculo) {
+        // Giro asimétrico para salir de laberintos naturales
+        return (rand() % 100 < 70) ? TURN_SR : TURN_SL;
     }
-
-    char i = ViablePorAlturaI_Nivel1(sensores.superficie[1], sensores.cota[1] - sensores.cota[0]);
-    char c = ViablePorAlturaI_Nivel1(sensores.superficie[2], sensores.cota[2] - sensores.cota[0]);
-    char d = ViablePorAlturaI_Nivel1(sensores.superficie[3], sensores.cota[3] - sensores.cota[0]);
-
-    int pos = VeoCasillaInteresanteI_Nivel1(i, c, d);
-
-    if (pos == 2) accion = WALK;
-    else if (pos == 1) accion = TURN_SL;
-    else if (pos == 3) accion = TURN_SR;
-    else {
-        // ANTIBUCLE en callejones: forzamos dar la media vuelta completa
-        if (last_action == TURN_SL) accion = TURN_SL;
-        else if (last_action == TURN_SR) accion = TURN_SR;
-        else accion = (rand() % 2 == 0) ? TURN_SL : TURN_SR;
-    }
-
-    last_action = accion;
-    return accion;
+    
+    return WALK;
 }
 
 // Niveles avanzados (Uso de búsqueda)
@@ -242,7 +228,33 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_2(Sensores sensores
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_3(Sensores sensores)
 {
-  return IDLE;
+  ActualizarMapa(sensores);
+    if (sensores.tiempo == 0) ruta_actual.clear();
+    
+    // Si llegamos a la Belkanita, paramos
+    if (sensores.posF == sensores.BelPosF && sensores.posC == sensores.BelPosC) return IDLE;
+    
+    if (sensores.choque) ruta_actual.clear();
+
+    if (ruta_actual.empty()) {
+        estado origen = {sensores.posF, sensores.posC, sensores.rumbo};
+        estado destino = {sensores.BelPosF, sensores.BelPosC, 0};
+        // Usamos tu búsqueda optimista
+        ruta_actual = BusquedaEnAnchuraN6(origen, destino);
+        if (ruta_actual.empty()) return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
+    }
+
+    if (!ruta_actual.empty()) {
+        Action a = ruta_actual.front();
+        ruta_actual.pop_front();
+        // Antichoques
+        if (a == WALK && (sensores.superficie[2] == 'M' || sensores.superficie[2] == 'P')) {
+            ruta_actual.clear();
+            return IDLE;
+        }
+        return a;
+    }
+    return IDLE;
 }
 
 /**
@@ -395,6 +407,18 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores)
 {
     ActualizarMapa(sensores);
+
+    // ========================================================
+    // PANEL DE DEBUG TEMPORAL - INGENIERO
+    // ========================================================
+    if ((int)sensores.tiempo % 50 == 0) {
+        cout << "[DEBUG ING] Tick: " << sensores.tiempo 
+             << " | Pos: (" << sensores.posF << "," << sensores.posC << ")"
+             << " | Bateria: " << sensores.energia 
+             << " | EstadoMente: " << estado_obra_ing_6 
+             << " | Pasos Ruta: " << ruta_actual.size() << endl;
+    }
+    // ========================================================
     
     if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
@@ -411,7 +435,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
 
         case ING6_EXPLORAR:
         {
-            // --- INTENTAR PLANIFICAR TUBERIAS ---
+            // --- 1. INTENTAR PLANIFICAR TUBERIAS ---
             if (sensores.BelPosF != -1 && sensores.BelPosC != -1) {
                 bool hay_U = false;
                 for (int r = 0; r < (int)mapaResultado.size() && !hay_U; r++)
@@ -420,75 +444,90 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
                 if (hay_U) {
                     list<Paso> plan_candidato = PlanificaTuberias(sensores.BelPosF, sensores.BelPosC);
                     if (!plan_candidato.empty()) {
-                        planTuberias = plan_candidato;
-                        hayPlanTuberias = true;
-                        fase_construccion = true;
-                        VisualizaRedTuberias(planTuberias);
-                        ruta_actual.clear();
-                        estado_obra_ing_6 = ING6_PLANIFICAR;
-                        return IDLE;
+                        // Comprobamos si podemos caminar hasta el inicio
+                        estado origen = {sensores.posF, sensores.posC, sensores.rumbo};
+                        estado destino = {sensores.BelPosF, sensores.BelPosC, 0};
+                        list<Action> ruta_al_inicio = BusquedaEnAnchuraN6(origen, destino);
+                        
+                        if (!ruta_al_inicio.empty() || (sensores.posF == sensores.BelPosF && sensores.posC == sensores.BelPosC)) {
+                            planTuberias = plan_candidato;
+                            hayPlanTuberias = true;
+                            fase_construccion = true;
+                            VisualizaRedTuberias(planTuberias);
+                            
+                            // ¡CORRECCIÓN VITAL! Vamos a PLANIFICAR para sacar el primer tubo de la lista
+                            ruta_actual.clear();
+                            estado_obra_ing_6 = ING6_PLANIFICAR; 
+                            
+                            cout << "Jefe de obra: ¡PLAN MAESTRO ENCONTRADO! Tubos a instalar: " << planTuberias.size() << endl;
+                            return IDLE;
+                        }
                     }
                 }
             }
 
-            // --- PROTECCION DE ENERGIA ---
+            // --- 2. PROTECCION DE ENERGIA ---
             if (sensores.energia < 100) return IDLE;
 
-            // --- EXPLORACION REACTIVA PURA (estilo nivel 0 mejorado) ---
-            // Primero: evaluar las 3 casillas frontales con filtro de altura
-            {
-                char i_s = ViablePorAlturaI(sensores.superficie[1], sensores.cota[1] - sensores.cota[0], tiene_zapatillas);
-                char c_s = ViablePorAlturaI(sensores.superficie[2], sensores.cota[2] - sensores.cota[0], tiene_zapatillas);
-                char d_s = ViablePorAlturaI(sensores.superficie[3], sensores.cota[3] - sensores.cota[0], tiene_zapatillas);
-
-                // Buscar C, S, D, U, X primero (terreno barato)
-                bool izq_buena = (i_s == 'C' || i_s == 'S' || i_s == 'D' || i_s == 'U' || i_s == 'X');
-                bool cen_buena = (c_s == 'C' || c_s == 'S' || c_s == 'D' || c_s == 'U' || c_s == 'X');
-                bool der_buena = (d_s == 'C' || d_s == 'S' || d_s == 'D' || d_s == 'U' || d_s == 'X');
-
-                // Seleccion con aleatoriedad en bifurcaciones
-                if (cen_buena && izq_buena && der_buena) {
-                    int r = rand() % 3;
-                    if (r == 0) return WALK;
-                    if (r == 1) return TURN_SL;
-                    return TURN_SR;
+            // --- 3. EXPLORACION INTELIGENTE ---
+            if (ruta_actual.empty()) {
+                int dest_f = -1, dest_c = -1;
+                int min_dist = 999999;
+                
+                for (int r = 0; r < (int)mapaResultado.size(); r += 2) {
+                    for (int c = 0; c < (int)mapaResultado[0].size(); c += 2) {
+                        if (mapaResultado[r][c] == '?') {
+                            int dist = abs(sensores.posF - r) + abs(sensores.posC - c);
+                            if (dist < min_dist) {
+                                min_dist = dist; dest_f = r; dest_c = c;
+                            }
+                        }
+                    }
                 }
-                if (cen_buena && izq_buena) return (rand() % 2 == 0) ? WALK : TURN_SL;
-                if (cen_buena && der_buena) return (rand() % 2 == 0) ? WALK : TURN_SR;
-                if (izq_buena && der_buena) return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
-                if (cen_buena) return WALK;
-                if (izq_buena) return TURN_SL;
-                if (der_buena) return TURN_SR;
 
-                // Plan B: hierba (coste 6 por paso, aceptable)
-                bool izq_h = (i_s == 'H');
-                bool cen_h = (c_s == 'H');
-                bool der_h = (d_s == 'H');
-                if (cen_h) return WALK;
-                if (izq_h && der_h) return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
-                if (izq_h) return TURN_SL;
-                if (der_h) return TURN_SR;
-
-                // Plan C: agua (coste 60, solo si no hay otra opcion)
-                bool izq_a = (i_s == 'A');
-                bool cen_a = (c_s == 'A');
-                bool der_a = (d_s == 'A');
-                if (cen_a && sensores.agentes[2] == '_') return WALK;
-                if (izq_a) return TURN_SL;
-                if (der_a) return TURN_SR;
-
-                // Nada viable: girar para buscar nueva direccion
-                return TURN_SL;
+                if (dest_f != -1) {
+                    estado origen = {sensores.posF, sensores.posC, sensores.rumbo};
+                    estado destino = {dest_f, dest_c, 0};
+                    ruta_actual = BusquedaEnAnchuraN6(origen, destino);
+                    
+                    if (ruta_actual.empty()) {
+                        mapaResultado[dest_f][dest_c] = 'M'; // Poda
+                        return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
+                    }
+                } else {
+                    return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
+                }
             }
+
+            if (!ruta_actual.empty()) {
+                Action a = ruta_actual.front();
+                ruta_actual.pop_front();
+                
+                if (a == WALK) {
+                    char enf = sensores.superficie[2];
+                    if (enf == 'M' || enf == 'P') {
+                        ruta_actual.clear();
+                        return (rand() % 2 == 0) ? TURN_SL : TURN_SR; // Evita bucles al chocar
+                    }
+                    int dif_h = sensores.cota[2] - sensores.cota[0];
+                    int max_d = tiene_zapatillas ? 2 : 1;
+                    if (abs(dif_h) > max_d) {
+                        ruta_actual.clear();
+                        return (rand() % 2 == 0) ? TURN_SL : TURN_SR; // Evita bucles
+                    }
+                }
+                return a;
+            }
+            return IDLE;
         }
 
         case ING6_PLANIFICAR:
         {
             if (planTuberias.empty()) {
-                // Red completada o vacía
                 return IDLE;
             }
 
+            // AHORA SÍ: Inicializamos paso_actual antes de ir a caminar
             paso_actual = planTuberias.front();
             planTuberias.pop_front();
             estado_obra_ing_6 = ING6_IR_CASILLA;
@@ -498,63 +537,51 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
 
         case ING6_IR_CASILLA:
         {
-            ActualizarMapa(sensores); // Seguir mapeando mientras nos movemos
+            ActualizarMapa(sensores); 
             
-            // Verificar que la casilla destino del tubo sigue siendo válida
-            char celda_tubo = mapaResultado[paso_actual.fil][paso_actual.col];
-            if (celda_tubo == 'M' || celda_tubo == 'P') {
-                // La casilla era '?' cuando planificamos, ahora es muro/precipicio
-                // Replanificar completamente
-                estado_obra_ing_6 = ING6_EXPLORAR;
-                hayPlanTuberias = false;
-                fase_construccion = false;
-                planTuberias.clear();
-                ruta_actual.clear();
-                return IDLE;
-            }
-            
+            // Si ya estamos sobre la casilla del tubo, a terraformar
             if (sensores.posF == paso_actual.fil && sensores.posC == paso_actual.col) {
                 estado_obra_ing_6 = ING6_TERRAFORMAR;
                 return IDLE;
             }
             
             if (ruta_actual.empty()) {
-                estado origen; origen.fila = sensores.posF; origen.columna = sensores.posC; origen.orientacion = sensores.rumbo;
-                estado destino; destino.fila = paso_actual.fil; destino.columna = paso_actual.col;
-                // Primero intentar por terreno conocido (barato)
+                estado origen = {sensores.posF, sensores.posC, sensores.rumbo};
+                estado destino = {paso_actual.fil, paso_actual.col, 0};
+                
                 ruta_actual = BusquedaEnAnchura(origen, destino);
-                if (ruta_actual.empty()) {
-                    // Si no hay camino conocido, intentar optimista
-                    ruta_actual = BusquedaEnAnchuraN6(origen, destino);
-                }
+                if (ruta_actual.empty()) ruta_actual = BusquedaEnAnchuraN6(origen, destino);
                 
                 if (ruta_actual.empty()) {
-                    // No podemos llegar. Volver a explorar.
-                    estado_obra_ing_6 = ING6_EXPLORAR;
-                    hayPlanTuberias = false;
-                    fase_construccion = false;
-                    planTuberias.clear();
-                    return IDLE;
+                    // ¡PROHIBIDO BORRAR EL PLAN MAESTRO! 
+                    // Damos un pequeño giro para actualizar los sensores y lo intentamos en el siguiente tick.
+                    return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
                 }
             }
             
             if (!ruta_actual.empty()) {
                 Action a = ruta_actual.front();
-                ruta_actual.pop_front();
                 
                 if (a == WALK) {
                     char enf = sensores.superficie[2];
                     if (enf == 'M' || enf == 'P') {
                         ruta_actual.clear();
-                        return IDLE;
+                        return (rand() % 2 == 0) ? TURN_SL : TURN_SR; 
                     }
                     int dif_h = sensores.cota[2] - sensores.cota[0];
                     int max_d = tiene_zapatillas ? 2 : 1;
                     if (abs(dif_h) > max_d) {
                         ruta_actual.clear();
-                        return IDLE;
+                        return (rand() % 2 == 0) ? TURN_SL : TURN_SR; 
+                    }
+                    // ¡NUEVO!: Radar anticolesiones con el Técnico
+                    if (sensores.agentes[2] != '_') {
+                        ruta_actual.clear();
+                        return IDLE; // Nos quedamos quietos esperando a que se aparte
                     }
                 }
+                
+                ruta_actual.pop_front();
                 return a;
             }
             return IDLE;
@@ -576,6 +603,8 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
             return COME;
 
         case ING6_ESPERAR_TECNICO:
+            // ¡RADAR ACTIVADO! Giramos continuamente para no darle la espalda al Operario.
+            // Sobra muchísima batería, así que el coste de girar nos da igual.
             if (sensores.agentes[2] == 't' && sensores.enfrente) {
                 estado_obra_ing_6 = ING6_INSTALAR;
                 return INSTALL;

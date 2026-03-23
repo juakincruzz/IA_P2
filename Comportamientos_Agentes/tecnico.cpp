@@ -127,15 +127,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
     return accion;
 }
 
-/**
- * @brief Comprueba si una celda es de tipo camino transitable.
- * @param c Carácter que representa el tipo de superficie.
- * @return true si es camino ('C'), zapatillas ('D') o meta ('U').
- */
-bool ComportamientoTecnico::es_camino(unsigned char c) const {
-  return (c == 'C' || c == 'D' || c == 'U');
-}
-
 
 /**
  * @brief Comportamiento reactivo del técnico para el Nivel 1.
@@ -143,37 +134,7 @@ bool ComportamientoTecnico::es_camino(unsigned char c) const {
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_1(Sensores sensores) {
-    ActualizarMapa(sensores);
-    
-    // Protocolo de supervivencia (nos sentamos si hay poca energía)
-    if (sensores.energia <= 50) return IDLE;
-
-    Action accion = IDLE;
-
-    if (sensores.choque) {
-        accion = (rand() % 2 == 0) ? TURN_SL : TURN_SR;
-        last_action = accion;
-        return accion;
-    }
-
-    char i = ViablePorAlturaT_Nivel1(sensores.superficie[1], sensores.cota[1] - sensores.cota[0]);
-    char c = ViablePorAlturaT_Nivel1(sensores.superficie[2], sensores.cota[2] - sensores.cota[0]);
-    char d = ViablePorAlturaT_Nivel1(sensores.superficie[3], sensores.cota[3] - sensores.cota[0]);
-
-    int pos = VeoCasillaInteresanteT_Nivel1(i, c, d);
-
-    if (pos == 2) accion = WALK;
-    else if (pos == 1) accion = TURN_SL;
-    else if (pos == 3) accion = TURN_SR;
-    else {
-        // ANTIBUCLE en callejones: forzamos dar la media vuelta completa
-        if (last_action == TURN_SL) accion = TURN_SL;
-        else if (last_action == TURN_SR) accion = TURN_SR;
-        else accion = (rand() % 2 == 0) ? TURN_SL : TURN_SR;
-    }
-
-    last_action = accion;
-    return accion;
+  return IDLE;
 }
 
 /**
@@ -191,26 +152,41 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_2(Sensores sensores) {
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_3(Sensores sensores) {
-  if (!hayPlan) {
+  ActualizarMapa(sensores);
+    if (sensores.tiempo == 0) ruta_actual_tec.clear();
+    
+    // Si llegamos a la Belkanita, paramos
+    if (sensores.posF == sensores.BelPosF && sensores.posC == sensores.BelPosC) return IDLE;
+    
+    if (sensores.choque) ruta_actual_tec.clear();
+
+    if (ruta_actual_tec.empty()) {
         estado origen;
         origen.fila = sensores.posF;
         origen.columna = sensores.posC;
         origen.orientacion = sensores.rumbo;
-
+        
         estado destino;
         destino.fila = sensores.BelPosF;
         destino.columna = sensores.BelPosC;
+        destino.orientacion = 0;
 
-        plan = AEstrella(origen, destino);
-        hayPlan = true;
+        // Usamos la búsqueda optimista del técnico (A*)
+        ruta_actual_tec = AEstrellaN6(origen, destino);
+        if (ruta_actual_tec.empty()) return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
     }
 
-    Action accion = IDLE;
-    if (hayPlan && !plan.empty()) {
-        accion = plan.front();
-        plan.pop_front();
+    if (!ruta_actual_tec.empty()) {
+        Action a = ruta_actual_tec.front();
+        ruta_actual_tec.pop_front();
+        // Antichoques
+        if (a == WALK && (sensores.superficie[2] == 'M' || sensores.superficie[2] == 'P')) {
+            ruta_actual_tec.clear();
+            return IDLE;
+        }
+        return a;
     }
-  return accion;
+    return IDLE;
 }
 
 /**
@@ -316,6 +292,20 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
     // 1. El Técnico abre los ojos y mapea en Nivel 6
     ActualizarMapa(sensores);
 
+    // ========================================================
+    // PANEL DE DEBUG TEMPORAL - TECNICO
+    // ========================================================
+    if ((int)sensores.tiempo % 50 == 0) {
+        cout << "[DEBUG TEC] Tick: " << sensores.tiempo 
+             << " | Pos: (" << sensores.posF << "," << sensores.posC << ")"
+             << " | Bateria: " << sensores.energia 
+             << " | EstadoMente: " << estado_obra_tec 
+             << " | Pasos Ruta: " << ruta_actual_tec.size() 
+             << " | Escucha Llamada?: " << (sensores.venpaca ? "SI" : "NO") 
+             << " | DestinoJefe: (" << sensores.GotoF << "," << sensores.GotoC << ")" << endl;
+    }
+    // ========================================================
+
     if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
     static int dest_f = -1;
@@ -345,80 +335,114 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
     }
 
     switch(estado_obra_tec) {
-
         case TEC_ESPERAR_AVISO:
-            // En nivel 6, giramos para mapear con los sensores pero sin gastar energía caminando
-            // Solo giramos cada pocos turnos para no gastar toda la energía
-            return TURN_SR; // Giro mínimo (coste 1 en la mayoría de terrenos)
+            if (sensores.venpaca) {
+                estado_obra_tec = TEC_IR_CASILLA;
+                destino_f = sensores.GotoF;
+                destino_c = sensores.GotoC;
+                ruta_actual_tec.clear();
+                return IDLE;
+            } else {
+                // EL TÉCNICO SE RETIRA A LA BASE PARA NO ESTORBAR AL INGENIERO
+                int dist_base = abs(sensores.posF - 11) + abs(sensores.posC - 18);
+                if (dist_base <= 2) return IDLE; // Si ya estamos cerca de la base, descansamos
+
+                if (ruta_actual_tec.empty()) {
+                    estado origen = {sensores.posF, sensores.posC, sensores.rumbo};
+                    estado destino = {11, 18, 0}; // Coordenadas seguras de inicio
+                    ruta_actual_tec = AEstrellaN6(origen, destino);
+                    if (ruta_actual_tec.empty()) return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
+                }
+                
+                Action a = ruta_actual_tec.front();
+                ruta_actual_tec.pop_front();
+                
+                // Radar antichoques mientras huye
+                if (a == WALK && (sensores.superficie[2] == 'M' || sensores.superficie[2] == 'P' || sensores.agentes[2] != '_')) {
+                    ruta_actual_tec.clear();
+                    return IDLE;
+                }
+                return a;
+            } 
 
         case TEC_IR_CASILLA:
-            // Si estamos adyacentes al destino, pasamos a alinearnos
-            if (abs(sensores.posF - dest_f) + abs(sensores.posC - dest_c) <= 1) {
+        {
+            ActualizarMapa(sensores);
+            
+            // NUEVO: Verificación de adyacencia usando distancia Manhattan (ORTOGONAL)
+            int dist = abs(sensores.posF - destino_f) + abs(sensores.posC - destino_c);
+            if (dist == 1) {
+                cout << "Operario: ¡Estoy al lado! Empezando maniobra de alineación." << endl;
                 estado_obra_tec = TEC_ALINEARSE;
                 ruta_actual_tec.clear();
                 return IDLE;
             }
 
-            // Si no tenemos ruta, calculamos con A* optimista
+            // Si el jefe avanza al siguiente tubo, actualizamos destino
+            if (sensores.venpaca && (destino_f != sensores.GotoF || destino_c != sensores.GotoC)) {
+                destino_f = sensores.GotoF;
+                destino_c = sensores.GotoC;
+                ruta_actual_tec.clear();
+            }
+            
             if (ruta_actual_tec.empty()) {
-                estado origen; 
-                origen.fila = sensores.posF; 
-                origen.columna = sensores.posC; 
-                origen.orientacion = sensores.rumbo;
-                
-                estado destino; 
-                destino.fila = dest_f; 
-                destino.columna = dest_c;
-                
+                estado origen = {sensores.posF, sensores.posC, sensores.rumbo};
+                estado destino = {destino_f, destino_c, 0};
                 ruta_actual_tec = AEstrellaN6(origen, destino);
                 
-                if (ruta_actual_tec.empty()) {
-                    // No encontramos ruta, giramos para descubrir más mapa
-                    return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
-                }
+                if (ruta_actual_tec.empty()) return (rand() % 2 == 0) ? TURN_SL : TURN_SR; 
             }
-
+            
             if (!ruta_actual_tec.empty()) {
                 Action a = ruta_actual_tec.front();
-                ruta_actual_tec.pop_front();
                 
-                // Verificación de seguridad antes de avanzar
                 if (a == WALK) {
                     char enf = sensores.superficie[2];
                     if (enf == 'M' || enf == 'P') {
                         ruta_actual_tec.clear();
-                        return TURN_SR;
+                        return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
                     }
                     int dif_h = sensores.cota[2] - sensores.cota[0];
-                    if (abs(dif_h) > 1) {
+                    int max_d = tiene_zapatillas ? 2 : 1;
+                    if (abs(dif_h) > max_d) {
                         ruta_actual_tec.clear();
-                        return TURN_SR;
+                        return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
                     }
-                    // Verificar que no hay otro agente bloqueando
+                    // Radar de colisiones
                     if (sensores.agentes[2] != '_') {
                         ruta_actual_tec.clear();
                         return IDLE;
                     }
                 }
+                
+                ruta_actual_tec.pop_front();
                 return a;
             }
             return IDLE;
+        }
 
         case TEC_ALINEARSE:
+        {
+            // Si tenemos al Jefe justo en la casilla de enfrente
             if (sensores.agentes[2] == 'i') {
+                // Si él también nos mira, ¡bingo!
                 if (sensores.enfrente) {
-                    estado_obra_tec = TEC_ESPERAR_AVISO;
-                    return INSTALL;
+                    cout << "Operario: ¡Contacto visual perfecto! INSTALANDO TUBERÍA." << endl;
+                    estado_obra_tec = TEC_INSTALAR;
+                    return IDLE;
                 } else {
+                    // Si le vemos pero él está de lado o de espaldas, NOS QUEDAMOS QUIETOS mirándole fijamente
                     return IDLE; 
                 }
-            } else {
-                return TURN_SR;
             }
+            // Si no vemos al jefe enfrente, seguimos girando para buscarle
+            return TURN_SR;
+        }
 
         case TEC_INSTALAR:
+            // Ponemos el tubo y volvemos a la base/esperar
             estado_obra_tec = TEC_ESPERAR_AVISO;
-            return IDLE;
+            return INSTALL;
     }
 
     return IDLE;
@@ -650,6 +674,13 @@ ubicacion ComportamientoTecnico::Delante(const ubicacion &actual) const {
   return delante;
 }
 
+/**
+ * @brief Comprueba si una casilla es transitable (no es muro ni precipicio)
+ */
+bool ComportamientoTecnico::es_camino(unsigned char casilla) const {
+    // Para el motor, consideramos camino cualquier cosa que no sea un obstáculo duro
+    return (casilla != 'M' && casilla != 'P');
+}
 
 /**
  * @brief Imprime por consola la secuencia de acciones de un plan.
@@ -842,9 +873,10 @@ list<Action> ComportamientoTecnico::AEstrella(const estado& origen, const estado
         nodo actual = abierta.top();
         abierta.pop();
 
-        // 1. ¿Llegamos a la meta?
-        if (abs(actual.st.fila - destino.fila) + abs(actual.st.columna - destino.columna) <= 1) {
-            return actual.secuencia; 
+        // ¿Llegamos al destino o estamos en una casilla adyacente (ORTOGONAL)?
+        int dist_manhattan = abs(actual.st.fila - destino.fila) + abs(actual.st.columna - destino.columna);
+        if (dist_manhattan == 1) {
+            return actual.secuencia; // ¡Nos vale con llegar al lado del Jefe!
         }
 
         // 2. Si este nodo es una versión vieja y más cara de un estado que ya mejoramos, lo saltamos
@@ -896,23 +928,29 @@ list<Action> ComportamientoTecnico::AEstrella(const estado& origen, const estado
         }
 
         // Comprobamos límites del mapa
-        if (nf >= 0 && nf < mapaResultado.size() && nc >= 0 && nc < mapaResultado[0].size()) {
+        if (nf >= 0 && nf < (int)mapaResultado.size() && nc >= 0 && nc < (int)mapaResultado[0].size()) {
             char sup_destino = mapaResultado[nf][nc];
             
-            // Viabilidad física: Muros, precipicios y bosques sin zapatillas
-            bool es_obstaculo = (sup_destino == 'P' || sup_destino == 'M');
+            // Tratamos '?' como transitable. Los únicos obstáculos duros son Precipicios y Muros.
+            if (sup_destino != 'P' && sup_destino != 'M') {
+                bool es_viable = true;
+                int coste_avance = 3; // Coste por defecto
 
-            if (!es_obstaculo) {
-                // Viabilidad de altura
-                int dif_cota = mapaCotas[nf][nc] - mapaCotas[actual.st.fila][actual.st.columna];
-                int max_desnivel = tiene_zapatillas ? 2 : 1;
+                if (sup_destino != '?') {
+                    // ¡EL TÉCNICO YA NO LE TIENE MIEDO AL BOSQUE!
+                    // Solo evitamos los desniveles mortales (mayor a 1)
+                    int dif_cota = mapaCotas[nf][nc] - mapaCotas[actual.st.fila][actual.st.columna];
+                    if (abs(dif_cota) > 1) {
+                        es_viable = false;
+                    } else {
+                        coste_avance = costeWALKTecnico(superficie_actual);
+                    }
+                }
                 
-                if (abs(dif_cota) <= max_desnivel) {
+                if (es_viable) {
                     nodo hijo_walk = actual;
                     hijo_walk.st.fila = nf;
                     hijo_walk.st.columna = nc;
-                    
-                    int coste_avance = costeWALKTecnico(superficie_actual);
                     hijo_walk.coste_g = actual.coste_g + coste_avance;
                     
                     if (g_costes.find(hijo_walk.st) == g_costes.end() || hijo_walk.coste_g < g_costes[hijo_walk.st]) {
@@ -949,9 +987,10 @@ list<Action> ComportamientoTecnico::AEstrellaN6(const estado& origen, const esta
         nodo actual = abierta.top();
         abierta.pop();
 
-        // ¿Llegamos a la meta? (distancia Manhattan <= 1 para poder alinearnos)
-        if (abs(actual.st.fila - destino.fila) + abs(actual.st.columna - destino.columna) <= 1) {
-            return actual.secuencia; 
+        // ¿Llegamos al destino o estamos en una casilla adyacente (ORTOGONAL)?
+        int dist_manhattan = abs(actual.st.fila - destino.fila) + abs(actual.st.columna - destino.columna);
+        if (dist_manhattan == 1) {
+            return actual.secuencia; // ¡Nos vale con llegar al lado del Jefe!
         }
 
         if (actual.coste_g > g_costes[actual.st]) continue;

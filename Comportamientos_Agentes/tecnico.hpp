@@ -245,6 +245,10 @@ private:
     EstadoObraTec estado_obra_tec;
     std::list<Action> ruta_actual_tec; // Ruta del técnico hacia el ingeniero
 
+    // Añade estas dos líneas:
+    int destino_f = -1;
+    int destino_c = -1;
+
   // Nivel 6
     enum EstadoObraIng6 {
         ING6_EXPLORAR,
@@ -256,6 +260,8 @@ private:
         ING6_INSTALAR
     };
     EstadoObraIng6 estado_obra_ing_6;
+
+    
 };
 
 #endif
