@@ -193,12 +193,99 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_1(Sensores sensores) {
 
 
 
-bool ComportamientoTecnico::EncontrarPlan_N2(const Estado& inicio, std::list<Action>& plan_resultante) {
-  plan_resultante.clear();
-  
-  // AQUÍ PROGRAMAREMOS LA MAGIA DE LA BÚSQUEDA (BFS, Dijkstra, A*)
+ComportamientoTecnico::Estado ComportamientoTecnico::AplicaAccion_N2(const Estado& st, Action act) {
+    Estado nuevo = st;
+    if (act == TURN_SL) {
+        nuevo.brujula = (Orientacion)((nuevo.brujula + 7) % 8);
+    } else if (act == TURN_SR) {
+        nuevo.brujula = (Orientacion)((nuevo.brujula + 1) % 8);
+    } else if (act == WALK || act == JUMP) {
+        switch (nuevo.brujula) {
+            case norte: nuevo.f--; break;
+            case noreste: nuevo.f--; nuevo.c++; break;
+            case este: nuevo.c++; break;
+            case sureste: nuevo.f++; nuevo.c++; break;
+            case sur: nuevo.f++; break;
+            case suroeste: nuevo.f++; nuevo.c--; break;
+            case oeste: nuevo.c--; break;
+            case noroeste: nuevo.f--; nuevo.c--; break;
+        }
+    }
+    return nuevo;
+}
 
-  return false; 
+bool ComportamientoTecnico::EsValida_N2(const Estado& st, Action act) {
+    if (act == TURN_SL || act == TURN_SR) return true;
+
+    if (act == WALK || act == JUMP) {
+        Estado destino = AplicaAccion_N2(st, act);
+        
+        if (destino.f < 0 || destino.f >= mapaResultado.size() || 
+            destino.c < 0 || destino.c >= mapaResultado[0].size()) {
+            return false;
+        }
+
+        unsigned char c = mapaResultado[destino.f][destino.c];
+        // En principio el técnico tampoco pasa por el bosque en este nivel a menos que tenga zapatillas, 
+        // pero la meta debería ser accesible por caminos limpios en su mitad del mapa.
+        if (c == 'M' || c == 'P' || c == 'A' || c == 'B') return false; 
+
+        unsigned char entidad = mapaEntidades[destino.f][destino.c];
+        if (entidad != '_' && entidad != '?') return false;
+
+        int dif = mapaCotas[destino.f][destino.c] - mapaCotas[st.f][st.c];
+
+        if (act == WALK && abs(dif) > 1) return false;
+        if (act == JUMP && dif != 2) return false;
+
+        return true;
+    }
+    return false;
+}
+
+bool ComportamientoTecnico::EncontrarPlan_N2(const Estado& inicio, int dest_f, int dest_c, std::list<Action>& plan_resultante) {
+    plan_resultante.clear();
+    std::queue<Nodo> abiertos;
+    std::set<Estado> cerrados;
+
+    Nodo n_inicial;
+    n_inicial.st = inicio;
+    abiertos.push(n_inicial);
+    cerrados.insert(inicio);
+
+    while (!abiertos.empty()) {
+        Nodo actual = abiertos.front();
+        abiertos.pop();
+
+        bool llegado = false;
+        if (dest_f != -1 && dest_c != -1) {
+            llegado = (actual.st.f == dest_f && actual.st.c == dest_c);
+        } else {
+            llegado = (mapaResultado[actual.st.f][actual.st.c] == 'U');
+        }
+
+        if (llegado) {
+            plan_resultante = actual.secuencia;
+            return true;
+        }
+
+        Action acciones[] = {WALK, JUMP, TURN_SL, TURN_SR};
+        
+        for (Action accion : acciones) {
+            if (EsValida_N2(actual.st, accion)) {
+                Estado siguiente = AplicaAccion_N2(actual.st, accion);
+                if (cerrados.find(siguiente) == cerrados.end()) {
+                    cerrados.insert(siguiente);
+                    Nodo hijo;
+                    hijo.st = siguiente;
+                    hijo.secuencia = actual.secuencia;
+                    hijo.secuencia.push_back(accion);
+                    abiertos.push(hijo);
+                }
+            }
+        }
+    }
+    return false;
 }
 
 /**
@@ -209,30 +296,30 @@ bool ComportamientoTecnico::EncontrarPlan_N2(const Estado& inicio, std::list<Act
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_2(Sensores sensores) {
   Action accion = IDLE;
 
-  // FASE 1: DELIBERACIÓN (Generar el plan)
   if (!hay_plan) {
-      // 1. Instanciamos nuestro estado actual
+      cout << "[TÉCNICO] Cerebro activado: Buscando ruta hacia (" << sensores.BelPosF << ", " << sensores.BelPosC << ")..." << endl;
       Estado estado_inicial;
       estado_inicial.f = sensores.posF;
       estado_inicial.c = sensores.posC;
       estado_inicial.brujula = sensores.rumbo;
 
-      // 2. Llamamos al algoritmo de búsqueda
-      hay_plan = EncontrarPlan_N2(estado_inicial, plan);
+      hay_plan = EncontrarPlan_N2(estado_inicial, sensores.BelPosF, sensores.BelPosC, plan);
 
-      // Si no ha encontrado ningún plan posible, nos quedamos parados
-      if (!hay_plan) {
+      if (hay_plan) {
+          cout << "[TÉCNICO] ¡Eureka! Plan maestro encontrado. Longitud de la ruta: " << plan.size() << " pasos." << endl;
+      } else {
+          cout << "[TÉCNICO] ¡ERROR! No hay camino posible." << endl;
+          hay_plan = true; 
           return IDLE;
       }
   }
 
-  // FASE 2: EJECUCIÓN (Consumir el plan paso a paso)
   if (hay_plan && !plan.empty()) {
-      accion = plan.front(); // Miramos la primera acción
-      plan.pop_front();      // La borramos de la lista para no repetirla
+      accion = plan.front();
+      plan.pop_front();
   }
 
-  return accion;
+  return accion; 
 }
 
 /**

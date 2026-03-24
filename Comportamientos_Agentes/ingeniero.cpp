@@ -229,108 +229,100 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores
 
 
 
-bool ComportamientoIngeniero::EncontrarPlan_N2(const Estado& inicio, int dest_f, int dest_c, std::list<Action>& plan_resultante) {
-    plan_resultante.clear();
-    std::queue<Nodo> abiertos;
-    std::set<Estado> cerrados;
+// =========================================================================
+// ALGORITMOS DE BÚSQUEDA (NIVEL 2)
+// =========================================================================
 
-    Nodo n_inicial;
-    n_inicial.st = inicio;
-    abiertos.push(n_inicial);
-    cerrados.insert(inicio);
+list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, const estado& destino) {
+    // La cola de estados por explorar (Abierta) y la memoria de estados ya visitados (Cerrados)
+    queue<nodo> abierta;
+    set<estado> cerrados;
 
-    while (!abiertos.empty()) {
-        Nodo actual = abiertos.front();
-        abiertos.pop();
+    // Metemos el estado inicial en la cola y lo marcamos como visitado
+    nodo inicial;
+    inicial.st = origen;
+    abierta.push(inicial);
+    cerrados.insert(origen);
 
-        // LA META AHORA SON LAS COORDENADAS
-        if (actual.st.f == dest_f && actual.st.c == dest_c) {
-            plan_resultante = actual.secuencia;
-            return true;
+    while (!abierta.empty()) {
+        // Sacamos el primer nodo de la cola para evaluarlo
+        nodo actual = abierta.front();
+        abierta.pop();
+
+        // 1. ¿HEMOS LLEGADO A LA META?
+        // Gracias a que sobrecargamos el operador == en el .hpp, esto solo comprueba fila y columna
+        if (actual.st == destino) {
+            return actual.secuencia; // ¡Devolvemos la lista de instrucciones ganadora!
         }
 
-        Action acciones[] = {WALK, JUMP, TURN_SL, TURN_SR};
-        for (Action accion : acciones) {
-            if (EsValida_N2(actual.st, accion)) {
-                Estado siguiente = AplicaAccion_N2(actual.st, accion);
-                if (cerrados.find(siguiente) == cerrados.end()) {
-                    cerrados.insert(siguiente);
-                    Nodo hijo;
-                    hijo.st = siguiente;
-                    hijo.secuencia = actual.secuencia;
-                    hijo.secuencia.push_back(accion);
-                    abiertos.push(hijo);
+        // 2. GENERAMOS LOS HIJOS (Posibles siguientes acciones)
+
+        // --- HIJO 1: GIRAR A LA IZQUIERDA (TURN_SL) ---
+        nodo hijo_sl = actual;
+        // Girar a la izquierda es restar 1 a la orientación (o sumar 7) en un reloj de 8 horas
+        hijo_sl.st.orientacion = (actual.st.orientacion + 7) % 8;
+        if (cerrados.find(hijo_sl.st) == cerrados.end()) {
+            hijo_sl.secuencia.push_back(TURN_SL);
+            cerrados.insert(hijo_sl.st);
+            abierta.push(hijo_sl);
+        }
+
+        // --- HIJO 2: GIRAR A LA DERECHA (TURN_SR) ---
+        nodo hijo_sr = actual;
+        // Girar a la derecha es sumar 1 a la orientación
+        hijo_sr.st.orientacion = (actual.st.orientacion + 1) % 8;
+        if (cerrados.find(hijo_sr.st) == cerrados.end()) {
+            hijo_sr.secuencia.push_back(TURN_SR);
+            cerrados.insert(hijo_sr.st);
+            abierta.push(hijo_sr);
+        }
+
+        // --- HIJO 3: AVANZAR (WALK) ---
+        nodo hijo_walk = actual;
+        int nf = actual.st.fila;
+        int nc = actual.st.columna;
+
+        // Calculamos dónde caeríamos si avanzamos según hacia dónde miramos
+        switch(actual.st.orientacion) {
+            case 0: nf--; break;           // Norte
+            case 1: nf--; nc++; break;     // Noreste
+            case 2: nc++; break;           // Este
+            case 3: nf++; nc++; break;     // Sureste
+            case 4: nf++; break;           // Sur
+            case 5: nf++; nc--; break;     // Suroeste
+            case 6: nc--; break;           // Oeste
+            case 7: nf--; nc--; break;     // Noroeste
+        }
+
+        // Comprobamos si el paso es legal (dentro del mapa)
+        if (nf >= 0 && nf < mapaResultado.size() && nc >= 0 && nc < mapaResultado[0].size()) {
+            unsigned char celda = mapaResultado[nf][nc];
+            
+            // Filtro de viabilidad: No muros, no precipicios, no agua, no bosque (asumiendo que no hay zapatillas de inicio)
+            if (celda != 'P' && celda != 'M' && celda != 'B' && celda != 'A') {
+                
+                // Filtro de altura: Desnivel máximo de 1
+                int dif_cota = mapaCotas[nf][nc] - mapaCotas[actual.st.fila][actual.st.columna];
+                if (abs(dif_cota) <= 1) {
+                    
+                    hijo_walk.st.fila = nf;
+                    hijo_walk.st.columna = nc;
+                    
+                    // Si nunca hemos estado en esta casilla mirando hacia allá, la añadimos
+                    if (cerrados.find(hijo_walk.st) == cerrados.end()) {
+                        hijo_walk.secuencia.push_back(WALK);
+                        cerrados.insert(hijo_walk.st);
+                        abierta.push(hijo_walk);
+                    }
                 }
             }
         }
     }
-    return false;
+
+    // Si la cola se vacía y no encontramos la meta, devolvemos una lista vacía (no hay camino)
+    return list<Action>(); 
 }
 
-// =========================================================
-// === MOTOR DE BÚSQUEDA NIVEL 2 (INGENIERO) ===
-// =========================================================
-
-ComportamientoIngeniero::Estado ComportamientoIngeniero::AplicaAccion_N2(const Estado& st, Action act) {
-    Estado nuevo = st;
-    if (act == TURN_SL) {
-        nuevo.brujula = (Orientacion)((nuevo.brujula + 7) % 8);
-    } else if (act == TURN_SR) {
-        nuevo.brujula = (Orientacion)((nuevo.brujula + 1) % 8);
-    } else if (act == WALK) {
-        switch (nuevo.brujula) {
-            case norte: nuevo.f--; break;
-            case noreste: nuevo.f--; nuevo.c++; break;
-            case este: nuevo.c++; break;
-            case sureste: nuevo.f++; nuevo.c++; break;
-            case sur: nuevo.f++; break;
-            case suroeste: nuevo.f++; nuevo.c--; break;
-            case oeste: nuevo.c--; break;
-            case noroeste: nuevo.f--; nuevo.c--; break;
-        }
-    } else if (act == JUMP) {
-        // El salto avanza 2 casillas de golpe
-        switch (nuevo.brujula) {
-            case norte: nuevo.f -= 2; break;
-            case noreste: nuevo.f -= 2; nuevo.c += 2; break;
-            case este: nuevo.c += 2; break;
-            case sureste: nuevo.f += 2; nuevo.c += 2; break;
-            case sur: nuevo.f += 2; break;
-            case suroeste: nuevo.f += 2; nuevo.c -= 2; break;
-            case oeste: nuevo.c -= 2; break;
-            case noroeste: nuevo.f -= 2; nuevo.c -= 2; break;
-        }
-    }
-    return nuevo;
-}
-
-bool ComportamientoIngeniero::EsValida_N2(const Estado& st, Action act) {
-    if (act == TURN_SL || act == TURN_SR) return true;
-
-    if (act == WALK || act == JUMP) {
-        Estado destino = AplicaAccion_N2(st, act);
-        
-        // 1. Comprobar límites del mapa
-        if (destino.f < 0 || destino.f >= mapaResultado.size() || 
-            destino.c < 0 || destino.c >= mapaResultado[0].size()) {
-            return false;
-        }
-
-        // 2. Comprobar tipo de terreno destino
-        unsigned char tipo_terreno = mapaResultado[destino.f][destino.c];
-        if (!es_transitable_N1(tipo_terreno)) return false;
-
-        // 3. Comprobar desniveles (Caminar tolera 1, Saltar tolera 2)
-        int cota_origen = mapaCotas[st.f][st.c];
-        int cota_destino = mapaCotas[destino.f][destino.c];
-        
-        if (act == WALK && abs(cota_destino - cota_origen) > 1) return false;
-        if (act == JUMP && abs(cota_destino - cota_origen) > 2) return false;
-
-        return true;
-    }
-    return false;
-}
 
 // Niveles avanzados (Uso de búsqueda)
 /**
@@ -339,28 +331,32 @@ bool ComportamientoIngeniero::EsValida_N2(const Estado& st, Action act) {
  * @return Acción a realizar.
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_2(Sensores sensores) {
-  Action accion = IDLE;
+    Action accion = IDLE;
 
-  if (!hay_plan) {
-      Estado estado_inicial;
-      estado_inicial.f = sensores.posF;
-      estado_inicial.c = sensores.posC;
-      estado_inicial.brujula = sensores.rumbo;
+    // 1. Si no hay plan, es el primer instante: ¡Toca pensar!
+    if (!hayPlan) {
+        estado origen;
+        origen.fila = sensores.posF;
+        origen.columna = sensores.posC;
+        origen.orientacion = sensores.rumbo;
 
-      // Probamos con estas variables que suelen ser las estándar del guion
-      hay_plan = EncontrarPlan_N2(estado_inicial, sensores.destF, sensores.destC, plan);
+        estado destino;
+        destino.fila = sensores.BelPosF;
+        destino.columna = sensores.BelPosC;
 
-      if (!hay_plan) return IDLE;
+        // Llamamos al algoritmo para que nos devuelva la lista de acciones óptima
+        plan = BusquedaEnAnchura(origen, destino);
+        
+        hayPlan = true;
+    }
 
-  // FASE 2: EJECUCIÓN (Consumir el plan paso a paso)
-  if (hay_plan && !plan.empty()) {
-      accion = plan.front(); // Miramos la primera acción
-      plan.pop_front();      // La borramos de la lista para no repetirla
-  }
+    // 2. Ejecutar el plan paso a paso
+    if (hayPlan && !plan.empty()) {
+        accion = plan.front(); // Miramos la siguiente acción
+        plan.pop_front();      // La sacamos de la lista porque la vamos a ejecutar ahora mismo
+    }
 
-  
-  return accion;
-  }
+    return accion;
 }
 
 /**

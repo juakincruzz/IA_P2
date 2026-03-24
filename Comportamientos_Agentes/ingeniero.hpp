@@ -11,6 +11,32 @@
 
 #include "comportamientos/comportamiento.hpp"
 
+// Estructura para representar la situación exacta del agente
+struct estado {
+    int fila;
+    int columna;
+    int orientacion; // 0: Norte, 1: Este, 2: Sur, 3: Oeste
+
+    // Sobrecargamos el operador < para que C++ nos deje usar std::set (memoria de visitados)
+    bool operator<(const estado& otro) const {
+        if (fila != otro.fila) return fila < otro.fila;
+        if (columna != otro.columna) return columna < otro.columna;
+        return orientacion < otro.orientacion;
+    }
+    
+    // Sobrecargamos el operador == para comprobar fácilmente si hemos llegado a la meta
+    bool operator==(const estado& otro) const {
+        return fila == otro.fila && columna == otro.columna;
+        // Nota: La orientación de llegada no importa para la meta, solo la posición
+    }
+};
+
+// Estructura para el árbol de búsqueda
+struct nodo {
+    estado st;
+    std::list<Action> secuencia; // La lista de acciones para llegar a este estado
+};
+
 class ComportamientoIngeniero : public Comportamiento {
 public:
   // =========================================================================
@@ -45,7 +71,7 @@ public:
                          std::vector<std::vector<unsigned char>> mapaC): 
                          Comportamiento(mapaR, mapaC) {
     // Inicializar Variables de Estado
-    hay_plan = false;
+    hayPlan = false;
   }
     
   ComportamientoIngeniero(const ComportamientoIngeniero &comport)
@@ -120,37 +146,6 @@ public:
    * @return Acción a realizar.
    */
   Action ComportamientoIngenieroNivel_6(Sensores sensores);
-
-  /**
-   * @brief Estructura para representar la situación exacta del agente
-   */
-  // Estructura para representar la situación exacta del agente
-  struct estado {
-      int fila;
-      int columna;
-      int orientacion; // 0: Norte, 1: Este, 2: Sur, 3: Oeste
-
-      // Sobrecargamos el operador < para que C++ nos deje usar std::set (memoria de visitados)
-      bool operator<(const estado& otro) const {
-          if (fila != otro.fila) return fila < otro.fila;
-          if (columna != otro.columna) return columna < otro.columna;
-          return orientacion < otro.orientacion;
-      }
-      
-      // Sobrecargamos el operador == para comprobar fácilmente si hemos llegado a la meta
-      bool operator==(const estado& otro) const {
-          return fila == otro.fila && columna == otro.columna;
-          // Nota: La orientación de llegada no importa para la meta, solo la posición
-      }
-  };
-
-  /**
-   * @brief Estructura para el árbol de búsqueda (nodos)
-   */
-  struct nodo {
-    estado st;
-    std::list<Action> secuencia; // La lista de acciones para llegar a este estado
-  };
 
 
   // Estado para la planificación de tuberías
@@ -265,42 +260,11 @@ private:
   // =========================================================
   // === VARIABLES Y ESTRUCTURAS NIVEL 2 (DELIBERATIVO) ===
   // =========================================================
-  
-  bool hay_plan;
-  std::list<Action> plan;
-
-  // Representa la situación exacta del agente en el mundo
-  struct Estado {
-      int f;
-      int c;
-      Orientacion brujula;
-      
-      // Sobrecargamos el operador < para poder guardar Estados en un std::set (Cerrados)
-      bool operator<(const Estado& otro) const {
-          if (f != otro.f) return f < otro.f;
-          if (c != otro.c) return c < otro.c;
-          return brujula < otro.brujula;
-      }
-      // Sobrecargamos el operador == para comparar si hemos llegado a la meta
-      bool operator==(const Estado& otro) const {
-          return f == otro.f && c == otro.c && brujula == otro.brujula;
-      }
-  };
-
-  // Representa un nodo en nuestro árbol de búsqueda
-  struct Nodo {
-      Estado st;
-      std::list<Action> secuencia; // Lista de acciones para llegar a este estado
-      // int coste_acumulado; // Lo usaremos más adelante si implementamos Dijkstra o A*
-  };
-
-  // Función principal de búsqueda
-  bool EncontrarPlan_N2(const Estado& inicio, int dest_f, int dest_c, std::list<Action>& plan_resultante);
-
-  // Funciones para la Búsqueda Deliberativa
-  Estado AplicaAccion_N2(const Estado& st, Action act);
-  bool EsValida_N2(const Estado& st, Action act);
-
+  bool hayPlan;                 // Para saber si ya hemos calculado la ruta
+  std::list<Action> plan;       // Aquí guardaremos las instrucciones a seguir
+    
+  // Declaramos nuestra función del algoritmo de búsqueda
+  std::list<Action> BusquedaEnAnchura(const estado& origen, const estado& destino);
 };
 
 
