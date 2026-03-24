@@ -325,6 +325,14 @@ private:
   };
 
   bool EncontrarPlan_N4(int start_f, int start_c, std::list<Paso>& plan_resultante);
+
+  // =========================================================
+  // === VARIABLES NIVEL 5 (MÁQUINA DE ESTADOS) =============
+  // =========================================================
+  int tramo_n5 = 0;
+  bool acabo_de_instalar_n5 = false;
+  bool terraformado_n5 = false;
+  std::vector<Paso> plan_n5; // Vector para acceder a los tramos fácilmente
 };
 
 

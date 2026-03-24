@@ -510,12 +510,154 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_4(Sensores sensores) {
   return IDLE;
 }
 
+
+
+// =========================================================
+// === MÁQUINA DE ESTADOS COOPERATIVA (NIVEL 5) ===
+// =========================================================
+
+// Clon exacto del algoritmo del Ingeniero para que ambos deduzcan el mismo plan
+bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c, std::list<Paso>& plan_resultante) {
+    plan_resultante.clear();
+    std::queue<NodoN4_Tecnico> abiertos;
+    std::set<EstadoN4_Tecnico> cerrados;
+
+    unsigned char start_terr = mapaResultado[start_f][start_c];
+    if (start_terr == 'M' || start_terr == 'P') return false; 
+    
+    int start_H = mapaCotas[start_f][start_c];
+    std::vector<int> alturas_inicio;
+    
+    if (start_terr == 'A') alturas_inicio.push_back(start_H);
+    else {
+        alturas_inicio.push_back(start_H);
+        if (start_H > 0) alturas_inicio.push_back(start_H - 1);
+        if (start_H < 9) alturas_inicio.push_back(start_H + 1);
+    }
+
+    for (int h : alturas_inicio) {
+        EstadoN4_Tecnico st = {start_f, start_c, h};
+        NodoN4_Tecnico nodo;
+        nodo.st = st;
+        Paso p = {start_f, start_c, h - start_H}; 
+        nodo.secuencia.push_back(p);
+        abiertos.push(nodo);
+        cerrados.insert(st);
+    }
+
+    int df[] = {-1, 1, 0, 0};
+    int dc[] = {0, 0, 1, -1};
+
+    while (!abiertos.empty()) {
+        NodoN4_Tecnico actual = abiertos.front();
+        abiertos.pop();
+
+        if (mapaResultado[actual.st.f][actual.st.c] == 'U') {
+            plan_resultante = actual.secuencia;
+            return true;
+        }
+
+        for (int i = 0; i < 4; i++) {
+            int nf = actual.st.f + df[i];
+            int nc = actual.st.c + dc[i];
+
+            if (nf < 0 || nf >= mapaResultado.size() || nc < 0 || nc >= mapaResultado[0].size()) continue;
+
+            unsigned char n_terr = mapaResultado[nf][nc];
+            if (n_terr == 'M' || n_terr == 'P') continue; 
+
+            int nH = mapaCotas[nf][nc];
+            std::vector<int> alturas_vecino;
+            
+            if (n_terr == 'A') alturas_vecino.push_back(nH); 
+            else {
+                alturas_vecino.push_back(nH);
+                if (nH > 0) alturas_vecino.push_back(nH - 1);
+                if (nH < 9) alturas_vecino.push_back(nH + 1);
+            }
+
+            for (int nh : alturas_vecino) {
+                if (actual.st.h >= nh) { // Ley de la gravedad
+                    EstadoN4_Tecnico siguiente = {nf, nc, nh};
+                    if (cerrados.find(siguiente) == cerrados.end()) {
+                        cerrados.insert(siguiente);
+                        NodoN4_Tecnico hijo = actual;
+                        hijo.st = siguiente;
+                        Paso p = {nf, nc, nh - nH};
+                        hijo.secuencia.push_back(p);
+                        abiertos.push(hijo);
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
 /**
  * @brief Comportamiento del técnico para el Nivel 5.
  * @param sensores Datos actuales de los sensores.
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
+    if (acabo_de_instalar_n5) {
+        tramo_n5++;
+        acabo_de_instalar_n5 = false;
+        terraformado_n5 = false;
+    }
+
+    if (plan_n5.empty()) {
+        std::list<Paso> lista_plan;
+        EncontrarPlan_N5_Arquitecto(sensores.BelPosF, sensores.BelPosC, lista_plan);
+        for (auto p : lista_plan) plan_n5.push_back(p);
+    }
+
+    if (tramo_n5 >= plan_n5.size() - 1) return IDLE;
+
+    // Asignación de posiciones INVERTIDA: El Técnico siempre va por delante
+    Paso mi_obj = plan_n5[tramo_n5 + 1];
+    Paso su_obj = plan_n5[tramo_n5];
+
+    // 2. MOVERSE A POSICIÓN (A* del Nivel 3)
+    if (sensores.posF != mi_obj.fil || sensores.posC != mi_obj.col) {
+        if (!hay_plan) {
+            EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, false};
+            if (mapaResultado[sensores.posF][sensores.posC] == 'D') inicio.zapatillas = true;
+            EncontrarPlan_N3(inicio, mi_obj.fil, mi_obj.col, plan);
+            hay_plan = true;
+        }
+        if (!plan.empty()) {
+            Action a = plan.front();
+            plan.pop_front();
+            return a;
+        }
+    }
+    hay_plan = false;
+
+    // 3. ENCARAR AL COMPAÑERO
+    Orientacion obj_ori;
+    if (su_obj.fil < sensores.posF) obj_ori = norte;
+    else if (su_obj.fil > sensores.posF) obj_ori = sur;
+    else if (su_obj.col < sensores.posC) obj_ori = oeste;
+    else obj_ori = este;
+
+    if (sensores.rumbo != obj_ori) {
+        int dif_rumbo = (obj_ori - sensores.rumbo + 8) % 8;
+        return (dif_rumbo <= 4) ? TURN_SR : TURN_SL;
+    }
+
+    // 4. TERRAFORMAR (El Técnico usa DIG, op == -1)
+    if (!terraformado_n5 && mi_obj.op == -1) { 
+        terraformado_n5 = true;
+        return DIG;
+    }
+
+    // 5. SINCRONIZACIÓN E INSTALACIÓN
+    if (sensores.enfrente) {
+        acabo_de_instalar_n5 = true;
+        return INSTALL;
+    }
+
     return IDLE;
 }
 

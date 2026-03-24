@@ -496,10 +496,70 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_4(Sensores sensores
  * @param sensores Datos actuales de los sensores.
  * @return Acción a realizar.
  */
-Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores)
-{
+Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores) {
+    if (acabo_de_instalar_n5) {
+        tramo_n5++;
+        acabo_de_instalar_n5 = false;
+        terraformado_n5 = false; 
+    }
+
+    if (plan_n5.empty()) {
+        std::list<Paso> lista_plan;
+        EncontrarPlan_N4(sensores.BelPosF, sensores.BelPosC, lista_plan);
+        for (auto p : lista_plan) plan_n5.push_back(p);
+    }
+
+    if (tramo_n5 >= plan_n5.size() - 1) return IDLE;
+
+    Paso mi_obj = plan_n5[tramo_n5];
+    Paso su_obj = plan_n5[tramo_n5 + 1];
+
+    // 2. MOVERSE A POSICIÓN (Usando tu BusquedaEnAnchura)
+    if (sensores.posF != mi_obj.fil || sensores.posC != mi_obj.col) {
+        if (!hayPlan) {
+            estado inicio = {sensores.posF, sensores.posC, (int)sensores.rumbo};
+            estado destino = {mi_obj.fil, mi_obj.col, 0}; // Orientación irrelevante para destino
+            
+            // Llamamos a TU función real
+            plan = BusquedaEnAnchura(inicio, destino);
+            hayPlan = true;
+        }
+        if (!plan.empty()) {
+            Action a = plan.front();
+            plan.pop_front();
+            return a;
+        }
+    }
+    hayPlan = false; 
+
+    // 3. ENCARAR AL COMPAÑERO
+    Orientacion obj_ori;
+    if (su_obj.fil < sensores.posF) obj_ori = norte;
+    else if (su_obj.fil > sensores.posF) obj_ori = sur;
+    else if (su_obj.col < sensores.posC) obj_ori = oeste;
+    else obj_ori = este;
+
+    if (sensores.rumbo != obj_ori) {
+        int dif_rumbo = (obj_ori - sensores.rumbo + 8) % 8;
+        return (dif_rumbo <= 4) ? TURN_SR : TURN_SL; 
+    }
+
+    // 4. TERRAFORMAR (Usando 'op'. 1 = RAISE)
+    if (!terraformado_n5 && mi_obj.op == 1) { 
+        terraformado_n5 = true;
+        return RAISE;
+    }
+
+    // 5. SINCRONIZACIÓN E INSTALACIÓN
+    if (sensores.enfrente) {
+        acabo_de_instalar_n5 = true;
+        return INSTALL;
+    }
+
     return IDLE;
 }
+
+
 /**
  * @brief Comportamiento del ingeniero para el Nivel 6.
  * @param sensores Datos actuales de los sensores.

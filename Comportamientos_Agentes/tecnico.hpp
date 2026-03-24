@@ -323,6 +323,30 @@ private:
   
   int CostoBateria_N3(const EstadoN3& st, Action act);
   int Heuristica(const EstadoN3& actual, int dest_f, int dest_c);
+
+  // =========================================================
+  // === VARIABLES NIVEL 5 (MÁQUINA DE ESTADOS) =============
+  // =========================================================
+  int tramo_n5 = 0;
+  bool acabo_de_instalar_n5 = false;
+  bool terraformado_n5 = false;
+  std::vector<Paso> plan_n5;
+
+  // El clon del cerebro del Ingeniero para leerle la mente
+  struct EstadoN4_Tecnico {
+      int f, c, h;
+      bool operator<(const EstadoN4_Tecnico& otro) const {
+          if (f != otro.f) return f < otro.f;
+          if (c != otro.c) return c < otro.c;
+          return h < otro.h;
+      }
+  };
+  struct NodoN4_Tecnico {
+      EstadoN4_Tecnico st;
+      std::list<Paso> secuencia;
+  };
+
+  bool EncontrarPlan_N5_Arquitecto(int start_f, int start_c, std::list<Paso>& plan_resultante);
 };
 
 #endif
