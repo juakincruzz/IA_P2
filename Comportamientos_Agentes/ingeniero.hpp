@@ -297,6 +297,34 @@ private:
           return f() > otro.f();
       }
   };
+
+  // =========================================================
+  // === VARIABLES Y ESTRUCTURAS NIVEL 4 (TUBERÍAS) ==========
+  // =========================================================
+  bool plan_tuberias_hecho = false;
+  std::list<Paso> plan_tuberias;
+
+  struct EstadoN4 {
+      int f;
+      int c;
+      int h; // Altura que tendrá la tubería en esta casilla
+
+      bool operator<(const EstadoN4& otro) const {
+          if (f != otro.f) return f < otro.f;
+          if (c != otro.c) return c < otro.c;
+          return h < otro.h;
+      }
+      bool operator==(const EstadoN4& otro) const {
+          return f == otro.f && c == otro.c && h == otro.h;
+      }
+  };
+
+  struct NodoN4 {
+      EstadoN4 st;
+      std::list<Paso> secuencia;
+  };
+
+  bool EncontrarPlan_N4(int start_f, int start_c, std::list<Paso>& plan_resultante);
 };
 
 

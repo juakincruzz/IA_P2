@@ -369,16 +369,128 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_3(Sensores sensores
     return IDLE;
 }
 
+
+// =========================================================
+// === MOTOR DE PLANIFICACIÓN DE TUBERÍAS (NIVEL 4) ===
+// =========================================================
+
+bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::list<Paso>& plan_resultante) {
+    plan_resultante.clear();
+    std::queue<NodoN4> abiertos;
+    std::set<EstadoN4> cerrados;
+
+    unsigned char start_terr = mapaResultado[start_f][start_c];
+    if (start_terr == 'M' || start_terr == 'P') return false; // Muros y precipicios prohibidos
+    
+    int start_H = mapaCotas[start_f][start_c];
+    std::vector<int> alturas_inicio;
+    
+    // Generar alturas posibles para la casilla inicial
+    if (start_terr == 'A') {
+        alturas_inicio.push_back(start_H); // En el agua no se puede excavar ni elevar
+    } else {
+        alturas_inicio.push_back(start_H);
+        if (start_H > 0) alturas_inicio.push_back(start_H - 1); // Opción: Excavar
+        if (start_H < 9) alturas_inicio.push_back(start_H + 1); // Opción: Elevar
+    }
+
+    // Inicializar la búsqueda con las alturas posibles del inicio
+    for (int h : alturas_inicio) {
+        EstadoN4 st = {start_f, start_c, h};
+        NodoN4 nodo;
+        nodo.st = st;
+        // La estructura Paso guarda la modificación: h - start_H (-1 = DIG, 0 = NADA, 1 = RAISE)
+        Paso p = {start_f, start_c, h - start_H}; 
+        nodo.secuencia.push_back(p);
+        
+        abiertos.push(nodo);
+        cerrados.insert(st);
+    }
+
+    // Movimientos ortogonales permitidos para la tubería
+    int df[] = {-1, 1, 0, 0};
+    int dc[] = {0, 0, 1, -1};
+
+    while (!abiertos.empty()) {
+        NodoN4 actual = abiertos.front();
+        abiertos.pop();
+
+        // 1. ¿Hemos llegado a la Planta de Tratamiento ('U')?
+        if (mapaResultado[actual.st.f][actual.st.c] == 'U') {
+            plan_resultante = actual.secuencia;
+            return true;
+        }
+
+        // 2. Expandir la tubería a los vecinos ortogonales
+        for (int i = 0; i < 4; i++) {
+            int nf = actual.st.f + df[i];
+            int nc = actual.st.c + dc[i];
+
+            // Comprobar límites
+            if (nf < 0 || nf >= mapaResultado.size() || nc < 0 || nc >= mapaResultado[0].size()) continue;
+
+            unsigned char n_terr = mapaResultado[nf][nc];
+            if (n_terr == 'M' || n_terr == 'P') continue; 
+
+            int nH = mapaCotas[nf][nc];
+            std::vector<int> alturas_vecino;
+            
+            if (n_terr == 'A') {
+                alturas_vecino.push_back(nH); 
+            } else {
+                alturas_vecino.push_back(nH);
+                if (nH > 0) alturas_vecino.push_back(nH - 1);
+                if (nH < 9) alturas_vecino.push_back(nH + 1);
+            }
+
+            for (int nh : alturas_vecino) {
+                // ¡LA LEY DE LA GRAVEDAD! El agua fluye si la altura actual es mayor o igual a la siguiente
+                if (actual.st.h >= nh) {
+                    EstadoN4 siguiente = {nf, nc, nh};
+                    
+                    if (cerrados.find(siguiente) == cerrados.end()) {
+                        cerrados.insert(siguiente);
+                        
+                        NodoN4 hijo = actual;
+                        hijo.st = siguiente;
+                        Paso p = {nf, nc, nh - nH};
+                        hijo.secuencia.push_back(p);
+                        
+                        abiertos.push(hijo);
+                    }
+                }
+            }
+        }
+    }
+    return false; // No hay plan posible
+}
+
 /**
  * @brief Comportamiento del ingeniero para el Nivel 4.
  * @param sensores Datos actuales de los sensores.
  * @return Acción a realizar.
  */
-Action ComportamientoIngeniero::ComportamientoIngenieroNivel_4(Sensores sensores)
-{
-  return IDLE;
-}
+Action ComportamientoIngeniero::ComportamientoIngenieroNivel_4(Sensores sensores) {
+    if (!plan_tuberias_hecho) {
+        cout << "[INGENIERO] Cerebro Arquitectónico activado." << endl;
+        cout << "[INGENIERO] Planificando red desde (" << sensores.BelPosF << ", " << sensores.BelPosC << ") hasta la planta 'U'..." << endl;
+        
+        bool exito = EncontrarPlan_N4(sensores.BelPosF, sensores.BelPosC, plan_tuberias);
 
+        if (exito) {
+            cout << "[INGENIERO] ¡Plan Maestro de Canalización Completado! Tramos necesarios: " << plan_tuberias.size() << endl;
+            
+            // ¡ARREGLO! El código real de los profesores solo pide el plan, sin guion bajo y con 1 parámetro.
+            VisualizaRedTuberias(plan_tuberias);
+        } else {
+            cout << "[INGENIERO] ¡ERROR CRÍTICO! Es físicamente imposible trazar la tubería por gravedad." << endl;
+        }
+        plan_tuberias_hecho = true;
+    }
+
+    // En el Nivel 4 no nos movemos, solo pensamos y enviamos el plano.
+    return IDLE; 
+}
 /**
  * @brief Comportamiento del ingeniero para el Nivel 5.
  * @param sensores Datos actuales de los sensores.
