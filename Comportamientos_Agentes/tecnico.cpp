@@ -322,13 +322,183 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_2(Sensores sensores) {
   return accion; 
 }
 
+
+
+// =========================================================
+// === MOTOR DE BÚSQUEDA A* NIVEL 3 (TÉCNICO) ===
+// =========================================================
+
+int ComportamientoTecnico::CostoBateria_N3(const EstadoN3& st, Action act) {
+    unsigned char terreno = mapaResultado[st.f][st.c];
+    int coste = 0;
+
+    // Si tiene zapatillas, el bosque se transita como si fuera camino
+    if (terreno == 'B' && st.zapatillas) terreno = 'C';
+
+    if (act == WALK) {
+        int cota_origen = mapaCotas[st.f][st.c];
+        EstadoN3 destino = AplicaAccion_N3(st, act); 
+        int cota_destino = mapaCotas[destino.f][destino.c];
+        int dif = cota_destino - cota_origen;
+
+        if (terreno == 'A') { coste = 60; if(dif > 0) coste += 5; else if(dif < 0) coste -= 2; }
+        else if (terreno == 'H') { coste = 6; if(dif > 0) coste += 5; else if(dif < 0) coste -= 2; }
+        else if (terreno == 'S') { coste = 3; if(dif > 0) coste += 5; else if(dif < 0) coste -= 2; }
+        else { coste = 1; }
+        
+        if (coste < 0) coste = 0; 
+
+    } else if (act == TURN_SL || act == TURN_SR) {
+        if (terreno == 'A') coste = 5;
+        else if (terreno == 'H') coste = 2;
+        else if (terreno == 'S') coste = 1;
+        else coste = 1;
+    } else if (act == IDLE) {
+        coste = 0;
+    }
+    return coste;
+}
+
+int ComportamientoTecnico::Heuristica(const EstadoN3& actual, int dest_f, int dest_c) {
+    return std::max(abs(actual.f - dest_f), abs(actual.c - dest_c));
+}
+
+ComportamientoTecnico::EstadoN3 ComportamientoTecnico::AplicaAccion_N3(const EstadoN3& st, Action act) {
+    EstadoN3 nuevo = st;
+    if (act == TURN_SL) {
+        nuevo.brujula = (Orientacion)((nuevo.brujula + 7) % 8);
+    } else if (act == TURN_SR) {
+        nuevo.brujula = (Orientacion)((nuevo.brujula + 1) % 8);
+    } else if (act == WALK) {
+        switch (nuevo.brujula) {
+            case norte: nuevo.f--; break;
+            case noreste: nuevo.f--; nuevo.c++; break;
+            case este: nuevo.c++; break;
+            case sureste: nuevo.f++; nuevo.c++; break;
+            case sur: nuevo.f++; break;
+            case suroeste: nuevo.f++; nuevo.c--; break;
+            case oeste: nuevo.c--; break;
+            case noroeste: nuevo.f--; nuevo.c--; break;
+        }
+        if (mapaResultado[nuevo.f][nuevo.c] == 'D') {
+            nuevo.zapatillas = true;
+        }
+    }
+    return nuevo;
+}
+
+bool ComportamientoTecnico::EsValida_N3(const EstadoN3& st, Action act) {
+    if (act == TURN_SL || act == TURN_SR) return true;
+
+    if (act == WALK) {
+        EstadoN3 destino = AplicaAccion_N3(st, act);
+        
+        if (destino.f < 0 || destino.f >= mapaResultado.size() || 
+            destino.c < 0 || destino.c >= mapaResultado[0].size()) {
+            return false;
+        }
+
+        unsigned char c = mapaResultado[destino.f][destino.c];
+        if (c == 'M' || c == 'P') return false; 
+        if (c == 'B' && !st.zapatillas) return false; 
+
+        unsigned char entidad = mapaEntidades[destino.f][destino.c];
+        if (entidad != '_' && entidad != '?') return false;
+
+        int dif = mapaCotas[destino.f][destino.c] - mapaCotas[st.f][st.c];
+        if (abs(dif) > 1) return false; 
+
+        return true;
+    }
+    return false;
+}
+
+bool ComportamientoTecnico::EncontrarPlan_N3(const EstadoN3& inicio, int dest_f, int dest_c, std::list<Action>& plan_resultante) {
+    plan_resultante.clear();
+    
+    std::priority_queue<NodoN3, std::vector<NodoN3>, std::greater<NodoN3>> abiertos;
+    std::set<EstadoN3> cerrados;
+
+    NodoN3 n_inicial;
+    n_inicial.st = inicio;
+    n_inicial.coste_g = 0;
+    n_inicial.coste_h = Heuristica(inicio, dest_f, dest_c);
+    
+    abiertos.push(n_inicial);
+
+    while (!abiertos.empty()) {
+        NodoN3 actual = abiertos.top();
+        abiertos.pop();
+
+        if (cerrados.find(actual.st) != cerrados.end()) continue;
+        cerrados.insert(actual.st);
+
+        if (actual.st.f == dest_f && actual.st.c == dest_c) {
+            plan_resultante = actual.secuencia;
+            return true;
+        }
+
+        Action acciones[] = {WALK, TURN_SL, TURN_SR};
+        
+        for (Action accion : acciones) {
+            if (EsValida_N3(actual.st, accion)) {
+                EstadoN3 siguiente = AplicaAccion_N3(actual.st, accion);
+                
+                if (cerrados.find(siguiente) == cerrados.end()) {
+                    int coste_accion = CostoBateria_N3(actual.st, accion);
+                    
+                    NodoN3 hijo;
+                    hijo.st = siguiente;
+                    hijo.secuencia = actual.secuencia;
+                    hijo.secuencia.push_back(accion);
+                    hijo.coste_g = actual.coste_g + coste_accion; 
+                    hijo.coste_h = Heuristica(siguiente, dest_f, dest_c); 
+                    
+                    abiertos.push(hijo);
+                }
+            }
+        }
+    }
+    return false;
+}
+
 /**
  * @brief Comportamiento del técnico para el Nivel 3.
  * @param sensores Datos actuales de los sensores.
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_3(Sensores sensores) {
-    return IDLE;
+    Action accion = IDLE;
+
+    if (!hay_plan) {
+        cout << "[TÉCNICO] Cerebro A* activado: Buscando ruta económica hacia (" << sensores.BelPosF << ", " << sensores.BelPosC << ")..." << endl;
+        EstadoN3 estado_inicial;
+        estado_inicial.f = sensores.posF;
+        estado_inicial.c = sensores.posC;
+        estado_inicial.brujula = sensores.rumbo;
+        estado_inicial.zapatillas = false; 
+        
+        if (mapaResultado[sensores.posF][sensores.posC] == 'D') {
+             estado_inicial.zapatillas = true;
+        }
+
+        hay_plan = EncontrarPlan_N3(estado_inicial, sensores.BelPosF, sensores.BelPosC, plan);
+
+        if (hay_plan) {
+            cout << "[TÉCNICO] ¡Eureka! Plan A* óptimo encontrado. Longitud: " << plan.size() << " pasos." << endl;
+        } else {
+            cout << "[TÉCNICO] ¡ERROR! No hay camino posible." << endl;
+            hay_plan = true; 
+            return IDLE;
+        }
+    }
+
+    if (hay_plan && !plan.empty()) {
+        accion = plan.front();
+        plan.pop_front();
+    }
+
+    return accion;
 }
 
 /**

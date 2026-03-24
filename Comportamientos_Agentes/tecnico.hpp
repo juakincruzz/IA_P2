@@ -282,6 +282,47 @@ private:
   Estado AplicaAccion_N2(const Estado& st, Action act);
   bool EsValida_N2(const Estado& st, Action act);
 
+
+  // =========================================================
+  // === VARIABLES Y ESTRUCTURAS NIVEL 3 (A-ESTRELLA) ========
+  // =========================================================
+  
+  struct EstadoN3 {
+      int f;
+      int c;
+      Orientacion brujula;
+      bool zapatillas; // Vital para Nivel 3
+
+      bool operator<(const EstadoN3& otro) const {
+          if (f != otro.f) return f < otro.f;
+          if (c != otro.c) return c < otro.c;
+          if (brujula != otro.brujula) return brujula < otro.brujula;
+          return zapatillas < otro.zapatillas;
+      }
+      bool operator==(const EstadoN3& otro) const {
+          return f == otro.f && c == otro.c && brujula == otro.brujula && zapatillas == otro.zapatillas;
+      }
+  };
+
+  struct NodoN3 {
+      EstadoN3 st;
+      std::list<Action> secuencia;
+      int coste_g; 
+      int coste_h; 
+      int f() const { return coste_g + coste_h; } 
+
+      bool operator>(const NodoN3& otro) const {
+          return f() > otro.f(); 
+      }
+  };
+
+  // Funciones del cerebro A* (Usan EstadoN3)
+  bool EncontrarPlan_N3(const EstadoN3& inicio, int dest_f, int dest_c, std::list<Action>& plan_resultante);
+  EstadoN3 AplicaAccion_N3(const EstadoN3& st, Action act);
+  bool EsValida_N3(const EstadoN3& st, Action act);
+  
+  int CostoBateria_N3(const EstadoN3& st, Action act);
+  int Heuristica(const EstadoN3& actual, int dest_f, int dest_c);
 };
 
 #endif

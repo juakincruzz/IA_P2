@@ -265,6 +265,38 @@ private:
     
   // Declaramos nuestra función del algoritmo de búsqueda
   std::list<Action> BusquedaEnAnchura(const estado& origen, const estado& destino);
+
+
+  // NIVEL 3
+  struct Estado {
+      int f;
+      int c;
+      Orientacion brujula;
+      bool zapatillas; // ¡NUEVO! Vital para cruzar bosques
+      
+      bool operator<(const Estado& otro) const {
+          if (f != otro.f) return f < otro.f;
+          if (c != otro.c) return c < otro.c;
+          if (brujula != otro.brujula) return brujula < otro.brujula;
+          return zapatillas < otro.zapatillas;
+      }
+      bool operator==(const Estado& otro) const {
+          return f == otro.f && c == otro.c && brujula == otro.brujula && zapatillas == otro.zapatillas;
+      }
+  };
+
+  struct Nodo {
+      Estado st;
+      std::list<Action> secuencia;
+      int coste_g; // Coste real acumulado (Batería gastada)
+      int coste_h; // Heurística (Distancia estimada)
+      int f() const { return coste_g + coste_h; } // Coste total estimado
+
+      // ¡NUEVO! Para que la Cola de Prioridad ordene de menor a mayor coste
+      bool operator>(const Nodo& otro) const {
+          return f() > otro.f();
+      }
+  };
 };
 
 
