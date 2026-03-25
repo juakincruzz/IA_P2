@@ -233,7 +233,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores
 // ALGORITMOS DE BÚSQUEDA (NIVEL 2)
 // =========================================================================
 
-list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, const estado& destino, bool agua_permitida) {
+list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, const estado& destino, bool agua_permitida, bool ignorar_entidades) {
     // La cola de estados por explorar (Abierta) y la memoria de estados ya visitados (Cerrados)
     queue<nodo> abierta;
     set<estado> cerrados;
@@ -250,7 +250,6 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, co
         abierta.pop();
 
         // 1. ¿HEMOS LLEGADO A LA META?
-        // Gracias a que sobrecargamos el operador == en el .hpp, esto solo comprueba fila y columna
         if (actual.st == destino) {
             return actual.secuencia; // ¡Devolvemos la lista de instrucciones ganadora!
         }
@@ -259,7 +258,6 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, co
 
         // --- HIJO 1: GIRAR A LA IZQUIERDA (TURN_SL) ---
         nodo hijo_sl = actual;
-        // Girar a la izquierda es restar 1 a la orientación (o sumar 7) en un reloj de 8 horas
         hijo_sl.st.orientacion = (actual.st.orientacion + 7) % 8;
         if (cerrados.find(hijo_sl.st) == cerrados.end()) {
             hijo_sl.secuencia.push_back(TURN_SL);
@@ -269,7 +267,6 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, co
 
         // --- HIJO 2: GIRAR A LA DERECHA (TURN_SR) ---
         nodo hijo_sr = actual;
-        // Girar a la derecha es sumar 1 a la orientación
         hijo_sr.st.orientacion = (actual.st.orientacion + 1) % 8;
         if (cerrados.find(hijo_sr.st) == cerrados.end()) {
             hijo_sr.secuencia.push_back(TURN_SR);
@@ -297,8 +294,15 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, co
         // Comprobamos si el paso es legal (dentro del mapa)
         if (nf >= 0 && nf < mapaResultado.size() && nc >= 0 && nc < mapaResultado[0].size()) {
             unsigned char celda = mapaResultado[nf][nc];
+            unsigned char entidad = mapaEntidades[nf][nc]; // ¡Añadido! Miramos si hay un agente en la celda
 
-            // Filtro de viabilidad: No muros, no precipicios, no agua, no bosque (asumiendo que no hay zapatillas de inicio)
+            // ¡NUEVO FILTRO ANTICOLISIÓN!
+            // Si no tenemos permiso para ignorar entidades y hay alguien en la celda, no podemos pasar
+            if (!ignorar_entidades && entidad != '_' && entidad != '?') {
+                continue; // Saltamos a la siguiente iteración, este camino está bloqueado por un compañero
+            }
+
+            // Filtro de viabilidad: No muros, no precipicios, no agua, no bosque 
             if (celda != 'P' && celda != 'M' && celda != 'B' && (agua_permitida || celda != 'A')) {
                 // Filtro de altura: Desnivel máximo de 1
                 int dif_cota = mapaCotas[nf][nc] - mapaCotas[actual.st.fila][actual.st.columna];
@@ -317,8 +321,6 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, co
             }
         }
     }
-
-
 
     // Si la cola se vacía y no encontramos la meta, devolvemos una lista vacía (no hay camino)
     return list<Action>(); 
@@ -381,26 +383,23 @@ bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::li
     std::set<EstadoN4> cerrados;
 
     unsigned char start_terr = mapaResultado[start_f][start_c];
-    if (start_terr == 'M' || start_terr == 'P') return false; // Muros y precipicios prohibidos
+    if (start_terr == 'M' || start_terr == 'P') return false; 
     
     int start_H = mapaCotas[start_f][start_c];
     std::vector<int> alturas_inicio;
     
-    // Generar alturas posibles para la casilla inicial
     if (start_terr == 'A') {
-        alturas_inicio.push_back(start_H); // En el agua no se puede excavar ni elevar
+        alturas_inicio.push_back(start_H); 
     } else {
         alturas_inicio.push_back(start_H);
-        if (start_H > 0) alturas_inicio.push_back(start_H - 1); // Opción: Excavar
-        if (start_H < 9) alturas_inicio.push_back(start_H + 1); // Opción: Elevar
+        if (start_H > 0) alturas_inicio.push_back(start_H - 1);
+        if (start_H < 9) alturas_inicio.push_back(start_H + 1); 
     }
 
-    // Inicializar la búsqueda con las alturas posibles del inicio
     for (int h : alturas_inicio) {
         EstadoN4 st = {start_f, start_c, h};
         NodoN4 nodo;
         nodo.st = st;
-        // La estructura Paso guarda la modificación: h - start_H (-1 = DIG, 0 = NADA, 1 = RAISE)
         Paso p = {start_f, start_c, h - start_H}; 
         nodo.secuencia.push_back(p);
         
@@ -408,7 +407,6 @@ bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::li
         cerrados.insert(st);
     }
 
-    // Movimientos ortogonales permitidos para la tubería
     int df[] = {-1, 1, 0, 0};
     int dc[] = {0, 0, 1, -1};
 
@@ -416,18 +414,15 @@ bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::li
         NodoN4 actual = abiertos.front();
         abiertos.pop();
 
-        // 1. ¿Hemos llegado a la Planta de Tratamiento ('U')?
         if (mapaResultado[actual.st.f][actual.st.c] == 'U') {
             plan_resultante = actual.secuencia;
             return true;
         }
 
-        // 2. Expandir la tubería a los vecinos ortogonales
         for (int i = 0; i < 4; i++) {
             int nf = actual.st.f + df[i];
             int nc = actual.st.c + dc[i];
 
-            // Comprobar límites
             if (nf < 0 || nf >= mapaResultado.size() || nc < 0 || nc >= mapaResultado[0].size()) continue;
 
             unsigned char n_terr = mapaResultado[nf][nc];
@@ -445,8 +440,9 @@ bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::li
             }
 
             for (int nh : alturas_vecino) {
-                // ¡LA LEY DE LA GRAVEDAD! El agua fluye si la altura actual es mayor o igual a la siguiente
-                if (actual.st.h >= nh) {
+                // ¡LA LEY DE LA GRAVEDAD Y LA FÍSICA DE ROBOTS! 
+                // El agua fluye (actual.st.h >= nh) Y el robot puede bajar a pie (actual.st.h - nh <= 1)
+                if (actual.st.h >= nh && (actual.st.h - nh) <= 1) {
                     EstadoN4 siguiente = {nf, nc, nh};
                     
                     if (cerrados.find(siguiente) == cerrados.end()) {
@@ -463,7 +459,7 @@ bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::li
             }
         }
     }
-    return false; // No hay plan posible
+    return false; 
 }
 
 /**
@@ -492,69 +488,127 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_4(Sensores sensores
     // En el Nivel 4 no nos movemos, solo pensamos y enviamos el plano.
     return IDLE; 
 }
+
+
+
+// =========================================================
+// FUNCIONES AUXILIARES DE ALINEACIÓN (NIVEL 5)
+// =========================================================
+
+static Orientacion OrientacionHacia(int fromF, int fromC, int toF, int toC) {
+    if (toF < fromF) return norte;
+    if (toF > fromF) return sur;
+    if (toC > fromC) return este;
+    if (toC < fromC) return oeste;
+    return norte; 
+}
+
+static int GirosNecesarios(Orientacion actual, Orientacion objetivo) {
+    return ((int)objetivo - (int)actual + 8) % 8;
+}
+
+
 /**
  * @brief Comportamiento del ingeniero para el Nivel 5.
  * @param sensores Datos actuales de los sensores.
  * @return Acción a realizar.
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores) {
-    if (acabo_de_instalar_n5) {
-        tramo_n5++;
-        acabo_de_instalar_n5 = false;
-        terraformado_n5 = false; 
+    if (sensores.tiempo == 0) {
+        estado_obra_ing = ING_CALCULAR_PLAN;
+        plan_n5.clear();
+        tramo_n5 = 0;
+        terraformado_n5 = false;
+        hayPlan = false;
+        plan.clear();
     }
 
-    if (plan_n5.empty()) {
+    if (estado_obra_ing == ING_CALCULAR_PLAN) {
         std::list<Paso> lista_plan;
         EncontrarPlan_N4(sensores.BelPosF, sensores.BelPosC, lista_plan);
         for (auto p : lista_plan) plan_n5.push_back(p);
+        cout << "[INGENIERO] Plan maestro diseñado. " << plan_n5.size() << " tramos." << endl;
+        estado_obra_ing = ING_IR_CASILLA;
     }
 
-    if (tramo_n5 >= plan_n5.size() - 1) return IDLE;
+    if (estado_obra_ing == ING_IR_CASILLA) {
+        if (tramo_n5 >= (int)plan_n5.size() - 1) return IDLE; 
+        
+        Paso mi_obj = plan_n5[tramo_n5 + 1];
 
-    Paso mi_obj = plan_n5[tramo_n5];
-    Paso su_obj = plan_n5[tramo_n5 + 1];
+        if (sensores.posF == mi_obj.fil && sensores.posC == mi_obj.col) {
+            estado_obra_ing = ING_TERRAFORMAR; 
+        } else {
+            if (!hayPlan) {
+                estado inicio = {sensores.posF, sensores.posC, (int)sensores.rumbo};
+                estado destino = {mi_obj.fil, mi_obj.col, 0};
+                plan = BusquedaEnAnchura(inicio, destino, true, true);
+                hayPlan = true;
+            }
 
-    // 2. MOVERSE A POSICIÓN (Usando tu BusquedaEnAnchura)
-    if (sensores.posF != mi_obj.fil || sensores.posC != mi_obj.col) {
-        if (!hayPlan) {
-            estado inicio = {sensores.posF, sensores.posC, (int)sensores.rumbo};
-            estado destino = {mi_obj.fil, mi_obj.col, 0}; // Orientación irrelevante para destino
-            
-            // Llamamos a TU función real
-            plan = BusquedaEnAnchura(inicio, destino, true);
-            hayPlan = true;
+            if (!plan.empty()) {
+                Action a = plan.front();
+                if (a == WALK) {
+                    int nf = sensores.posF, nc = sensores.posC;
+                    switch(sensores.rumbo) {
+                        case norte: nf--; break; case noreste: nf--; nc++; break;
+                        case este: nc++; break; case sureste: nf++; nc++; break;
+                        case sur: nf++; break; case suroeste: nf++; nc--; break;
+                        case oeste: nc--; break; case noroeste: nf--; nc--; break;
+                    }
+                    if (nf >= 0 && nf < (int)mapaEntidades.size() && nc >= 0 && nc < (int)mapaEntidades[0].size()) {
+                        if (mapaEntidades[nf][nc] != '_' && mapaEntidades[nf][nc] != '?') {
+                            return IDLE; // Cedemos el paso temporalmente sin borrar el plan
+                        }
+                    }
+                }
+                plan.pop_front();
+                return a;
+            } else {
+                hayPlan = false;
+                return IDLE;
+            }
         }
-        if (!plan.empty()) {
-            Action a = plan.front();
-            plan.pop_front();
-            return a;
+    }
+
+    if (estado_obra_ing == ING_TERRAFORMAR) {
+        Paso mi_obj = plan_n5[tramo_n5 + 1];
+        if (!terraformado_n5) {
+            terraformado_n5 = true;
+            if (mi_obj.op == 1) return RAISE;
+            if (mi_obj.op == -1) return DIG;
         }
-    }
-    hayPlan = false; 
-
-    // 3. ENCARAR AL COMPAÑERO
-    Orientacion obj_ori;
-    if (su_obj.fil < sensores.posF) obj_ori = norte;
-    else if (su_obj.fil > sensores.posF) obj_ori = sur;
-    else if (su_obj.col < sensores.posC) obj_ori = oeste;
-    else obj_ori = este;
-
-    if (sensores.rumbo != obj_ori) {
-        int dif_rumbo = (obj_ori - sensores.rumbo + 8) % 8;
-        return (dif_rumbo <= 4) ? TURN_SR : TURN_SL; 
+        estado_obra_ing = ING_LLAMAR;
     }
 
-    // 4. TERRAFORMAR (Usando 'op'. 1 = RAISE)
-    if (!terraformado_n5 && mi_obj.op == 1) { 
-        terraformado_n5 = true;
-        return RAISE;
+    if (estado_obra_ing == ING_LLAMAR) {
+        cout << "[INGENIERO] ¡Terreno listo! Pitando al Técnico con COME..." << endl;
+        estado_obra_ing = ING_ALINEARSE;
+        return COME; 
     }
 
-    // 5. SINCRONIZACIÓN E INSTALACIÓN
-    if (sensores.enfrente) {
-        acabo_de_instalar_n5 = true;
-        return INSTALL;
+    if (estado_obra_ing == ING_ALINEARSE) {
+        Paso su_obj = plan_n5[tramo_n5]; // Miramos hacia aguas arriba donde estará el Técnico
+        
+        // ¡LA FUNCIÓN AUXILIAR YA ESTÁ RECUPERADA!
+        Orientacion ori_deseada = OrientacionHacia(sensores.posF, sensores.posC, su_obj.fil, su_obj.col);
+
+        if (sensores.rumbo != ori_deseada) {
+            int giros = GirosNecesarios(sensores.rumbo, ori_deseada);
+            return (giros <= 4) ? TURN_SR : TURN_SL;
+        }
+
+        if (sensores.enfrente) {
+            cout << "[INGENIERO] Contacto visual mutuo. ¡INSTALANDO TRAMO " << tramo_n5 << "!" << endl;
+            tramo_n5++; 
+            terraformado_n5 = false;
+            hayPlan = false;
+            plan.clear();
+            estado_obra_ing = ING_IR_CASILLA; 
+            return INSTALL;
+        } 
+        
+        return IDLE; 
     }
 
     return IDLE;

@@ -267,7 +267,7 @@ private:
     std::list<Action> plan;       // Aquí guardaremos las instrucciones a seguir
     
     // Declaramos nuestra función del algoritmo de búsqueda
-    list<Action> BusquedaEnAnchura(const estado &origen, const estado &destino, bool agua_permitida = false);
+    list<Action> BusquedaEnAnchura(const estado &origen, const estado &destino, bool agua_permitida = false, bool ignorar_entidades = false);
 
 
     // NIVEL 3
@@ -336,6 +336,12 @@ private:
     bool acabo_de_instalar_n5 = false;
     bool terraformado_n5 = false;
     std::vector<Paso> plan_n5; // Vector para acceder a los tramos fácilmente
+
+    // =========================================================
+    // === MÁQUINA DE ESTADOS NIVEL 5 (JEFE DE OBRA) ==========
+    // =========================================================
+    enum EstadoObraIng { ING_CALCULAR_PLAN, ING_IR_CASILLA, ING_TERRAFORMAR, ING_LLAMAR, ING_ALINEARSE };
+    EstadoObraIng estado_obra_ing = ING_CALCULAR_PLAN;
 };
 
 

@@ -316,7 +316,7 @@ private:
   };
 
   // Funciones del cerebro A* (Usan EstadoN3)
-  bool EncontrarPlan_N3(const EstadoN3& inicio, int dest_f, int dest_c, std::list<Action>& plan_resultante, bool ignorar_entidades = false);
+  bool EncontrarPlan_N3(const EstadoN3& inicio, int dest_f, int dest_c, std::list<Action>& plan_resultante, bool ignorar_entidades = false, bool parar_adyacente = false);
   EstadoN3 AplicaAccion_N3(const EstadoN3& st, Action act);
   bool EsValida_N3(const EstadoN3& st, Action act, bool ignorar_entidades = false);
   
@@ -348,6 +348,12 @@ private:
   };
 
   bool EncontrarPlan_N5_Arquitecto(int start_f, int start_c, std::list<Paso>& plan_resultante);
+
+  // =========================================================
+  // === MÁQUINA DE ESTADOS NIVEL 5 (OPERARIO) ==============
+  // =========================================================
+  enum EstadoObraTec { TEC_ESPERAR_AVISO, TEC_IR_CASILLA, TEC_ALINEARSE };
+  EstadoObraTec estado_obra_tec = TEC_ESPERAR_AVISO;
 };
 
 #endif

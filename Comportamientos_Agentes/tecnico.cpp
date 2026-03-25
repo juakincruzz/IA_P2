@@ -380,14 +380,17 @@ ComportamientoTecnico::EstadoN3 ComportamientoTecnico::AplicaAccion_N3(const Est
             case oeste: nuevo.c--; break;
             case noroeste: nuevo.f--; nuevo.c--; break;
         }
-        if (mapaResultado[nuevo.f][nuevo.c] == 'D') {
-            nuevo.zapatillas = true;
+        // ¡PARCHE ANTICRASH! Comprobamos límites antes de leer el mapa
+        if (nuevo.f >= 0 && nuevo.f < mapaResultado.size() && nuevo.c >= 0 && nuevo.c < mapaResultado[0].size()) {
+            if (mapaResultado[nuevo.f][nuevo.c] == 'D') {
+                nuevo.zapatillas = true;
+            }
         }
     }
     return nuevo;
 }
 
-bool ComportamientoTecnico::EsValida_N3(const EstadoN3& st, Action act) {
+bool ComportamientoTecnico::EsValida_N3(const EstadoN3& st, Action act, bool ignorar_entidades) {
     if (act == TURN_SL || act == TURN_SR) return true;
 
     if (act == WALK) {
@@ -403,7 +406,7 @@ bool ComportamientoTecnico::EsValida_N3(const EstadoN3& st, Action act) {
         if (c == 'B' && !st.zapatillas) return false; 
 
         unsigned char entidad = mapaEntidades[destino.f][destino.c];
-        if (entidad != '_' && entidad != '?') return false;
+        if (!ignorar_entidades && entidad != '_' && entidad != '?') return false;
 
         int dif = mapaCotas[destino.f][destino.c] - mapaCotas[st.f][st.c];
         if (abs(dif) > 1) return false; 
@@ -413,9 +416,8 @@ bool ComportamientoTecnico::EsValida_N3(const EstadoN3& st, Action act) {
     return false;
 }
 
-bool ComportamientoTecnico::EncontrarPlan_N3(const EstadoN3& inicio, int dest_f, int dest_c, std::list<Action>& plan_resultante) {
+bool ComportamientoTecnico::EncontrarPlan_N3(const EstadoN3& inicio, int dest_f, int dest_c, std::list<Action>& plan_resultante, bool ignorar_entidades, bool parar_adyacente) {
     plan_resultante.clear();
-    
     std::priority_queue<NodoN3, std::vector<NodoN3>, std::greater<NodoN3>> abiertos;
     std::set<EstadoN3> cerrados;
 
@@ -423,7 +425,6 @@ bool ComportamientoTecnico::EncontrarPlan_N3(const EstadoN3& inicio, int dest_f,
     n_inicial.st = inicio;
     n_inicial.coste_g = 0;
     n_inicial.coste_h = Heuristica(inicio, dest_f, dest_c);
-    
     abiertos.push(n_inicial);
 
     while (!abiertos.empty()) {
@@ -433,27 +434,31 @@ bool ComportamientoTecnico::EncontrarPlan_N3(const EstadoN3& inicio, int dest_f,
         if (cerrados.find(actual.st) != cerrados.end()) continue;
         cerrados.insert(actual.st);
 
-        if (actual.st.f == dest_f && actual.st.c == dest_c) {
-            plan_resultante = actual.secuencia;
-            return true;
+        // ¡LA MAGIA! Si solo necesitamos llegar al lado de la tubería, el A* se da por satisfecho aquí
+        if (parar_adyacente) {
+            if (abs(actual.st.f - dest_f) + abs(actual.st.c - dest_c) <= 1) {
+                plan_resultante = actual.secuencia;
+                return true;
+            }
+        } else {
+            if (actual.st.f == dest_f && actual.st.c == dest_c) {
+                plan_resultante = actual.secuencia;
+                return true;
+            }
         }
 
         Action acciones[] = {WALK, TURN_SL, TURN_SR};
-        
         for (Action accion : acciones) {
-            if (EsValida_N3(actual.st, accion)) {
+            if (EsValida_N3(actual.st, accion, ignorar_entidades)) {
                 EstadoN3 siguiente = AplicaAccion_N3(actual.st, accion);
-                
                 if (cerrados.find(siguiente) == cerrados.end()) {
                     int coste_accion = CostoBateria_N3(actual.st, accion);
-                    
                     NodoN3 hijo;
                     hijo.st = siguiente;
                     hijo.secuencia = actual.secuencia;
                     hijo.secuencia.push_back(accion);
-                    hijo.coste_g = actual.coste_g + coste_accion; 
-                    hijo.coste_h = Heuristica(siguiente, dest_f, dest_c); 
-                    
+                    hijo.coste_g = actual.coste_g + coste_accion;
+                    hijo.coste_h = Heuristica(siguiente, dest_f, dest_c);
                     abiertos.push(hijo);
                 }
             }
@@ -577,7 +582,8 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c
             }
 
             for (int nh : alturas_vecino) {
-                if (actual.st.h >= nh) { // Ley de la gravedad
+                // GRAVEDAD Y CAMINABILIDAD
+                if (actual.st.h >= nh && (actual.st.h - nh) <= 1) {
                     EstadoN4_Tecnico siguiente = {nf, nc, nh};
                     if (cerrados.find(siguiente) == cerrados.end()) {
                         cerrados.insert(siguiente);
@@ -594,15 +600,40 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c
     return false;
 }
 
+// =========================================================
+// FUNCIONES AUXILIARES DE ALINEACIÓN (NIVEL 5)
+// =========================================================
+
+static Orientacion OrientacionHacia_Tec(int fromF, int fromC, int toF, int toC) {
+    if (toF < fromF) return norte;
+    if (toF > fromF) return sur;
+    if (toC > fromC) return este;
+    if (toC < fromC) return oeste;
+    return norte;
+}
+
+static int GirosNecesarios_Tec(Orientacion actual, Orientacion objetivo) {
+    return ((int)objetivo - (int)actual + 8) % 8;
+}
+
+
 /**
  * @brief Comportamiento del técnico para el Nivel 5.
  * @param sensores Datos actuales de los sensores.
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
-    if (acabo_de_instalar_n5) {
-        tramo_n5++;
-        acabo_de_instalar_n5 = false;
+    static int dest_f = -1;
+    static int dest_c = -1;
+
+    if (sensores.tiempo == 0) {
+        estado_obra_tec = TEC_ESPERAR_AVISO;
+        plan.clear();
+        hay_plan = false;
+        plan_n5.clear();
+        tramo_n5 = 0;
+        dest_f = -1;
+        dest_c = -1;
         terraformado_n5 = false;
     }
 
@@ -612,50 +643,96 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
         for (auto p : lista_plan) plan_n5.push_back(p);
     }
 
-    if (tramo_n5 >= plan_n5.size() - 1) return IDLE;
-
-    // Asignación de posiciones INVERTIDA: El Técnico siempre va por delante
-    Paso mi_obj = plan_n5[tramo_n5 + 1];
-    Paso su_obj = plan_n5[tramo_n5];
-
-    // 2. MOVERSE A POSICIÓN (A* del Nivel 3)
-    if (sensores.posF != mi_obj.fil || sensores.posC != mi_obj.col) {
-        if (!hay_plan) {
-            EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, false};
-            if (mapaResultado[sensores.posF][sensores.posC] == 'D') inicio.zapatillas = true;
-            EncontrarPlan_N3(inicio, mi_obj.fil, mi_obj.col, plan);
-            hay_plan = true;
+    // SI EL JEFE PITA (COME), REACCIONAMOS AL VUELO
+    if (sensores.venpaca) {
+        int ing_f = sensores.GotoF;
+        int ing_c = sensores.GotoC;
+        
+        int tramo_encontrado = -1;
+        for (int i = 1; i < (int)plan_n5.size(); i++) {
+            if (plan_n5[i].fil == ing_f && plan_n5[i].col == ing_c) {
+                tramo_encontrado = i - 1; 
+                break;
+            }
         }
-        if (!plan.empty()) {
-            Action a = plan.front();
-            plan.pop_front();
-            return a;
+
+        if (tramo_encontrado >= 0) {
+            if (dest_f != plan_n5[tramo_encontrado].fil || dest_c != plan_n5[tramo_encontrado].col) {
+                tramo_n5 = tramo_encontrado;
+                dest_f = plan_n5[tramo_n5].fil; // El Técnico va aguas arriba
+                dest_c = plan_n5[tramo_n5].col;
+                cout << "[TÉCNICO] ¡El Jefe llama! Voy al tramo " << tramo_n5 << " en (" << dest_f << ", " << dest_c << ")" << endl;
+                estado_obra_tec = TEC_IR_CASILLA;
+                plan.clear(); 
+                hay_plan = false;
+                terraformado_n5 = false;
+            }
         }
     }
-    hay_plan = false;
 
-    // 3. ENCARAR AL COMPAÑERO
-    Orientacion obj_ori;
-    if (su_obj.fil < sensores.posF) obj_ori = norte;
-    else if (su_obj.fil > sensores.posF) obj_ori = sur;
-    else if (su_obj.col < sensores.posC) obj_ori = oeste;
-    else obj_ori = este;
-
-    if (sensores.rumbo != obj_ori) {
-        int dif_rumbo = (obj_ori - sensores.rumbo + 8) % 8;
-        return (dif_rumbo <= 4) ? TURN_SR : TURN_SL;
+    if (estado_obra_tec == TEC_ESPERAR_AVISO) {
+        return IDLE;
     }
 
-    // 4. TERRAFORMAR (El Técnico usa DIG, op == -1)
-    if (!terraformado_n5 && mi_obj.op == -1) { 
-        terraformado_n5 = true;
-        return DIG;
+    if (estado_obra_tec == TEC_IR_CASILLA) {
+        if (sensores.posF == dest_f && sensores.posC == dest_c) {
+            Paso mi_obj = plan_n5[tramo_n5];
+            if (!terraformado_n5) {
+                terraformado_n5 = true;
+                if (mi_obj.op == -1) return DIG; // El Técnico solo puede excavar si hace falta
+            }
+            estado_obra_tec = TEC_ALINEARSE;
+        } else {
+            if (!hay_plan) {
+                EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, false};
+                if (mapaResultado[sensores.posF][sensores.posC] == 'D') inicio.zapatillas = true;
+                EncontrarPlan_N3(inicio, dest_f, dest_c, plan, true); 
+                hay_plan = true;
+            }
+
+            if (!plan.empty()) {
+                Action a = plan.front();
+                if (a == WALK) {
+                    int nf = sensores.posF, nc = sensores.posC;
+                    switch(sensores.rumbo) {
+                        case norte: nf--; break; case noreste: nf--; nc++; break;
+                        case este: nc++; break; case sureste: nf++; nc++; break;
+                        case sur: nf++; break; case suroeste: nf++; nc--; break;
+                        case oeste: nc--; break; case noroeste: nf--; nc--; break;
+                    }
+                    if (nf >= 0 && nf < (int)mapaEntidades.size() && nc >= 0 && nc < (int)mapaEntidades[0].size()) {
+                        if (mapaEntidades[nf][nc] != '_' && mapaEntidades[nf][nc] != '?') {
+                            return IDLE; // Cedemos el paso temporalmente sin borrar el A-Estrella
+                        }
+                    }
+                }
+                plan.pop_front();
+                return a;
+            } else {
+                hay_plan = false;
+                return IDLE;
+            }
+        }
     }
 
-    // 5. SINCRONIZACIÓN E INSTALACIÓN
-    if (sensores.enfrente) {
-        acabo_de_instalar_n5 = true;
-        return INSTALL;
+    if (estado_obra_tec == TEC_ALINEARSE) {
+        Paso su_obj = plan_n5[tramo_n5 + 1]; // Miramos hacia aguas abajo
+        Orientacion ori_deseada = OrientacionHacia_Tec(sensores.posF, sensores.posC, su_obj.fil, su_obj.col);
+
+        if (sensores.rumbo != ori_deseada) {
+            int giros = GirosNecesarios_Tec(sensores.rumbo, ori_deseada);
+            return (giros <= 4) ? TURN_SR : TURN_SL;
+        }
+
+        if (sensores.enfrente) {
+            cout << "[TÉCNICO] Contacto visual mutuo. ¡INSTALANDO!" << endl;
+            estado_obra_tec = TEC_ESPERAR_AVISO;
+            hay_plan = false;
+            plan.clear();
+            return INSTALL;
+        } 
+        
+        return IDLE; // Esperamos pacientes al Jefe
     }
 
     return IDLE;
