@@ -122,8 +122,8 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores
 
 // --- FUNCIONES AUXILIARES NIVEL 1 (INGENIERO) ---
 bool ComportamientoIngeniero::es_transitable_N1(unsigned char c) const {
-  // Ahora el sendero 'S' y los puestos base 'X' también son válidos para explorar
-  return (c == 'C' || c == 'S' || c == 'D' || c == 'U' || c == 'X');
+  // LISTA NEGRA: Todo es pisable menos los obstáculos duros y lo desconocido
+  return (c != 'M' && c != 'P' && c != 'A' && c != 'B' && c != '?');
 }
 
 char ComportamientoIngeniero::ViablePorAltura_N1(char casilla, int dif, bool zap) {
@@ -187,10 +187,14 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores
   u_der = Delante(u_der);
 
   // 4. LEER EL MAPA DE FEROMONAS (999999 si no es transitable)
-  // (Nota: para el tecnico, añade 'tiene_zapatillas' dentro de es_transitable_N1)
-  int vis_frente = es_transitable_N1(c) ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
-  int vis_izq = es_transitable_N1(i) ? matriz_visitas[u_izq.f][u_izq.c] : 999999;
-  int vis_der = es_transitable_N1(d) ? matriz_visitas[u_der.f][u_der.c] : 999999;
+  // ¡MAGIA MODULAR! Si estamos en Nivel 6, usamos la lista negra. Si no, tu lista blanca original.
+  bool trans_c = (sensores.nivel == 6) ? (c != 'M' && c != 'P' && c != 'A' && c != 'B' && c != '?') : es_transitable_N1(c);
+  bool trans_i = (sensores.nivel == 6) ? (i != 'M' && i != 'P' && i != 'A' && i != 'B' && i != '?') : es_transitable_N1(i);
+  bool trans_d = (sensores.nivel == 6) ? (d != 'M' && d != 'P' && d != 'A' && d != 'B' && d != '?') : es_transitable_N1(d);
+
+  int vis_frente = trans_c ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
+  int vis_izq = trans_i ? matriz_visitas[u_izq.f][u_izq.c] : 999999;
+  int vis_der = trans_d ? matriz_visitas[u_der.f][u_der.c] : 999999;
 
   // 5. ENCONTRAR LA RUTA MENOS PISADA
   int min_visitas = vis_frente;
@@ -292,22 +296,21 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, co
         }
 
         // Comprobamos si el paso es legal (dentro del mapa)
-        if (nf >= 0 && nf < mapaResultado.size() && nc >= 0 && nc < mapaResultado[0].size()) {
+        if (nf >= 0 && nf < (int)mapaResultado.size() && nc >= 0 && nc < (int)mapaResultado[0].size()) {
             unsigned char celda = mapaResultado[nf][nc];
-            unsigned char entidad = mapaEntidades[nf][nc]; // ¡Añadido! Miramos si hay un agente en la celda
+            unsigned char entidad = mapaEntidades[nf][nc]; // Miramos si hay un agente en la celda
 
-            // ¡NUEVO FILTRO ANTICOLISIÓN!
-            // Si no tenemos permiso para ignorar entidades y hay alguien en la celda, no podemos pasar
+            // ¡FILTRO ANTICOLISIÓN!
             if (!ignorar_entidades && entidad != '_' && entidad != '?') {
-                continue; // Saltamos a la siguiente iteración, este camino está bloqueado por un compañero
+                continue; // Saltamos a la siguiente iteración, este camino está bloqueado
             }
 
             // Filtro de viabilidad: No muros, no precipicios, no agua, no bosque 
             if (celda != 'P' && celda != 'M' && celda != 'B' && (agua_permitida || celda != 'A')) {
-                // Filtro de altura: Desnivel máximo de 1
                 int dif_cota = mapaCotas[nf][nc] - mapaCotas[actual.st.fila][actual.st.columna];
 
-                if (abs(dif_cota) <= 1) {
+                // ¡EXTENSIÓN N6 (OPTIMISTA)! Si es '?' somos optimistas y suponemos que es llano y transitable.
+                if (celda == '?' || abs(dif_cota) <= 1) {
                     hijo_walk.st.fila = nf;
                     hijo_walk.st.columna = nc;
 
@@ -322,7 +325,7 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, co
         }
     }
 
-    // Si la cola se vacía y no encontramos la meta, devolvemos una lista vacía (no hay camino)
+    // Si la cola se vacía y no encontramos la meta, devolvemos una lista vacía
     return list<Action>(); 
 }
 
@@ -621,12 +624,8 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
  * @return Acción a realizar.
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores) {
-    // =======================================================
-    // 🚨 ¡AQUÍ ESTÁ LA CLAVE! 🚨
-    // Escribe aquí la misma función/código que usas en tu Nivel 1 
-    // para copiar lo que ves a mapaResultado y mapaCotas.
-    // Ejemplo: ActualizarMatriz(sensores);
-    // =======================================================
+    ActualizarMapa(sensores);
+    if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
     if (sensores.tiempo == 0) {
         plan_tuberias_hecho = false;
@@ -647,14 +646,9 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
             case oeste: nc--; break; case noroeste: nf--; nc--; break;
         }
         if (nf < 0 || nf >= (int)mapaResultado.size() || nc < 0 || nc >= (int)mapaResultado[0].size()) return false;
-        
         unsigned char celda = mapaResultado[nf][nc];
-        
-        // ¡NUEVO! Prohibido pisar precipicios, muros o NIEBLA ('?')
-        if (celda == 'P' || celda == 'M' || celda == '?') return false;
-        
-        int desnivel = mapaCotas[nf][nc] - mapaCotas[sens.posF][sens.posC];
-        if (abs(desnivel) > 1) return false;
+        if (celda == 'P' || celda == 'M' || celda == '?') return false; // El sensor real no miente
+        if (abs(mapaCotas[nf][nc] - mapaCotas[sens.posF][sens.posC]) > 1) return false;
         if (sens.choque) return false;
         return true;
     };
@@ -663,18 +657,20 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
 
     if (!plan_tuberias_hecho) {
         std::list<Paso> lista_plan;
-        unsigned char start_terr = mapaResultado[sensores.BelPosF][sensores.BelPosC];
         
-        if (start_terr != '?') {
+        // 1. ¿Podemos construir ya? (Planificación viable exigida por el guion)
+        if (mapaResultado[sensores.BelPosF][sensores.BelPosC] != '?') {
             if (EncontrarPlan_N4(sensores.BelPosF, sensores.BelPosC, lista_plan)) {
-                cout << "[INGENIERO N6] ¡EUREKA! Ruta descubierta y segura." << endl;
+                cout << "[INGENIERO N6] ¡EUREKA! Red de tuberías viable planificada." << endl;
                 plan_tuberias_hecho = true;
                 for (auto p : lista_plan) plan_n5.push_back(p);
                 estado_obra_ing = ING_IR_CASILLA; 
+                hayPlan = false; plan.clear();
                 return IDLE; 
             }
         }
 
+        // 2. Extensión de Búsqueda (Nivel 2 optimista hacia la Belkanita)
         if (!hayPlan) {
             estado inicio = {sensores.posF, sensores.posC, (int)sensores.rumbo};
             estado destino = {sensores.BelPosF, sensores.BelPosC, 0};
@@ -682,24 +678,24 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
             hayPlan = true;
         }
 
-        if (!plan.empty()) {
+        // 3. Ejecución y Combinación con Nivel 1
+        if (hayPlan && !plan.empty()) {
             Action a = plan.front();
             if (a == WALK && !es_seguro(sensores)) {
-                hayPlan = false;
-                plan.clear();
-                return TURN_SR; 
+                hayPlan = false; plan.clear();
+                // El plan optimista falló ante la realidad. Cedemos el control al Nivel 1 para salir del apuro.
+                return ComportamientoIngenieroNivel_1(sensores); 
             }
             plan.pop_front();
             return a;
         } else {
             hayPlan = false;
-            if (rand() % 100 < 15) return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
-            Orientacion ori = OrientacionHacia(sensores.posF, sensores.posC, sensores.BelPosF, sensores.BelPosC);
-            if (sensores.rumbo != ori && rand() % 100 < 80) return (GirosNecesarios(sensores.rumbo, ori) <= 4) ? TURN_SR : TURN_SL;
-            return es_seguro(sensores) ? WALK : TURN_SR;
+            // Si no hay ruta ni siquiera optimista, usamos Nivel 1 para descubrir más mapa
+            return ComportamientoIngenieroNivel_1(sensores);
         }
     }
 
+    // 4. Posterior construcción de la misma (Nivel 5)
     double tiempo_real = sensores.tiempo;
     sensores.tiempo = 1; 
     Action accion = ComportamientoIngenieroNivel_5(sensores);
