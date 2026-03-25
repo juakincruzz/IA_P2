@@ -233,7 +233,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores
 // ALGORITMOS DE BÚSQUEDA (NIVEL 2)
 // =========================================================================
 
-list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, const estado& destino) {
+list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, const estado& destino, bool agua_permitida) {
     // La cola de estados por explorar (Abierta) y la memoria de estados ya visitados (Cerrados)
     queue<nodo> abierta;
     set<estado> cerrados;
@@ -297,17 +297,16 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, co
         // Comprobamos si el paso es legal (dentro del mapa)
         if (nf >= 0 && nf < mapaResultado.size() && nc >= 0 && nc < mapaResultado[0].size()) {
             unsigned char celda = mapaResultado[nf][nc];
-            
+
             // Filtro de viabilidad: No muros, no precipicios, no agua, no bosque (asumiendo que no hay zapatillas de inicio)
-            if (celda != 'P' && celda != 'M' && celda != 'B' && celda != 'A') {
-                
+            if (celda != 'P' && celda != 'M' && celda != 'B' && (agua_permitida || celda != 'A')) {
                 // Filtro de altura: Desnivel máximo de 1
                 int dif_cota = mapaCotas[nf][nc] - mapaCotas[actual.st.fila][actual.st.columna];
+
                 if (abs(dif_cota) <= 1) {
-                    
                     hijo_walk.st.fila = nf;
                     hijo_walk.st.columna = nc;
-                    
+
                     // Si nunca hemos estado en esta casilla mirando hacia allá, la añadimos
                     if (cerrados.find(hijo_walk.st) == cerrados.end()) {
                         hijo_walk.secuencia.push_back(WALK);
@@ -318,6 +317,8 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, co
             }
         }
     }
+
+
 
     // Si la cola se vacía y no encontramos la meta, devolvemos una lista vacía (no hay camino)
     return list<Action>(); 
@@ -521,7 +522,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
             estado destino = {mi_obj.fil, mi_obj.col, 0}; // Orientación irrelevante para destino
             
             // Llamamos a TU función real
-            plan = BusquedaEnAnchura(inicio, destino);
+            plan = BusquedaEnAnchura(inicio, destino, true);
             hayPlan = true;
         }
         if (!plan.empty()) {
