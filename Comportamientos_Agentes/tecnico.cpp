@@ -744,10 +744,110 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
+    // =======================================================
+    // 🚨 ¡AQUÍ ESTÁ LA CLAVE! 🚨
+    // Llama aquí a la función que usas para actualizar el mapa.
+    // Ejemplo: ActualizarMatriz(sensores);
+    // =======================================================
+
+    static int dest_f = -1;
+    static int dest_c = -1;
+
+    if (sensores.tiempo == 0) {
+        estado_n6 = 0;
+        dest_f = -1;
+        dest_c = -1;
+        hay_plan = false;
+        plan.clear();
+    }
+
+    auto es_seguro = [&](Sensores sens) {
+        int nf = sens.posF, nc = sens.posC;
+        switch(sens.rumbo) {
+            case norte: nf--; break; case noreste: nf--; nc++; break;
+            case este: nc++; break; case sureste: nf++; nc++; break;
+            case sur: nf++; break; case suroeste: nf++; nc--; break;
+            case oeste: nc--; break; case noroeste: nf--; nc--; break;
+        }
+        if (nf < 0 || nf >= (int)mapaResultado.size() || nc < 0 || nc >= (int)mapaResultado[0].size()) return false;
+        
+        unsigned char celda = mapaResultado[nf][nc];
+        // ¡NUEVO! Prohibido pisar precipicios, muros o NIEBLA ('?')
+        if (celda == 'P' || celda == 'M' || celda == '?') return false;
+        
+        int desnivel = mapaCotas[nf][nc] - mapaCotas[sens.posF][sens.posC];
+        if (abs(desnivel) > 1) return false;
+        if (sens.choque) return false;
+        return true;
+    };
+
+    if (mapaResultado[sensores.posF][sensores.posC] == 'X' && sensores.energia < 3000) return IDLE; 
+
+    if (sensores.venpaca) {
+        if (dest_f != sensores.GotoF || dest_c != sensores.GotoC) {
+            dest_f = sensores.GotoF;
+            dest_c = sensores.GotoC;
+            cout << "[TÉCNICO N6] ¡El Jefe llama a (" << dest_f << ", " << dest_c << ")! Allá voy." << endl;
+            estado_n6 = 1;
+            plan.clear(); 
+            hay_plan = false;
+        }
+    }
+
+    switch(estado_n6) {
+        case 0: 
+            if (rand() % 100 < 15) return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
+            return es_seguro(sensores) ? WALK : TURN_SR;
+
+        case 1: 
+            if (abs(sensores.posF - dest_f) + abs(sensores.posC - dest_c) <= 1) {
+                cout << "[TÉCNICO N6] ¡Al lado del Jefe! Alineándome." << endl;
+                estado_n6 = 2;
+                return IDLE;
+            } else {
+                if (!hay_plan) {
+                    EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, false};
+                    if (mapaResultado[sensores.posF][sensores.posC] == 'D') inicio.zapatillas = true;
+                    EncontrarPlan_N3(inicio, dest_f, dest_c, plan, true, true); 
+                    hay_plan = true;
+                }
+
+                if (!plan.empty()) {
+                    Action a = plan.front();
+                    if (a == WALK && !es_seguro(sensores)) {
+                        hay_plan = false;
+                        plan.clear();
+                        return TURN_SR; 
+                    }
+                    plan.pop_front();
+                    return a;
+                } else {
+                    hay_plan = false;
+                    if (rand() % 100 < 10) return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
+                    Orientacion ori = OrientacionHacia_Tec(sensores.posF, sensores.posC, dest_f, dest_c);
+                    if (sensores.rumbo != ori && rand() % 100 < 80) return (GirosNecesarios_Tec(sensores.rumbo, ori) <= 4) ? TURN_SR : TURN_SL;
+                    return es_seguro(sensores) ? WALK : TURN_SR;
+                }
+            }
+
+        case 2: 
+            Orientacion ori_deseada = OrientacionHacia_Tec(sensores.posF, sensores.posC, dest_f, dest_c);
+            if (sensores.rumbo != ori_deseada) {
+                int giros = GirosNecesarios_Tec(sensores.rumbo, ori_deseada);
+                return (giros <= 4) ? TURN_SR : TURN_SL;
+            }
+
+            if (sensores.enfrente) {
+                cout << "[TÉCNICO N6] ¡INSTALANDO!" << endl;
+                estado_n6 = 0; 
+                hay_plan = false;
+                plan.clear();
+                return INSTALL;
+            } 
+            return IDLE; 
+    }
     return IDLE;
 }
-
-
 
 
 // =========================================================================

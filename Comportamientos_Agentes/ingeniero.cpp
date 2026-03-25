@@ -426,7 +426,7 @@ bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::li
             if (nf < 0 || nf >= mapaResultado.size() || nc < 0 || nc >= mapaResultado[0].size()) continue;
 
             unsigned char n_terr = mapaResultado[nf][nc];
-            if (n_terr == 'M' || n_terr == 'P') continue; 
+            if (n_terr == 'M' || n_terr == 'P' || n_terr == '?') continue; 
 
             int nH = mapaCotas[nf][nc];
             std::vector<int> alturas_vecino;
@@ -620,9 +620,91 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
  * @param sensores Datos actuales de los sensores.
  * @return Acción a realizar.
  */
-Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores)
-{
-  return IDLE;
+Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores) {
+    // =======================================================
+    // 🚨 ¡AQUÍ ESTÁ LA CLAVE! 🚨
+    // Escribe aquí la misma función/código que usas en tu Nivel 1 
+    // para copiar lo que ves a mapaResultado y mapaCotas.
+    // Ejemplo: ActualizarMatriz(sensores);
+    // =======================================================
+
+    if (sensores.tiempo == 0) {
+        plan_tuberias_hecho = false;
+        estado_obra_ing = ING_CALCULAR_PLAN; 
+        plan_n5.clear();
+        tramo_n5 = 0;
+        terraformado_n5 = false;
+        hayPlan = false;
+        plan.clear();
+    }
+
+    auto es_seguro = [&](Sensores sens) {
+        int nf = sens.posF, nc = sens.posC;
+        switch(sens.rumbo) {
+            case norte: nf--; break; case noreste: nf--; nc++; break;
+            case este: nc++; break; case sureste: nf++; nc++; break;
+            case sur: nf++; break; case suroeste: nf++; nc--; break;
+            case oeste: nc--; break; case noroeste: nf--; nc--; break;
+        }
+        if (nf < 0 || nf >= (int)mapaResultado.size() || nc < 0 || nc >= (int)mapaResultado[0].size()) return false;
+        
+        unsigned char celda = mapaResultado[nf][nc];
+        
+        // ¡NUEVO! Prohibido pisar precipicios, muros o NIEBLA ('?')
+        if (celda == 'P' || celda == 'M' || celda == '?') return false;
+        
+        int desnivel = mapaCotas[nf][nc] - mapaCotas[sens.posF][sens.posC];
+        if (abs(desnivel) > 1) return false;
+        if (sens.choque) return false;
+        return true;
+    };
+
+    if (mapaResultado[sensores.posF][sensores.posC] == 'X' && sensores.energia < 3000) return IDLE; 
+
+    if (!plan_tuberias_hecho) {
+        std::list<Paso> lista_plan;
+        unsigned char start_terr = mapaResultado[sensores.BelPosF][sensores.BelPosC];
+        
+        if (start_terr != '?') {
+            if (EncontrarPlan_N4(sensores.BelPosF, sensores.BelPosC, lista_plan)) {
+                cout << "[INGENIERO N6] ¡EUREKA! Ruta descubierta y segura." << endl;
+                plan_tuberias_hecho = true;
+                for (auto p : lista_plan) plan_n5.push_back(p);
+                estado_obra_ing = ING_IR_CASILLA; 
+                return IDLE; 
+            }
+        }
+
+        if (!hayPlan) {
+            estado inicio = {sensores.posF, sensores.posC, (int)sensores.rumbo};
+            estado destino = {sensores.BelPosF, sensores.BelPosC, 0};
+            plan = BusquedaEnAnchura(inicio, destino, true, true); 
+            hayPlan = true;
+        }
+
+        if (!plan.empty()) {
+            Action a = plan.front();
+            if (a == WALK && !es_seguro(sensores)) {
+                hayPlan = false;
+                plan.clear();
+                return TURN_SR; 
+            }
+            plan.pop_front();
+            return a;
+        } else {
+            hayPlan = false;
+            if (rand() % 100 < 15) return (rand() % 2 == 0) ? TURN_SL : TURN_SR;
+            Orientacion ori = OrientacionHacia(sensores.posF, sensores.posC, sensores.BelPosF, sensores.BelPosC);
+            if (sensores.rumbo != ori && rand() % 100 < 80) return (GirosNecesarios(sensores.rumbo, ori) <= 4) ? TURN_SR : TURN_SL;
+            return es_seguro(sensores) ? WALK : TURN_SR;
+        }
+    }
+
+    double tiempo_real = sensores.tiempo;
+    sensores.tiempo = 1; 
+    Action accion = ComportamientoIngenieroNivel_5(sensores);
+    sensores.tiempo = tiempo_real;
+    return accion;
 }
 
 // =========================================================================

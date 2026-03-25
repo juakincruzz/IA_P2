@@ -354,6 +354,11 @@ private:
   // =========================================================
   enum EstadoObraTec { TEC_ESPERAR_AVISO, TEC_IR_CASILLA, TEC_ALINEARSE };
   EstadoObraTec estado_obra_tec = TEC_ESPERAR_AVISO;
+
+  // =========================================================
+  // === NIVEL 6 (COOPERACIÓN COMPLETA) =========================
+  // =========================================================
+  int estado_n6 = 0; // 0: Explorar, 1: Ir a Jefe, 2: Alinearse
 };
 
 #endif
