@@ -358,7 +358,9 @@ private:
   // =========================================================
   // === NIVEL 6 (COOPERACIÓN COMPLETA) =========================
   // =========================================================
-  int estado_n6 = 0; // 0: Explorar, 1: Ir a Jefe, 2: Alinearse
+  int estado_n6 = 0;
+  int dest_n6_f = -1, dest_n6_c = -1;
+  int intento_orbita_n6 = 0; // Qué casilla adyacente estamos probando (0-3)
 };
 
 #endif

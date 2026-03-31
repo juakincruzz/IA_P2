@@ -754,144 +754,118 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
     ActualizarMapa(sensores);
     if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
-    static int dest_f = -1;
-    static int dest_c = -1;
-    static int target_orbita_f = -1;
-    static int target_orbita_c = -1;
-
     if (sensores.tiempo == 0) {
-        estado_n6 = 0; dest_f = -1; dest_c = -1;
-        target_orbita_f = -1; target_orbita_c = -1;
+        estado_n6 = 0;
+        dest_n6_f = -1; dest_n6_c = -1;
         hay_plan = false; plan.clear();
+        intento_orbita_n6 = 0;
     }
 
     auto es_seguro = [&](Sensores sens) {
-        int nf = sens.posF, nc = sens.posC;
-        switch(sens.rumbo) {
-            case norte: nf--; break; case noreste: nf--; nc++; break;
-            case este: nc++; break; case sureste: nf++; nc++; break;
-            case sur: nf++; break; case suroeste: nf++; nc--; break;
-            case oeste: nc--; break; case noroeste: nf--; nc--; break;
-        }
-        if (nf < 0 || nf >= (int)mapaResultado.size() || nc < 0 || nc >= (int)mapaResultado[0].size()) return false;
-        
-        // ¡USAMOS LOS OJOS REALES! Así evitamos ahogarnos si cruzamos la niebla
         unsigned char real_c = sens.superficie[2];
         if (real_c == 'P' || real_c == 'M' || real_c == 'A') return false;
         if (real_c == 'B' && !tiene_zapatillas) return false;
-        
-        // La altura la miramos en la memoria solo si la conocemos
-        if (mapaResultado[nf][nc] != '?') {
-            if (abs(mapaCotas[nf][nc] - mapaCotas[sens.posF][sens.posC]) > 1) return false;
-        }
-        
+        if (abs(sens.cota[2] - sens.cota[0]) > 1) return false;
         if (sens.choque) return false;
-        if (sens.agentes[2] != '_') return false; // ¡ANTICABEZAZOS! 
+        if (sens.agentes[2] != '_') return false;
         return true;
     };
 
-    if (mapaResultado[sensores.posF][sensores.posC] == 'X' && sensores.energia < 3000) return IDLE; 
-
+    // --- RECEPCIÓN DEL COME ---
     if (sensores.venpaca) {
-        if (dest_f != sensores.GotoF || dest_c != sensores.GotoC) {
-            dest_f = sensores.GotoF; dest_c = sensores.GotoC;
-            cout << "[TÉCNICO N6] ¡Llamada del Jefe en (" << dest_f << "," << dest_c << ")! Interceptando." << endl;
-            estado_n6 = 1; plan.clear(); hay_plan = false;
+        if (dest_n6_f != sensores.GotoF || dest_n6_c != sensores.GotoC || estado_n6 == 4) {
+            dest_n6_f = sensores.GotoF;
+            dest_n6_c = sensores.GotoC;
+            estado_n6 = 1;
+            plan.clear(); hay_plan = false;
+            intento_orbita_n6 = 0;
         }
     }
 
+    // Las 4 casillas ortogonales alrededor del ingeniero
+    int df[] = {-1, 1, 0, 0}; // Norte, Sur, Este, Oeste del ingeniero
+    int dc[] = {0, 0, 1, -1};
+
     switch(estado_n6) {
-        case 0: // MODO PEREZOSO
-            if (sensores.choque) return TURN_SR; 
-            return IDLE; 
-
-        case 1: // IR AL JEFE
-            if (std::max(abs(sensores.posF - dest_f), abs(sensores.posC - dest_c)) <= 1 && (sensores.posF != dest_f || sensores.posC != dest_c)) {
-                estado_n6 = 2; return IDLE;
-            } else {
-                if (!hay_plan) {
-                    EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, tiene_zapatillas};
-                    EncontrarPlan_N3(inicio, dest_f, dest_c, plan, true, true); 
-                    hay_plan = true;
-                }
-                if (!plan.empty()) {
-                    Action a = plan.front();
-                    if (a == WALK && !es_seguro(sensores)) {
-                        hay_plan = false; plan.clear(); return TURN_SR; 
-                    }
-                    plan.pop_front();
-                    return a;
-                } else {
-                    hay_plan = false; return TURN_SR;
-                }
-            }
-
-        case 2: { // ALINEARSE
-            Orientacion ori_deseada = OrientacionHacia_Tec(sensores.posF, sensores.posC, dest_f, dest_c);
-            if (sensores.rumbo != ori_deseada) {
-                int giros = GirosNecesarios_Tec(sensores.rumbo, ori_deseada);
-                return (giros <= 4) ? TURN_SR : TURN_SL;
-            }
-            if (sensores.enfrente) {
-                cout << "[TÉCNICO N6] ¡Posición perfecta! INSTALANDO." << endl;
-                estado_n6 = 4; hay_plan = false; plan.clear(); return INSTALL;
-            } else {
-                cout << "[TÉCNICO N6] Casilla errónea. Iniciando órbita." << endl;
-                estado_n6 = 3; hay_plan = false; plan.clear(); return IDLE;
-            }
+        case 0: { // EXPLORAR hasta recibir COME
+            return IDLE;
         }
 
-        case 3: // ÓRBITA
-            if (!hay_plan) {
-                std::vector<std::pair<int,int>> opciones;
-                int df[] = {-1, 1, 0, 0};
-                int dc[] = {0, 0, -1, 1};
-                for(int i = 0; i < 4; i++){
-                    int cand_f = dest_f + df[i];
-                    int cand_c = dest_c + dc[i];
-                    if(cand_f == sensores.posF && cand_c == sensores.posC) continue; 
-                    if(cand_f < 0 || cand_f >= (int)mapaResultado.size() || cand_c < 0 || cand_c >= (int)mapaResultado[0].size()) continue;
-                    unsigned char celda = mapaResultado[cand_f][cand_c];
-                    
-                    if (celda != '?') {
-                        if(celda == 'M' || celda == 'P' || celda == 'A') continue; 
-                        if(celda == 'B' && !tiene_zapatillas) continue;
-                        if(abs(mapaCotas[cand_f][cand_c] - mapaCotas[dest_f][dest_c]) > 1) continue; 
-                    }
-                    opciones.push_back({cand_f, cand_c});
-                }
-                
-                if(!opciones.empty()){
-                    static int intento = 0;
-                    int idx = intento % opciones.size();
-                    intento++;
-                    target_orbita_f = opciones[idx].first;
-                    target_orbita_c = opciones[idx].second;
-                    
-                    EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, tiene_zapatillas};
-                    unsigned char temp = mapaResultado[dest_f][dest_c];
-                    mapaResultado[dest_f][dest_c] = 'M';
-                    EncontrarPlan_N3(inicio, target_orbita_f, target_orbita_c, plan, true, false); 
-                    mapaResultado[dest_f][dest_c] = temp;
-                    hay_plan = true;
-                } else {
-                    return TURN_SR; 
+        case 1: {
+            // Elegir la mejor casilla adyacente ortogonal por cercanía
+            int mejor_f = -1, mejor_c = -1;
+            int mejor_dist = 999999;
+            int df[] = {-1, 1, 0, 0};
+            int dc[] = {0, 0, 1, -1};
+            
+            // Si ya estamos en una casilla adyacente ortogonal al ingeniero, ir directo a alinearse
+            for (int i = 0; i < 4; i++) {
+                int cf = dest_n6_f + df[i];
+                int cc = dest_n6_c + dc[i];
+                if (sensores.posF == cf && sensores.posC == cc) {
+                    estado_n6 = 2;
+                    return IDLE;
                 }
             }
-            
-            if (hay_plan && !plan.empty()) {
+
+            // Buscar la casilla adyacente no probada más cercana
+            int target_f = dest_n6_f + df[intento_orbita_n6 % 4];
+            int target_c = dest_n6_c + dc[intento_orbita_n6 % 4];
+
+            if (!hay_plan) {
+                EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, tiene_zapatillas};
+                unsigned char temp = mapaResultado[dest_n6_f][dest_n6_c];
+                mapaResultado[dest_n6_f][dest_n6_c] = 'M';
+                EncontrarPlan_N3(inicio, target_f, target_c, plan, true, false);
+                mapaResultado[dest_n6_f][dest_n6_c] = temp;
+                hay_plan = true;
+            }
+            if (!plan.empty()) {
                 Action a = plan.front();
                 if (a == WALK && !es_seguro(sensores)) {
-                    hay_plan = false; plan.clear(); return TURN_SR; 
+                    hay_plan = false; plan.clear();
+                    intento_orbita_n6++;
+                    if (intento_orbita_n6 >= 4) { intento_orbita_n6 = 0; return TURN_SR; }
+                    return IDLE;
                 }
                 plan.pop_front();
                 return a;
             } else {
-                hay_plan = false; estado_n6 = 1; return IDLE;
+                hay_plan = false;
+                intento_orbita_n6++;
+                if (intento_orbita_n6 >= 4) { intento_orbita_n6 = 0; return TURN_SR; }
+                return IDLE;
+            }
+        }
+
+        case 2: { // ALINEARSE mirando hacia el ingeniero
+            Orientacion ori_deseada = OrientacionHacia_Tec(sensores.posF, sensores.posC,
+                                                            dest_n6_f, dest_n6_c);
+            if (sensores.rumbo != ori_deseada) {
+                int giros = GirosNecesarios_Tec(sensores.rumbo, ori_deseada);
+                return (giros <= 4) ? TURN_SR : TURN_SL;
             }
 
-        case 4: // ESPERA ENTRE TUBOS
-            if (sensores.choque) return TURN_SR; 
+            if (sensores.enfrente) {
+                // ¡Contacto visual! Instalar
+                estado_n6 = 4;
+                hay_plan = false; plan.clear();
+                dest_n6_f = -1; dest_n6_c = -1;
+                return INSTALL;
+            } else {
+                // Casilla incorrecta, probar la siguiente
+                intento_orbita_n6++;
+                hay_plan = false; plan.clear();
+                if (intento_orbita_n6 >= 4) intento_orbita_n6 = 0;
+                estado_n6 = 1;
+                return IDLE;
+            }
+        }
+
+        case 3: // (reservado)
+            return IDLE;
+
+        case 4: // ESPERAR siguiente COME
             return IDLE;
     }
     return IDLE;
