@@ -401,8 +401,8 @@ bool ComportamientoTecnico::EsValida_N3(const EstadoN3& st, Action act, bool ign
     if (act == WALK) {
         EstadoN3 destino = AplicaAccion_N3(st, act);
         
-        if (destino.f < 0 || destino.f >= mapaResultado.size() || 
-            destino.c < 0 || destino.c >= mapaResultado[0].size()) {
+        if (destino.f < 0 || destino.f >= (int)mapaResultado.size() || 
+            destino.c < 0 || destino.c >= (int)mapaResultado[0].size()) {
             return false;
         }
 
@@ -414,11 +414,9 @@ bool ComportamientoTecnico::EsValida_N3(const EstadoN3& st, Action act, bool ign
         if (!ignorar_entidades && entidad != '_' && entidad != '?') return false;
 
         int dif = mapaCotas[destino.f][destino.c] - mapaCotas[st.f][st.c];
-        if (abs(dif) > 1) return false; 
-
-        // EXTENSIÓN N6: Si es '?' no comprobamos la altura, confiamos.
+        
+        // ¡LA CLAVE! Si es '?', somos optimistas y trazamos la ruta
         if (c != '?' && abs(dif) > 1) return false; 
-        return true;
 
         return true;
     }
@@ -443,9 +441,9 @@ bool ComportamientoTecnico::EncontrarPlan_N3(const EstadoN3& inicio, int dest_f,
         if (cerrados.find(actual.st) != cerrados.end()) continue;
         cerrados.insert(actual.st);
 
-        // ¡LA MAGIA! Si solo necesitamos llegar al lado de la tubería, el A* se da por satisfecho aquí
         if (parar_adyacente) {
-            if (abs(actual.st.f - dest_f) + abs(actual.st.c - dest_c) <= 1) {
+            // ¡PARCHE DIAGONAL! Si la distancia máxima es 1 (incluso diagonal), hemos llegado.
+            if (std::max(abs(actual.st.f - dest_f), abs(actual.st.c - dest_c)) <= 1 && (actual.st.f != dest_f || actual.st.c != dest_c)) {
                 plan_resultante = actual.secuencia;
                 return true;
             }
@@ -762,8 +760,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
     static int target_orbita_c = -1;
 
     if (sensores.tiempo == 0) {
-        estado_n6 = 0;
-        dest_f = -1; dest_c = -1;
+        estado_n6 = 0; dest_f = -1; dest_c = -1;
         target_orbita_f = -1; target_orbita_c = -1;
         hay_plan = false; plan.clear();
     }
@@ -777,71 +774,74 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
             case oeste: nc--; break; case noroeste: nf--; nc--; break;
         }
         if (nf < 0 || nf >= (int)mapaResultado.size() || nc < 0 || nc >= (int)mapaResultado[0].size()) return false;
-        unsigned char celda = mapaResultado[nf][nc];
-        if (celda == 'P' || celda == 'M' || celda == '?') return false;
-        if (abs(mapaCotas[nf][nc] - mapaCotas[sens.posF][sens.posC]) > 1) return false;
+        
+        // ¡USAMOS LOS OJOS REALES! Así evitamos ahogarnos si cruzamos la niebla
+        unsigned char real_c = sens.superficie[2];
+        if (real_c == 'P' || real_c == 'M' || real_c == 'A') return false;
+        if (real_c == 'B' && !tiene_zapatillas) return false;
+        
+        // La altura la miramos en la memoria solo si la conocemos
+        if (mapaResultado[nf][nc] != '?') {
+            if (abs(mapaCotas[nf][nc] - mapaCotas[sens.posF][sens.posC]) > 1) return false;
+        }
+        
         if (sens.choque) return false;
+        if (sens.agentes[2] != '_') return false; // ¡ANTICABEZAZOS! 
         return true;
     };
 
     if (mapaResultado[sensores.posF][sensores.posC] == 'X' && sensores.energia < 3000) return IDLE; 
 
-    // ¡EL PITIDO DEL JEFE!
     if (sensores.venpaca) {
         if (dest_f != sensores.GotoF || dest_c != sensores.GotoC) {
             dest_f = sensores.GotoF; dest_c = sensores.GotoC;
             cout << "[TÉCNICO N6] ¡Llamada del Jefe en (" << dest_f << "," << dest_c << ")! Interceptando." << endl;
-            estado_n6 = 1;
-            plan.clear(); hay_plan = false;
+            estado_n6 = 1; plan.clear(); hay_plan = false;
         }
     }
 
     switch(estado_n6) {
-        case 0: // EXPLORACIÓN
-            return ComportamientoTecnicoNivel_1(sensores);
+        case 0: // MODO PEREZOSO
+            if (sensores.choque) return TURN_SR; 
+            return IDLE; 
 
-        case 1: // IR AL JEFE (Parando adyacente)
-            if (abs(sensores.posF - dest_f) + abs(sensores.posC - dest_c) <= 1) {
+        case 1: // IR AL JEFE
+            if (std::max(abs(sensores.posF - dest_f), abs(sensores.posC - dest_c)) <= 1 && (sensores.posF != dest_f || sensores.posC != dest_c)) {
                 estado_n6 = 2; return IDLE;
             } else {
                 if (!hay_plan) {
-                    EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, false};
-                    if (mapaResultado[sensores.posF][sensores.posC] == 'D') inicio.zapatillas = true;
+                    EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, tiene_zapatillas};
                     EncontrarPlan_N3(inicio, dest_f, dest_c, plan, true, true); 
                     hay_plan = true;
                 }
                 if (!plan.empty()) {
                     Action a = plan.front();
                     if (a == WALK && !es_seguro(sensores)) {
-                        hay_plan = false; plan.clear(); 
-                        return ComportamientoTecnicoNivel_1(sensores); 
+                        hay_plan = false; plan.clear(); return TURN_SR; 
                     }
                     plan.pop_front();
                     return a;
                 } else {
-                    hay_plan = false;
-                    return ComportamientoTecnicoNivel_1(sensores);
+                    hay_plan = false; return TURN_SR;
                 }
             }
 
-        case 2: { // ALINEARSE Y COMPROBAR
+        case 2: { // ALINEARSE
             Orientacion ori_deseada = OrientacionHacia_Tec(sensores.posF, sensores.posC, dest_f, dest_c);
             if (sensores.rumbo != ori_deseada) {
                 int giros = GirosNecesarios_Tec(sensores.rumbo, ori_deseada);
                 return (giros <= 4) ? TURN_SR : TURN_SL;
             }
-            
-            // Miramos al jefe. ¿Él nos mira a nosotros?
             if (sensores.enfrente) {
                 cout << "[TÉCNICO N6] ¡Posición perfecta! INSTALANDO." << endl;
-                estado_n6 = 0; hay_plan = false; plan.clear(); return INSTALL;
+                estado_n6 = 4; hay_plan = false; plan.clear(); return INSTALL;
             } else {
                 cout << "[TÉCNICO N6] Casilla errónea. Iniciando órbita." << endl;
                 estado_n6 = 3; hay_plan = false; plan.clear(); return IDLE;
             }
         }
 
-        case 3: // ORBITAR AL JEFE
+        case 3: // ÓRBITA
             if (!hay_plan) {
                 std::vector<std::pair<int,int>> opciones;
                 int df[] = {-1, 1, 0, 0};
@@ -852,8 +852,12 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
                     if(cand_f == sensores.posF && cand_c == sensores.posC) continue; 
                     if(cand_f < 0 || cand_f >= (int)mapaResultado.size() || cand_c < 0 || cand_c >= (int)mapaResultado[0].size()) continue;
                     unsigned char celda = mapaResultado[cand_f][cand_c];
-                    if(celda == 'M' || celda == 'P') continue;
-                    if(abs(mapaCotas[cand_f][cand_c] - mapaCotas[dest_f][dest_c]) > 1) continue; 
+                    
+                    if (celda != '?') {
+                        if(celda == 'M' || celda == 'P' || celda == 'A') continue; 
+                        if(celda == 'B' && !tiene_zapatillas) continue;
+                        if(abs(mapaCotas[cand_f][cand_c] - mapaCotas[dest_f][dest_c]) > 1) continue; 
+                    }
                     opciones.push_back({cand_f, cand_c});
                 }
                 
@@ -864,18 +868,14 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
                     target_orbita_f = opciones[idx].first;
                     target_orbita_c = opciones[idx].second;
                     
-                    EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, false};
-                    if (mapaResultado[sensores.posF][sensores.posC] == 'D') inicio.zapatillas = true;
-                    
-                    // TRUCO MAESTRO: Hacemos creer al A* que el jefe es un muro para poder rodearlo
+                    EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, tiene_zapatillas};
                     unsigned char temp = mapaResultado[dest_f][dest_c];
                     mapaResultado[dest_f][dest_c] = 'M';
                     EncontrarPlan_N3(inicio, target_orbita_f, target_orbita_c, plan, true, false); 
                     mapaResultado[dest_f][dest_c] = temp;
-                    
                     hay_plan = true;
                 } else {
-                    return TURN_SR; // Atrapado, giramos para recalcular
+                    return TURN_SR; 
                 }
             }
             
@@ -887,11 +887,12 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
                 plan.pop_front();
                 return a;
             } else {
-                // Hemos llegado a la nueva casilla de la órbita. Volvemos al estado 1 para alinearnos de nuevo.
-                hay_plan = false;
-                estado_n6 = 1; 
-                return IDLE;
+                hay_plan = false; estado_n6 = 1; return IDLE;
             }
+
+        case 4: // ESPERA ENTRE TUBOS
+            if (sensores.choque) return TURN_SR; 
+            return IDLE;
     }
     return IDLE;
 }

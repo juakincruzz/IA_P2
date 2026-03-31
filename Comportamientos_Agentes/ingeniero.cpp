@@ -647,7 +647,11 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
         }
         if (nf < 0 || nf >= (int)mapaResultado.size() || nc < 0 || nc >= (int)mapaResultado[0].size()) return false;
         unsigned char celda = mapaResultado[nf][nc];
-        if (celda == 'P' || celda == 'M' || celda == '?') return false; // El sensor real no miente
+        
+        // ¡FUERA EL MIEDO AL AGUA! Tienen que cruzar el río para ganar.
+        if (celda == 'P' || celda == 'M' || celda == '?') return false; 
+        if (celda == 'B' && !tiene_zapatillas) return false;
+        
         if (abs(mapaCotas[nf][nc] - mapaCotas[sens.posF][sens.posC]) > 1) return false;
         if (sens.choque) return false;
         return true;
@@ -658,7 +662,6 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
     if (!plan_tuberias_hecho) {
         std::list<Paso> lista_plan;
         
-        // 1. ¿Podemos construir ya? (Planificación viable exigida por el guion)
         if (mapaResultado[sensores.BelPosF][sensores.BelPosC] != '?') {
             if (EncontrarPlan_N4(sensores.BelPosF, sensores.BelPosC, lista_plan)) {
                 cout << "[INGENIERO N6] ¡EUREKA! Red de tuberías viable planificada." << endl;
@@ -670,32 +673,28 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
             }
         }
 
-        // 2. Extensión de Búsqueda (Nivel 2 optimista hacia la Belkanita)
         if (!hayPlan) {
             estado inicio = {sensores.posF, sensores.posC, (int)sensores.rumbo};
             estado destino = {sensores.BelPosF, sensores.BelPosC, 0};
+            // ¡CLAVE! El tercer parámetro es 'true' para permitir que el plan cruce el agua
             plan = BusquedaEnAnchura(inicio, destino, true, true); 
             hayPlan = true;
         }
 
-        // 3. Ejecución y Combinación con Nivel 1
         if (hayPlan && !plan.empty()) {
             Action a = plan.front();
             if (a == WALK && !es_seguro(sensores)) {
                 hayPlan = false; plan.clear();
-                // El plan optimista falló ante la realidad. Cedemos el control al Nivel 1 para salir del apuro.
                 return ComportamientoIngenieroNivel_1(sensores); 
             }
             plan.pop_front();
             return a;
         } else {
             hayPlan = false;
-            // Si no hay ruta ni siquiera optimista, usamos Nivel 1 para descubrir más mapa
             return ComportamientoIngenieroNivel_1(sensores);
         }
     }
 
-    // 4. Posterior construcción de la misma (Nivel 5)
     double tiempo_real = sensores.tiempo;
     sensores.tiempo = 1; 
     Action accion = ComportamientoIngenieroNivel_5(sensores);
