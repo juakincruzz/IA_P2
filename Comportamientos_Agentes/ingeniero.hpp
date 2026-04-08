@@ -60,6 +60,8 @@ public:
                 matriz_visitas[i][j] = 0;
             }
         }
+
+        est_n6 = 0;
     }
 
     /**
@@ -342,6 +344,11 @@ private:
     // =========================================================
     enum EstadoObraIng { ING_CALCULAR_PLAN, ING_IR_CASILLA, ING_TERRAFORMAR, ING_LLAMAR, ING_ALINEARSE };
     EstadoObraIng estado_obra_ing = ING_CALCULAR_PLAN;
+
+    // =========================================================
+    // === NIVEL 6 =============================================
+    // =========================================================
+    int est_n6 ;
 };
 
 
