@@ -68,6 +68,7 @@ struct Sensores {
   int GotoF;     // Fila destino enviada por el ingeniero
   int GotoC;     // Columna destino enviada por el ingeniero
   int ecologico; // Nivel de impacto ecológico provocado
+  int max_ecologico; // Máximo impacto ecológico permitido
 };
 
 class Comportamiento {

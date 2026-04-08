@@ -69,6 +69,8 @@ private:
   int energiaInicial = 3000;
   int InstantesInicial = 3000;
 
+  bool reset_activado = false;
+
 public:
   MonitorJuego(int x = 3000) {
     maxPasos = x;
@@ -105,6 +107,7 @@ public:
     pasos = 0;
     nivel = valor;
     maxPasos = pMaxPasos;
+    reset_activado = false;
   }
   bool inicializarJuego(); // Mira si tiene que inicializar un juego
   int juegoInicializado() {
@@ -141,6 +144,9 @@ public:
   int getRetardo() { return retardo; }
 
   int getLevel() { return nivel; }
+
+  void setResetActivado(bool valor) { reset_activado = valor; }
+  bool getResetActivado() const { return reset_activado; }
 
   void setListObj(list<pair<int, int>> &obj) {
     if (obj.size() > 0)
@@ -243,6 +249,7 @@ public:
   }
   bool checkPipeConnection(int startF, int startC);
   bool checkLevel4();
+  int calcularImpactoPlan(const ListaCasillasPlan &plan);
 
   void addFailedAction(int f, int c, int duration = 2) {
     visualMarkers.push_back({f, c, duration, 0});

@@ -244,9 +244,10 @@ void MonitorJuego::put_active_objetivos(int number) {
  * @param[out] posCol   Columna del objetivo.
  */
 void MonitorJuego::get_n_active_objetivo(int n, int &posFila, int &posCol) {
-
-  posFila = objetivosActivos[0];
-  posCol = objetivosActivos[1];
+  if (2 * n + 1 < objetivosActivos.size()) {
+    posFila = objetivosActivos[2 * n];
+    posCol = objetivosActivos[2 * n + 1];
+  }
 }
 
 /**
@@ -258,12 +259,14 @@ void MonitorJuego::get_n_active_objetivo(int n, int &posFila, int &posCol) {
  * @param posCol   Nueva columna del objetivo.
  */
 void MonitorJuego::set_n_active_objetivo(int n, int posFila, int posCol) {
+  if (2 * n + 1 < objetivosActivos.size()) {
+    objetivosActivos[2 * n] = posFila;
+    objetivosActivos[2 * n + 1] = posCol;
+  }
 
-  objetivosActivos[0] = posFila;
-  objetivosActivos[1] = posCol;
-
-  if (numero_entidades() > 0)
-    get_entidad(0)->setObjetivos(objetivosActivos);
+  for (unsigned int i = 0; i < entidades.size(); i++) {
+    entidades[i]->setObjetivos(objetivosActivos);
+  }
 }
 
 /**
@@ -1083,8 +1086,8 @@ bool MonitorJuego::checkPipeConnection(int startF, int startC) {
  * @brief Valida el plan de canalización propuesto por el ingeniero
  *        en el nivel 4.
  *
- * Comprueba que el plan no esté vacío, comience en la casilla objetivo
- * (BelPos), que cada paso sea adyacente al anterior, que las alturas
+ * Comprueba que el plan no esté vacío, comience en la casilla del ingeniero,
+ * que cada paso sea adyacente al anterior, que las alturas
  * sean consistentes (misma altura o descenso de 1) y que el plan
  * termine en una casilla de tipo 'U'.
  *
@@ -1096,63 +1099,112 @@ bool MonitorJuego::checkLevel4() {
   ListaCasillasPlan plan = eng->getCanalizacionPlan();
 
   if (plan.empty()) {
-    addMensaje("Sistema", "Error Nivel 4: El plan de canalización está vacío.");
+    addMensaje("Sistema", "Error Nivel 4: El plan presentado está vacío.");
     return false;
   }
 
+  // Comprobación de inicio en la casilla de la Belkanita (objetivo)
+  int objF = -1, objC = -1;
+  get_n_active_objetivo(0, objF, objC);
   auto it = plan.begin();
-  // El punto de partida del plan debe ser la coordenada BelPos
-  if (it->fil != (int)objetivosActivos[0] || it->col != (int)objetivosActivos[1]) {
+  if (it->fil != objF or it->col != objC) {
     stringstream ss;
-    ss << "Error Nivel 4: El plan debe empezar en (" << objetivosActivos[0] << "," << objetivosActivos[1] << ").";
+    ss << "Error Nivel 4: El plan debe comenzar en la casilla de la Belkanita (" 
+       << objF << "," << objC << ").";
     addMensaje("Sistema", ss.str());
     return false;
   }
 
   int last_h = (int)mapa->alturaEnCelda(it->fil, it->col) + it->op;
-
   int curr_f = it->fil;
   int curr_c = it->col;
 
-  // Avanzar al segundo elemento
-  ++it;
+  // Avanzar al segundo elemento para comprobar adyacencia y alturas
+  auto it_check = it;
+  ++it_check;
 
-  for (; it != plan.end(); ++it) {
-    int h = (int)mapa->alturaEnCelda(it->fil, it->col) + it->op;
+  for (; it_check != plan.end(); ++it_check) {
+    int h = (int)mapa->alturaEnCelda(it_check->fil, it_check->col) + it_check->op;
 
-    // Comprobación de adyacencia (misma casilla o ortogonalmente adyacente)
-    int dist = abs(it->fil - curr_f) + abs(it->col - curr_c);
+    // Comprobación de adyacencia
+    int dist = abs(it_check->fil - curr_f) + abs(it_check->col - curr_c);
     if (dist > 1) {
       stringstream ss;
-      ss << "Error Nivel 4: Salto detectado en (" << it->fil << "," << it->col << ").";
+      ss << "Error Nivel 4: Salto detectado en (" << it_check->fil << "," << it_check->col << ").";
       addMensaje("Sistema", ss.str());
       return false;
     }
 
-    // Comprobación de consistencia de altura: h_ant == h_sig o h_sig == h_ant -
-    // 1
+    // Comprobación de consistencia de altura
     if (!(last_h == h || h == last_h - 1)) {
       stringstream ss;
-      ss << "Error Nivel 4: Altura inconsistente en (" << it->fil << "," << it->col << ").";
+      ss << "Error Nivel 4: Altura inconsistente en (" << it_check->fil << "," << it_check->col << ").";
       addMensaje("Sistema", ss.str());
       return false;
     }
 
-    curr_f = it->fil;
-    curr_c = it->col;
+    curr_f = it_check->fil;
+    curr_c = it_check->col;
     last_h = h;
   }
 
-  // Comprobar que la última posición es 'U'
-  char celda = mapa->getCelda(curr_f, curr_c);
-  if (celda != 'U') {
+  // Comprobar que termina en una casilla 'U'
+  auto last_it = plan.end();
+  --last_it;
+  if (mapa->getCelda(last_it->fil, last_it->col) != 'U') {
+    addMensaje("Sistema", "Error Nivel 4: El plan debe terminar en una Planta de Tratamiento ('U').");
+    return false;
+  }
+
+  // Validación de impacto ecológico unificada
+  int simulated_impact = calcularImpactoPlan(plan);
+  if (simulated_impact > maxImpacto) {
     stringstream ss;
-    ss << "Error Nivel 4: El plan termina en '" << celda << "', debería ser 'U'.";
+    ss << "Error Nivel 4: Se ha superado el impacto ecológico máximo permitido (" 
+       << simulated_impact << " > " << maxImpacto << ").";
     addMensaje("Sistema", ss.str());
     return false;
   }
 
   return true;
+}
+
+/**
+ * @brief Calcula el impacto ecológico total de un plan de canalización.
+ * 
+ * La lógica suma el coste de DIG/RAISE en cada punto y el coste de INSTALL
+ * en ambos extremos de cada segmento de la tubería.
+ * 
+ * @param plan Plan de canalización a evaluar.
+ * @return Impacto ecológico total calculado.
+ */
+int MonitorJuego::calcularImpactoPlan(const ListaCasillasPlan &plan) {
+  int total_impact = 0;
+  if (plan.empty()) return 0;
+
+  auto it = plan.begin();
+  // Primer punto
+  unsigned char celda = mapa->getCelda(it->fil, it->col);
+  if (it->op == -1) total_impact += getCosteEco(DIG,   celda);
+  if (it->op ==  1) total_impact += getCosteEco(RAISE, celda);
+
+  auto prev = it;
+  ++it;
+  for (; it != plan.end(); ++it) {
+    celda = mapa->getCelda(it->fil, it->col);
+    // Impacto de alteración del terreno en el punto actual
+    if (it->op == -1) total_impact += getCosteEco(DIG,   celda);
+    if (it->op ==  1) total_impact += getCosteEco(RAISE, celda);
+
+    // Impacto de instalación entre el punto anterior y el actual (contabilizado en ambos)
+    unsigned char celda_prev = mapa->getCelda(prev->fil, prev->col);
+    total_impact += getCosteEco(INSTALL, celda_prev);
+    total_impact += getCosteEco(INSTALL, celda);
+    
+    prev = it;
+  }
+
+  return total_impact;
 }
 /**
  * @brief Elimina los marcadores visuales de acción fallida en una celda.
@@ -1185,39 +1237,25 @@ void MonitorJuego::clearFailedAction(int f, int c) {
  */
 int MonitorJuego::getCosteEco(Action accion, unsigned char celda) {
   switch (accion) {
-  case INSTALL:
-    switch (celda) {
-    case 'A':
+    case INSTALL:
+      if (celda == 'A') return 50;
+      if (celda == 'H') return 45;
+      if (celda == 'S') return 25;
+      if (celda == 'C' || celda == 'U') return 15;
+      return 30;
+    case RAISE:
+      if (celda == 'A') return 1000000;
+      if (celda == 'H') return 55;
+      if (celda == 'S') return 30;
+      if (celda == 'C' || celda == 'U') return 10;
+      return 40;
+    case DIG:
+      if (celda == 'A') return 1000000;
+      if (celda == 'H') return 65;
+      if (celda == 'S') return 40;
+      if (celda == 'C' || celda == 'U') return 25;
       return 50;
-    case 'H':
-      return 5;
-    case 'S':
-      return 7;
     default:
-      return 10;
-    }
-  case RAISE:
-    switch (celda) {
-    case 'A':
       return 0;
-    case 'H':
-      return 15;
-    case 'S':
-      return 7;
-    default:
-      return 5;
-    }
-  case DIG:
-    switch (celda) {
-    case 'A':
-      return 0;
-    case 'H':
-    case 'S':
-      return 10;
-    default:
-      return 2;
-    }
-  default:
-    return 0;
   }
 }

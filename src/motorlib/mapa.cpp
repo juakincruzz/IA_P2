@@ -1787,6 +1787,7 @@ void Mapa::drawFirstPerson(int entidad, vector<unsigned int> objetivosActivos, i
   luz.draw();
 
   // --- Draw Clouds (Pixel-Art Clusters) ---
+  /* Nubes anuladas por rendimiento CPU/GPU
   glDisable(GL_LIGHTING);
   glDisable(GL_FOG); // Ensure clouds are not washed out by fog
   glColor3f(0.95, 0.95, 1.0); // Very light blueish white
@@ -1822,6 +1823,7 @@ void Mapa::drawFirstPerson(int entidad, vector<unsigned int> objetivosActivos, i
   }
   glEnable(GL_FOG);
   glEnable(GL_LIGHTING);
+  */
   // ----------------------------------------
 
   // Draw Trail
@@ -1842,7 +1844,7 @@ void Mapa::drawFirstPerson(int entidad, vector<unsigned int> objetivosActivos, i
 
 
   static float water_offset = 0.0f;
-  water_offset += 0.005f;
+  // water_offset += 0.005f; // Comentado para aligerar la simulación
 
   // Fog of War: get agent's discovered map for levels 0, 1, 6
   vector<vector<unsigned char>> mapaVisible;
@@ -2496,18 +2498,18 @@ void Mapa::drawZenithal(int entidad, vector<unsigned int> objetivosActivos, int 
 
   // Rendering range scales with zoom
   int range = (int)(35.0f * zoom / 55.0f);
+
+  Luz luz(GL_LIGHT0);
+  luz.setPosicion(_vertex3<float>(0.5, 1.0, 0.5)); // Directional Sun: Fixed angle everywhere
+  luz.encender();
+  luz.draw();
   int fs = (int)x - range;
   int fi = (int)x + range;
   int ci = (int)z - range;
   int cd = (int)z + range;
 
-  Luz luz(GL_LIGHT0);
-  luz.setPosicion(_vertex3<float>(0.5, 1.0, 0.5)); // Directional Sun: Fixed angle everywhere
-  luz.encender();
-  luz.draw(); 
-
   static float water_offset_zenith = 0.0f;
-  water_offset_zenith += 0.005f;
+  // water_offset_zenith += 0.005f; // Comentado para aligerar la simulación
 
   // Fog of War: get agent's discovered map for levels 0, 1, 6
   vector<vector<unsigned char>> mapaVisible;

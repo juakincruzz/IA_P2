@@ -307,13 +307,13 @@ void display_vistPrincipal() {
     // Clear color (background)
     glClearColor(0.53, 0.81, 0.92, 1.0); // Light sky blue
 
-    // Enable fog for atmospheric depth
-    glEnable(GL_FOG);
-    GLfloat fogColor[] = {0.73, 0.87, 0.95, 1.0}; // Horizon color
-    glFogfv(GL_FOG_COLOR, fogColor);
-    glFogi(GL_FOG_MODE, GL_EXP2);
-    glFogf(GL_FOG_DENSITY, 0.0020f); // Slightly lighter fog for clarity
-    glHint(GL_FOG_HINT, GL_NICEST);
+    // Enable fog for atmospheric depth - Disabled for CPU performance
+    glDisable(GL_FOG);
+    // GLfloat fogColor[] = {0.73, 0.87, 0.95, 1.0}; // Horizon color
+    // glFogfv(GL_FOG_COLOR, fogColor);
+    // glFogi(GL_FOG_MODE, GL_EXP2);
+    // glFogf(GL_FOG_DENSITY, 0.0020f); // Slightly lighter fog for clarity
+    // glHint(GL_FOG_HINT, GL_NICEST);
   } else {
     glClearColor(0.0, 0.0, 0.0, 1);
     glDisable(GL_FOG);
@@ -386,17 +386,18 @@ void display_vistPrincipal() {
       glEnd();
     };
 
-    drawCloud(-6, 7, 1.0);
-    drawCloud(-2, 8, 1.2);
-    drawCloud(4, 6, 0.9);
-    drawCloud(8, 7.5, 1.1);
+    // Nubes anuladas por rendimiento CPU/GPU
+    // drawCloud(-6, 7, 1.0);
+    // drawCloud(-2, 8, 1.2);
+    // drawCloud(4, 6, 0.9);
+    // drawCloud(8, 7.5, 1.1);
 
     glPopMatrix();
     glMatrixMode(GL_MODELVIEW);
     glPopMatrix();
 
     glEnable(GL_DEPTH_TEST);
-    glEnable(GL_FOG);
+    // glEnable(GL_FOG); // Desactivado por falta de configuración (evita pantalla negra)
   }
   // -------------------------
 

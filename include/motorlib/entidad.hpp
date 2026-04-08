@@ -107,9 +107,9 @@ public:
     }
   }
 
-  //  Action think(int acc, vector<vector<unsigned char>> vision, int level, int impacto_eco);
+  //  Action think(int acc, vector<vector<unsigned char>> vision, int level, int impacto_eco, int max_impact);
 
-  Action think(int acc, vector<vector<unsigned char>> vision, int level, int impacto_eco);
+  Action think(int acc, vector<vector<unsigned char>> vision, int level, int impacto_eco, int max_impact);
 
   // Programar funciones para la interacción con el entorno
   void setPosicion(unsigned int paramF, unsigned int paramC) {
