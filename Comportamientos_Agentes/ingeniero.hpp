@@ -54,6 +54,9 @@ public:
 
         giro45Izq = 0;
 
+        giros_sin_avanzar_n0 = 0;
+        girar_derecha_n0 = false;
+
         // Dentro del constructor:
         for(int i = 0; i < 200; i++){
             for(int j = 0; j < 200; j++){
@@ -248,6 +251,8 @@ private:
     // Nivel 0
     Action last_action ;
     bool tiene_zapatillas ;
+    int giros_sin_avanzar_n0;
+    bool girar_derecha_n0;
 
     // Nivel 1
     int giro45Izq; // Indica el número de giros a la izquierda que quedan por dar

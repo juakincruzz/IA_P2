@@ -36,6 +36,8 @@ public:
     last_action = IDLE;
     tiene_zapatillas = false;
     giro45Izq = 0;
+    giros_sin_avanzar_n0 = 0;
+    girar_derecha_n0 = true; // El técnico gira a la derecha por defecto (opuesto al ingeniero)
 
     // Dentro del constructor:
     for(int i = 0; i < 200; i++){
@@ -229,6 +231,8 @@ private:
   // =========================================================================
   Action last_action;
   bool tiene_zapatillas;
+  int giros_sin_avanzar_n0;
+  bool girar_derecha_n0;
 
   // Nivel 1
     int giro45Izq; // Indica el número de giros a la izquierda que quedan por dar
@@ -276,9 +280,9 @@ private:
   };
 
   // Funciones del cerebro
-  bool EncontrarPlan_N2(const Estado& inicio, int dest_f, int dest_c, std::list<Action>& plan_resultante);
+  bool EncontrarPlan_N2(const Estado& inicio, int dest_f, int dest_c, std::list<Action>& plan_resultante, bool aguaPermitida);
   Estado AplicaAccion_N2(const Estado& st, Action act);
-  bool EsValida_N2(const Estado& st, Action act);
+  bool EsValida_N2(const Estado& st, Action act, bool aguaPermitida);
 
 
   // =========================================================
