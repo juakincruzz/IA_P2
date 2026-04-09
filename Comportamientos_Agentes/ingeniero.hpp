@@ -274,8 +274,7 @@ private:
     std::list<Action> plan;       // Aquí guardaremos las instrucciones a seguir
     
     // Declaramos nuestra función del algoritmo de búsqueda
-    list<Action> BusquedaEnAnchura(const estado &origen, const estado &destino, bool agua_permitida = false, bool ignorar_entidades = false);
-
+    list<Action> BusquedaEnAnchura(const estado &origen, const estado &destino, bool agua_permitida = false, bool ignorar_entidades = false, bool tiene_zap_inicio = false);
 
     // NIVEL 3
     struct Estado {
@@ -306,6 +305,28 @@ private:
         bool operator>(const Nodo& otro) const {
             return f() > otro.f();
         }
+    };
+
+    struct estado_ext {
+        int fila;
+        int columna;
+        int orientacion;
+        bool zapatillas;
+
+        bool operator<(const estado_ext& otro) const {
+            if (fila != otro.fila) return fila < otro.fila;
+            if (columna != otro.columna) return columna < otro.columna;
+            if (orientacion != otro.orientacion) return orientacion < otro.orientacion;
+            return zapatillas < otro.zapatillas;
+        }
+        bool operator==(const estado_ext& otro) const {
+            return fila == otro.fila && columna == otro.columna;
+        }
+    };
+
+    struct nodo_ext {
+        estado_ext st;
+        std::list<Action> secuencia;
     };
 
     // =========================================================

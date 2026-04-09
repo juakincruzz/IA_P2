@@ -74,7 +74,10 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
 
     // Anticolisión: el Técnico evita al Ingeniero
     if (sensores.agentes[1] == 'i') ci = 'P';
-    if (sensores.agentes[2] == 'i') cc = 'P';
+    if (sensores.agentes[2] == 'i'&& giros_sin_avanzar_n0 >= 4) {
+        last_action = TURN_SR;
+        return TURN_SR;
+    }
     if (sensores.agentes[3] == 'i') cd = 'P';
 
     // Prioridad absoluta: si veo 'U' adyacente, ir a ella
@@ -369,32 +372,11 @@ bool ComportamientoTecnico::EncontrarPlan_N2(const Estado& inicio, int dest_f, i
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_2(Sensores sensores) {
-    Action accion = IDLE;
-
-    // En ComportamientoTecnicoNivel_2, cambiar la búsqueda a dos intentos:
-    if (!hay_plan) {
-        Estado ei;
-        ei.f = sensores.posF; ei.c = sensores.posC; ei.brujula = sensores.rumbo;
-        
-        // Intento 1: sin agua
-        hay_plan = EncontrarPlan_N2(ei, sensores.BelPosF, sensores.BelPosC, plan, false);
-        // Intento 2: con agua
-        if (!hay_plan)
-            hay_plan = EncontrarPlan_N2(ei, sensores.BelPosF, sensores.BelPosC, plan, true);
-        if (!hay_plan) return IDLE;
-    }
-
-    // Replanificar si el plan se vació sin llegar al destino
-    if (hay_plan && plan.empty() &&
-        (sensores.posF != sensores.BelPosF || sensores.posC != sensores.BelPosC)) {
-        hay_plan = false;
-    }
-
-    if (hay_plan && !plan.empty()) {
-        accion = plan.front();
-        plan.pop_front();
-    }
-    return accion;
+    // En nivel 2, el Técnico solo debe apartarse del Ingeniero
+    if (sensores.agentes[2] == 'i') return TURN_SR;
+    if (sensores.agentes[1] == 'i') return TURN_SR;
+    if (sensores.agentes[3] == 'i') return TURN_SL;
+    return IDLE;
 }
 
 
@@ -435,7 +417,8 @@ int ComportamientoTecnico::CostoBateria_N3(const EstadoN3& st, Action act) {
 }
 
 int ComportamientoTecnico::Heuristica(const EstadoN3& actual, int dest_f, int dest_c) {
-    return std::max(abs(actual.f - dest_f), abs(actual.c - dest_c));
+    // Distancia Chebyshev multiplicada por el coste mínimo de movimiento (1)
+    return max(abs(actual.f - dest_f), abs(actual.c - dest_c));
 }
 
 ComportamientoTecnico::EstadoN3 ComportamientoTecnico::AplicaAccion_N3(const EstadoN3& st, Action act) {
@@ -477,7 +460,7 @@ bool ComportamientoTecnico::EsValida_N3(const EstadoN3& st, Action act, bool ign
         }
 
         unsigned char c = mapaResultado[destino.f][destino.c];
-        if (c == 'M' || c == 'P') return false; 
+        if (c == 'M' || c == 'P' || c == 'A') return false;
         if (c == 'B' && !st.zapatillas) return false; 
 
         unsigned char entidad = mapaEntidades[destino.f][destino.c];
@@ -563,7 +546,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_3(Sensores sensores) {
              estado_inicial.zapatillas = true;
         }
 
-        hay_plan = EncontrarPlan_N3(estado_inicial, sensores.BelPosF, sensores.BelPosC, plan);
+        hay_plan = EncontrarPlan_N3(estado_inicial, sensores.BelPosF, sensores.BelPosC, plan, true);
 
         if (hay_plan) {
             cout << "[TÉCNICO] ¡Eureka! Plan A* óptimo encontrado. Longitud: " << plan.size() << " pasos." << endl;
@@ -748,10 +731,8 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
     if (estado_obra_tec == TEC_IR_CASILLA) {
         if (sensores.posF == destn6_f && sensores.posC == destn6_c) {
             Paso mi_obj = plan_n5[tramo_n5];
-            if (!terraformado_n5) {
-                terraformado_n5 = true;
-                if (mi_obj.op == -1) return DIG; // El Técnico solo puede excavar si hace falta
-            }
+            // El Técnico NO puede hacer DIG ni RAISE - solo el Ingeniero terraforma
+            terraformado_n5 = true;
             estado_obra_tec = TEC_ALINEARSE;
         } else {
             if (!hay_plan) {

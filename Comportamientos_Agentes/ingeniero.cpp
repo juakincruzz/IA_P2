@@ -157,6 +157,20 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores
   // Anti-bucle
   if (pos == 0) {
     giros_sin_avanzar_n0++;
+    // Intentar JUMP si llevamos mucho rato bloqueados
+    if (giros_sin_avanzar_n0 >= 24) {
+      // Intentar saltar: comprobar casilla a 2 de distancia
+      ubicacion u_jump = Delante(Delante(actual));
+      if (u_jump.f >= 0 && u_jump.f < (int)mapaResultado.size() &&
+          u_jump.c >= 0 && u_jump.c < (int)mapaResultado[0].size()) {
+        unsigned char destJump = mapaResultado[u_jump.f][u_jump.c];
+        if (destJump == 'C' || destJump == 'D' || destJump == 'U' || destJump == '?') {
+          giros_sin_avanzar_n0 = 0;
+          last_action = JUMP;
+          return JUMP;
+        }
+      }
+    }
     if (giros_sin_avanzar_n0 >= 16) {
       girar_derecha_n0 = !girar_derecha_n0;
       giros_sin_avanzar_n0 = 0;
@@ -294,105 +308,113 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores
 // ALGORITMOS DE BÚSQUEDA (NIVEL 2)
 // =========================================================================
 
-list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, const estado& destino, bool agua_permitida, bool ignorar_entidades) {
-    queue<nodo> abierta;
-    set<estado> cerrados;
+list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, const estado& destino, bool agua_permitida, bool ignorar_entidades, bool tiene_zap_inicio) {
+    queue<nodo_ext> abierta;
+    set<estado_ext> cerrados;
 
-    nodo inicial;
-    inicial.st = origen;
+    nodo_ext inicial;
+    inicial.st = {origen.fila, origen.columna, origen.orientacion, tiene_zap_inicio};
     abierta.push(inicial);
-    cerrados.insert(origen);
+    cerrados.insert(inicial.st);
 
     int nodos_expandidos = 0;
 
-    while (!abierta.empty() && nodos_expandidos < 100000) { // Límite de nodos expandidos para evitar bucles infinitos
+    while (!abierta.empty() && nodos_expandidos < 100000) {
         nodos_expandidos++;
-        nodo actual = abierta.front();
+        nodo_ext actual = abierta.front();
         abierta.pop();
 
-        if (actual.st == destino) return actual.secuencia;
+        if (actual.st.fila == destino.fila && actual.st.columna == destino.columna)
+            return actual.secuencia;
+
+        bool zap = actual.st.zapatillas;
+        int max_desnivel = zap ? 2 : 1;
 
         // HIJO 1: GIRAR IZQUIERDA
-        nodo hijo_sl = actual;
-        hijo_sl.st.orientacion = (actual.st.orientacion + 7) % 8;
-        if (cerrados.find(hijo_sl.st) == cerrados.end()) {
-            hijo_sl.secuencia.push_back(TURN_SL);
-            cerrados.insert(hijo_sl.st);
-            abierta.push(hijo_sl);
+        {
+            nodo_ext hijo = actual;
+            hijo.st.orientacion = (actual.st.orientacion + 7) % 8;
+            if (cerrados.find(hijo.st) == cerrados.end()) {
+                hijo.secuencia.push_back(TURN_SL);
+                cerrados.insert(hijo.st);
+                abierta.push(hijo);
+            }
         }
 
         // HIJO 2: GIRAR DERECHA
-        nodo hijo_sr = actual;
-        hijo_sr.st.orientacion = (actual.st.orientacion + 1) % 8;
-        if (cerrados.find(hijo_sr.st) == cerrados.end()) {
-            hijo_sr.secuencia.push_back(TURN_SR);
-            cerrados.insert(hijo_sr.st);
-            abierta.push(hijo_sr);
+        {
+            nodo_ext hijo = actual;
+            hijo.st.orientacion = (actual.st.orientacion + 1) % 8;
+            if (cerrados.find(hijo.st) == cerrados.end()) {
+                hijo.secuencia.push_back(TURN_SR);
+                cerrados.insert(hijo.st);
+                abierta.push(hijo);
+            }
         }
 
-        // HIJO 3: AVANZAR
-        nodo hijo_walk = actual;
-        int nf = actual.st.fila, nc = actual.st.columna;
-        switch(actual.st.orientacion) {
-            case 0: nf--; break; case 1: nf--; nc++; break;
-            case 2: nc++; break; case 3: nf++; nc++; break;
-            case 4: nf++; break; case 5: nf++; nc--; break;
-            case 6: nc--; break; case 7: nf--; nc--; break;
-        }
-
-        if (nf >= 0 && nf < (int)mapaResultado.size() && nc >= 0 && nc < (int)mapaResultado[0].size()) {
-            unsigned char celda = mapaResultado[nf][nc];
-            unsigned char entidad = mapaEntidades[nf][nc];
-            if (ignorar_entidades || (entidad == '_' || entidad == '?')) {
-                if (celda != 'P' && celda != 'M' && celda != 'B' && (agua_permitida || celda != 'A')) {
-                    int dif_cota = mapaCotas[nf][nc] - mapaCotas[actual.st.fila][actual.st.columna];
-                    if (celda == '?' || abs(dif_cota) <= 1) {
-                        hijo_walk.st.fila = nf; hijo_walk.st.columna = nc;
-                        if (cerrados.find(hijo_walk.st) == cerrados.end()) {
-                            hijo_walk.secuencia.push_back(WALK);
-                            cerrados.insert(hijo_walk.st);
-                            abierta.push(hijo_walk);
+        // HIJO 3: WALK
+        {
+            int nf = actual.st.fila, nc = actual.st.columna;
+            switch(actual.st.orientacion) {
+                case 0: nf--; break; case 1: nf--; nc++; break;
+                case 2: nc++; break; case 3: nf++; nc++; break;
+                case 4: nf++; break; case 5: nf++; nc--; break;
+                case 6: nc--; break; case 7: nf--; nc--; break;
+            }
+            if (nf >= 0 && nf < (int)mapaResultado.size() && nc >= 0 && nc < (int)mapaResultado[0].size()) {
+                unsigned char celda = mapaResultado[nf][nc];
+                unsigned char entidad = mapaEntidades[nf][nc];
+                if (ignorar_entidades || (entidad == '_' || entidad == '?')) {
+                    if (celda != 'P' && celda != 'M' && celda != 'B' && (agua_permitida || celda != 'A')) {
+                        int dif_cota = mapaCotas[nf][nc] - mapaCotas[actual.st.fila][actual.st.columna];
+                        if (celda == '?' || abs(dif_cota) <= max_desnivel) {
+                            nodo_ext hijo = actual;
+                            hijo.st.fila = nf; hijo.st.columna = nc;
+                            if (celda == 'D') hijo.st.zapatillas = true;
+                            if (cerrados.find(hijo.st) == cerrados.end()) {
+                                hijo.secuencia.push_back(WALK);
+                                cerrados.insert(hijo.st);
+                                abierta.push(hijo);
+                            }
                         }
                     }
                 }
             }
         }
 
-        // HIJO 4: SALTAR (JUMP)
-        nodo hijo_jump = actual;
-        int jf = actual.st.fila, jc = actual.st.columna;
-        int mf = actual.st.fila, mc = actual.st.columna;
-
-        switch(actual.st.orientacion) {
-            case 0: jf-=2; mf--; break; case 1: jf-=2; jc+=2; mf--; mc++; break;
-            case 2: jc+=2; mc++; break; case 3: jf+=2; jc+=2; mf++; mc++; break;
-            case 4: jf+=2; mf++; break; case 5: jf+=2; jc-=2; mf++; mc--; break;
-            case 6: jc-=2; mc--; break; case 7: jf-=2; jc-=2; mf--; mc--; break;
-        }
-
-        if (jf >= 0 && jf < (int)mapaResultado.size() && jc >= 0 && jc < (int)mapaResultado[0].size()) {
-            unsigned char c_mid = mapaResultado[mf][mc], c_fin = mapaResultado[jf][jc];
-            unsigned char e_mid = mapaEntidades[mf][mc], e_fin = mapaEntidades[jf][jc];
-
-            // ¡CLAVE T2.3! La casilla del medio (c_mid) SÍ puede ser precipicio ('P') para saltarlo.
-            // Pero no podemos aterrizar (c_fin) en un muro ('M'), precipicio ('P') o bosque ('B').
-            if (c_mid != 'M' && c_fin != 'M' && c_fin != 'P' && c_fin != 'B' && (agua_permitida || c_fin != 'A')) {
-                if (ignorar_entidades || ((e_mid == '_' || e_mid == '?') && (e_fin == '_' || e_fin == '?'))) {
-                    int dif_cota_fin = mapaCotas[jf][jc] - mapaCotas[actual.st.fila][actual.st.columna];
-                    // El salto supera desniveles de hasta 2
-                    if (c_fin == '?' || abs(dif_cota_fin) <= 2) {
-                        hijo_jump.st.fila = jf; hijo_jump.st.columna = jc;
-                        if (cerrados.find(hijo_jump.st) == cerrados.end()) {
-                            hijo_jump.secuencia.push_back(JUMP);
-                            cerrados.insert(hijo_jump.st);
-                            abierta.push(hijo_jump);
+        // HIJO 4: JUMP
+        {
+            int jf = actual.st.fila, jc = actual.st.columna;
+            int mf = actual.st.fila, mc = actual.st.columna;
+            switch(actual.st.orientacion) {
+                case 0: jf-=2; mf--; break; case 1: jf-=2; jc+=2; mf--; mc++; break;
+                case 2: jc+=2; mc++; break; case 3: jf+=2; jc+=2; mf++; mc++; break;
+                case 4: jf+=2; mf++; break; case 5: jf+=2; jc-=2; mf++; mc--; break;
+                case 6: jc-=2; mc--; break; case 7: jf-=2; jc-=2; mf--; mc--; break;
+            }
+            if (jf >= 0 && jf < (int)mapaResultado.size() && jc >= 0 && jc < (int)mapaResultado[0].size()) {
+                unsigned char c_mid = mapaResultado[mf][mc], c_fin = mapaResultado[jf][jc];
+                unsigned char e_mid = mapaEntidades[mf][mc], e_fin = mapaEntidades[jf][jc];
+                if (c_mid != 'M' && c_mid != 'P' && c_mid != 'B' && (agua_permitida || c_mid != 'A') &&
+                    c_fin != 'M' && c_fin != 'P' && c_fin != 'B' && (agua_permitida || c_fin != 'A')) {
+                    if (ignorar_entidades || ((e_mid == '_' || e_mid == '?') && (e_fin == '_' || e_fin == '?'))) {
+                        int dif_cota_fin = mapaCotas[jf][jc] - mapaCotas[actual.st.fila][actual.st.columna];
+                        if (c_fin == '?' || abs(dif_cota_fin) <= max_desnivel) {
+                            nodo_ext hijo = actual;
+                            hijo.st.fila = jf; hijo.st.columna = jc;
+                            if (c_fin == 'D') hijo.st.zapatillas = true;
+                            if (cerrados.find(hijo.st) == cerrados.end()) {
+                                hijo.secuencia.push_back(JUMP);
+                                cerrados.insert(hijo.st);
+                                abierta.push(hijo);
+                            }
                         }
                     }
                 }
             }
         }
     }
-    return list<Action>(); 
+    return list<Action>();
 }
 
 
@@ -409,15 +431,12 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_2(Sensores sensores
         estado origen = {sensores.posF, sensores.posC, (int)sensores.rumbo};
         estado destino = {sensores.BelPosF, sensores.BelPosC, 0};
 
-        // Buscamos ignorando entidades, primero sin mojarnos. Si falla, nos mojamos.
         plan = BusquedaEnAnchura(origen, destino, false, true);
-        if (plan.empty()) {
+        if (plan.empty())
             plan = BusquedaEnAnchura(origen, destino, true, true);
-        }
         hayPlan = true;
     }
 
-    // Si el plan se vació pero no hemos llegado, replantificamos
     if (hayPlan && plan.empty() &&
         (sensores.posF != sensores.BelPosF || sensores.posC != sensores.BelPosC)) {
         hayPlan = false;
@@ -434,28 +453,11 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_2(Sensores sensores
  * @return Acción a realizar.
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_3(Sensores sensores) {
-    Action accion = IDLE;
-
-    if (!hayPlan) {
-        estado origen = {sensores.posF, sensores.posC, (int)sensores.rumbo};
-        estado destino = {sensores.BelPosF, sensores.BelPosC, 0};
-
-        plan = BusquedaEnAnchura(origen, destino, false, true);
-        if (plan.empty())
-            plan = BusquedaEnAnchura(origen, destino, true, true);
-        hayPlan = true;
-    }
-
-    // Replanificar si llegó a vacío sin alcanzar el destino
-    if (hayPlan && plan.empty() &&
-        (sensores.posF != sensores.BelPosF || sensores.posC != sensores.BelPosC))
-        hayPlan = false;
-
-    if (hayPlan && !plan.empty()) {
-        accion = plan.front();
-        plan.pop_front();
-    }
-    return accion;
+    // En nivel 3, el Ingeniero solo debe apartarse del Técnico
+    if (sensores.agentes[2] == 't') return TURN_SR;
+    if (sensores.agentes[1] == 't') return TURN_SR;
+    if (sensores.agentes[3] == 't') return TURN_SL;
+    return IDLE;
 }
 
 
