@@ -63,45 +63,68 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
     if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
     if (sensores.superficie[0] == 'U') return IDLE;
 
-    if (last_action == WALK)
-        giros_sin_avanzar_n0 = 0;
+    // Protocolo de retroceso
+    if (retroceder_n0 > 0) {
+        retroceder_n0--;
+        if (retroceder_n0 >= 3) { last_action = TURN_SR; return TURN_SR; }
+        else                     { last_action = WALK;    return WALK;    }
+    }
 
+    if (last_action == WALK) giros_sin_avanzar_n0 = 0;
     matriz_visitas[sensores.posF][sensores.posC]++;
 
     char ci = ViablePorAltura(sensores.superficie[1], sensores.cota[1] - sensores.cota[0]);
     char cc = ViablePorAltura(sensores.superficie[2], sensores.cota[2] - sensores.cota[0]);
     char cd = ViablePorAltura(sensores.superficie[3], sensores.cota[3] - sensores.cota[0]);
 
-    // Anticolisión: el Técnico evita al Ingeniero
     if (sensores.agentes[1] == 'i') ci = 'P';
-    if (sensores.agentes[2] == 'i'&& giros_sin_avanzar_n0 >= 4) {
-        last_action = TURN_SR;
-        return TURN_SR;
-    }
+    if (sensores.agentes[2] == 'i') cc = 'P';
     if (sensores.agentes[3] == 'i') cd = 'P';
 
-    // Prioridad absoluta: si veo 'U' adyacente, ir a ella
-    if (cc == 'U') { last_action = WALK; return WALK; }
+    if (cc == 'U') { last_action = WALK;    return WALK;    }
     if (ci == 'U') { last_action = TURN_SL; return TURN_SL; }
     if (cd == 'U') { last_action = TURN_SR; return TURN_SR; }
 
-    // Calcular coordenadas de las 3 casillas adyacentes
-    ubicacion actual = {sensores.posF, sensores.posC, sensores.rumbo};
-    ubicacion u_izq = actual;
-    u_izq.brujula = (Orientacion)((actual.brujula + 7) % 8);
-    u_izq = Delante(u_izq);
+    ubicacion actual   = {sensores.posF, sensores.posC, sensores.rumbo};
+    ubicacion u_izq    = actual;
+    u_izq.brujula      = (Orientacion)((actual.brujula + 7) % 8);
+    u_izq              = Delante(u_izq);
     ubicacion u_frente = Delante(actual);
-    ubicacion u_der = actual;
-    u_der.brujula = (Orientacion)((actual.brujula + 1) % 8);
-    u_der = Delante(u_der);
+    ubicacion u_der    = actual;
+    u_der.brujula      = (Orientacion)((actual.brujula + 1) % 8);
+    u_der              = Delante(u_der);
 
     bool ok_i = (ci == 'C' || ci == 'D');
     bool ok_c = (cc == 'C' || cc == 'D');
     bool ok_d = (cd == 'C' || cd == 'D');
 
-    int vis_i = ok_i ? matriz_visitas[u_izq.f][u_izq.c] : 999999;
+    int vis_i = ok_i ? matriz_visitas[u_izq.f][u_izq.c]      : 999999;
     int vis_c = ok_c ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
-    int vis_d = ok_d ? matriz_visitas[u_der.f][u_der.c] : 999999;
+    int vis_d = ok_d ? matriz_visitas[u_der.f][u_der.c]       : 999999;
+
+    // === SESGO HACIA U: si la hemos visto en el mapa, acercarnos ===
+    int u_f = -1, u_c = -1;
+    for (int f = 0; f < (int)mapaResultado.size() && u_f == -1; f++)
+        for (int c = 0; c < (int)mapaResultado[0].size() && u_f == -1; c++)
+            if (mapaResultado[f][c] == 'U') { u_f = f; u_c = c; }
+
+    if (u_f != -1) {
+        int df = u_f - sensores.posF;
+        int dc = u_c - sensores.posC;
+        if (ok_i) {
+            int dfi = u_izq.f - sensores.posF, dci = u_izq.c - sensores.posC;
+            if ((df != 0 && dfi * df < 0) || (dc != 0 && dci * dc < 0)) vis_i += 500;
+        }
+        if (ok_c) {
+            int dfc = u_frente.f - sensores.posF, dcc = u_frente.c - sensores.posC;
+            if ((df != 0 && dfc * df < 0) || (dc != 0 && dcc * dc < 0)) vis_c += 500;
+        }
+        if (ok_d) {
+            int dfd = u_der.f - sensores.posF, dcd = u_der.c - sensores.posC;
+            if ((df != 0 && dfd * df < 0) || (dc != 0 && dcd * dc < 0)) vis_d += 500;
+        }
+    }
+    // ===============================================================
 
     int min_vis = vis_c;
     if (vis_i < min_vis) min_vis = vis_i;
@@ -109,32 +132,42 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
 
     int pos = 0;
     if (min_vis < 999999) {
-        // Técnico desempata: recto > derecha > izquierda (opuesto al ingeniero)
-        if (vis_c == min_vis) pos = 2;
+        // Técnico desempata: recto > derecha > izquierda
+        if      (vis_c == min_vis) pos = 2;
         else if (vis_d == min_vis) pos = 3;
-        else pos = 1;
+        else                       pos = 1;
     }
 
     // Mirar filas lejanas
     if (pos == 0) {
         bool hay_izq = false, hay_der = false;
         for (int k = 4; k <= 5; k++)
-            if (sensores.superficie[k] == 'C' || sensores.superficie[k] == 'U' || sensores.superficie[k] == 'D') hay_izq = true;
+            if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D') hay_izq = true;
         for (int k = 7; k <= 8; k++)
-            if (sensores.superficie[k] == 'C' || sensores.superficie[k] == 'U' || sensores.superficie[k] == 'D') hay_der = true;
+            if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D') hay_der = true;
         for (int k = 9; k <= 11; k++)
-            if (sensores.superficie[k] == 'C' || sensores.superficie[k] == 'U' || sensores.superficie[k] == 'D') hay_izq = true;
+            if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D') hay_izq = true;
         for (int k = 13; k <= 15; k++)
-            if (sensores.superficie[k] == 'C' || sensores.superficie[k] == 'U' || sensores.superficie[k] == 'D') hay_der = true;
+            if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D') hay_der = true;
 
-        if (hay_der && !hay_izq) pos = 3;
-        else if (hay_izq && !hay_der) pos = 1;
-        else if (hay_der && hay_izq) pos = 3;
+        if      (hay_der && !hay_izq)  pos = 3;
+        else if (hay_izq && !hay_der)  pos = 1;
+        else if (hay_der &&  hay_izq)  pos = 3;
     }
 
     // Anti-bucle
     if (pos == 0) {
         giros_sin_avanzar_n0++;
+        bool veo_ingeniero = false;
+        for (int k = 1; k <= 3; k++)
+            if (sensores.agentes[k] == 'i') veo_ingeniero = true;
+
+        if (veo_ingeniero && giros_sin_avanzar_n0 >= 3) {
+            retroceder_n0 = 7;
+            giros_sin_avanzar_n0 = 0;
+            last_action = TURN_SR;
+            return TURN_SR;
+        }
         if (giros_sin_avanzar_n0 >= 16) {
             girar_derecha_n0 = !girar_derecha_n0;
             giros_sin_avanzar_n0 = 0;
@@ -142,7 +175,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
     }
 
     switch (pos) {
-        case 2: accion = WALK; break;
+        case 2: accion = WALK;    break;
         case 1: accion = TURN_SL; break;
         case 3: accion = TURN_SR; break;
         default: accion = girar_derecha_n0 ? TURN_SR : TURN_SL; break;

@@ -38,6 +38,8 @@ public:
     giro45Izq = 0;
     giros_sin_avanzar_n0 = 0;
     girar_derecha_n0 = true; // El técnico gira a la derecha por defecto (opuesto al ingeniero)
+    turnos_viendo_ingeniero_n0 = 0;
+    retroceder_n0 = 0;
 
     // Dentro del constructor:
     for(int i = 0; i < 200; i++){
@@ -233,6 +235,8 @@ private:
   bool tiene_zapatillas;
   int giros_sin_avanzar_n0;
   bool girar_derecha_n0;
+  int turnos_viendo_ingeniero_n0;
+  int retroceder_n0;  // Turnos que quedan de retroceso
 
   // Nivel 1
     int giro45Izq; // Indica el número de giros a la izquierda que quedan por dar

@@ -4,6 +4,7 @@
 #include <queue>
 #include <set>
 #include <cstdlib>
+#include <algorithm>
 
 using namespace std;
 
@@ -81,111 +82,108 @@ int VeoCasillaInteresanteI_Nivel1(char i, char c, char d) {
 
 // Niveles iniciales (Comportamientos reactivos simples)
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores) {
-  Action accion = IDLE;
-  ActualizarMapa(sensores);
+    Action accion = IDLE;
+    ActualizarMapa(sensores);
 
-  if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
-  if (sensores.superficie[0] == 'U') return IDLE;
+    if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
+    if (sensores.superficie[0] == 'U') return IDLE;
 
-  if (last_action == WALK || last_action == JUMP)
-    giros_sin_avanzar_n0 = 0;
+    // Siempre incrementar visitas
+    matriz_visitas[sensores.posF][sensores.posC]++;
+    if (last_action == WALK || last_action == JUMP) giros_sin_avanzar_n0 = 0;
 
-  matriz_visitas[sensores.posF][sensores.posC]++;
+    char ci = ViablePorAltura(sensores.superficie[1], sensores.cota[1] - sensores.cota[0], tiene_zapatillas);
+    char cc = ViablePorAltura(sensores.superficie[2], sensores.cota[2] - sensores.cota[0], tiene_zapatillas);
+    char cd = ViablePorAltura(sensores.superficie[3], sensores.cota[3] - sensores.cota[0], tiene_zapatillas);
 
-  // Viabilidad por altura de las 3 casillas frontales
-  char ci = ViablePorAltura(sensores.superficie[1], sensores.cota[1] - sensores.cota[0], tiene_zapatillas);
-  char cc = ViablePorAltura(sensores.superficie[2], sensores.cota[2] - sensores.cota[0], tiene_zapatillas);
-  char cd = ViablePorAltura(sensores.superficie[3], sensores.cota[3] - sensores.cota[0], tiene_zapatillas);
+    // Anticolisión
+    if (sensores.agentes[1] == 't') ci = 'P';
+    if (sensores.agentes[2] == 't') cc = 'P';
+    if (sensores.agentes[3] == 't') cd = 'P';
 
-  // Anticolisión: evitar al Técnico
-  if (sensores.agentes[1] == 't') ci = 'P';
-  if (sensores.agentes[2] == 't') cc = 'P';
-  if (sensores.agentes[3] == 't') cd = 'P';
+    // Prioridad absoluta: U visible
+    if (cc == 'U') { last_action = WALK;    return WALK;    }
+    if (ci == 'U') { last_action = TURN_SL; return TURN_SL; }
+    if (cd == 'U') { last_action = TURN_SR; return TURN_SR; }
 
-  // Prioridad absoluta: si veo 'U' adyacente, ir a ella
-  if (cc == 'U') { last_action = WALK; return WALK; }
-  if (ci == 'U') { last_action = TURN_SL; return TURN_SL; }
-  if (cd == 'U') { last_action = TURN_SR; return TURN_SR; }
+    // Coordenadas adyacentes para leer visitas
+    ubicacion actual = {sensores.posF, sensores.posC, sensores.rumbo};
+    ubicacion u_izq = actual;
+    u_izq.brujula = (Orientacion)((actual.brujula + 7) % 8);
+    u_izq = Delante(u_izq);
+    ubicacion u_frente = Delante(actual);
+    ubicacion u_der = actual;
+    u_der.brujula = (Orientacion)((actual.brujula + 1) % 8);
+    u_der = Delante(u_der);
 
-  // Calcular coordenadas de las 3 casillas adyacentes
-  ubicacion actual = {sensores.posF, sensores.posC, sensores.rumbo};
-  ubicacion u_izq = actual;
-  u_izq.brujula = (Orientacion)((actual.brujula + 7) % 8);
-  u_izq = Delante(u_izq);
-  ubicacion u_frente = Delante(actual);
-  ubicacion u_der = actual;
-  u_der.brujula = (Orientacion)((actual.brujula + 1) % 8);
-  u_der = Delante(u_der);
+    bool ok_i = (ci == 'C' || ci == 'D');
+    bool ok_c = (cc == 'C' || cc == 'D');
+    bool ok_d = (cd == 'C' || cd == 'D');
 
-  // Determinar cuáles son transitables (C, D, U)
-  bool ok_i = (ci == 'C' || ci == 'D');
-  bool ok_c = (cc == 'C' || cc == 'D');
-  bool ok_d = (cd == 'C' || cd == 'D');
+    int vis_i = ok_i ? matriz_visitas[u_izq.f][u_izq.c]    : 999999;
+    int vis_c = ok_c ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
+    int vis_d = ok_d ? matriz_visitas[u_der.f][u_der.c]    : 999999;
 
-  int vis_i = ok_i ? matriz_visitas[u_izq.f][u_izq.c] : 999999;
-  int vis_c = ok_c ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
-  int vis_d = ok_d ? matriz_visitas[u_der.f][u_der.c] : 999999;
+    int min_vis = min({vis_i, vis_c, vis_d});
 
-  int min_vis = vis_c;
-  if (vis_i < min_vis) min_vis = vis_i;
-  if (vis_d < min_vis) min_vis = vis_d;
+    int pos = 0;
+    if (min_vis < 999999) {
+        // Empate: preferir recto → izq → der
+        if      (vis_c == min_vis) pos = 2;
+        else if (vis_i == min_vis) pos = 1;
+        else                       pos = 3;
+    } else {
+        // FALLBACK: mirar filas 2 y 3 con alternancia para no crear bucle
+        bool hay_izq = false, hay_der = false;
+        for (int k = 4; k <= 5; k++)
+            if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D')
+                { hay_izq = true; break; }
+        for (int k = 9; k <= 11; k++)
+            if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D')
+                { hay_izq = true; break; }
+        for (int k = 7; k <= 8; k++)
+            if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D')
+                { hay_der = true; break; }
+        for (int k = 13; k <= 15; k++)
+            if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D')
+                { hay_der = true; break; }
 
-  int pos = 0;
-  if (min_vis < 999999) {
-    if (vis_c == min_vis) pos = 2;
-    else if (vis_i == min_vis) pos = 1;
-    else pos = 3;
-  }
+        if      (hay_izq && !hay_der)           pos = 1;
+        else if (hay_der && !hay_izq)           pos = 3;
+        else if (hay_izq && hay_der)            pos = girar_derecha_n0 ? 3 : 1; // ALTERNANCIA
+    }
 
-  // Si no hay casilla transitable inmediata, mirar filas lejanas
-  if (pos == 0) {
-    bool hay_izq = false, hay_der = false;
-    for (int k = 4; k <= 5; k++)
-      if (sensores.superficie[k] == 'C' || sensores.superficie[k] == 'U' || sensores.superficie[k] == 'D') hay_izq = true;
-    for (int k = 7; k <= 8; k++)
-      if (sensores.superficie[k] == 'C' || sensores.superficie[k] == 'U' || sensores.superficie[k] == 'D') hay_der = true;
-    for (int k = 9; k <= 11; k++)
-      if (sensores.superficie[k] == 'C' || sensores.superficie[k] == 'U' || sensores.superficie[k] == 'D') hay_izq = true;
-    for (int k = 13; k <= 15; k++)
-      if (sensores.superficie[k] == 'C' || sensores.superficie[k] == 'U' || sensores.superficie[k] == 'D') hay_der = true;
-
-    if (hay_izq && !hay_der) pos = 1;
-    else if (hay_der && !hay_izq) pos = 3;
-    else if (hay_izq && hay_der) pos = 1;
-  }
-
-  // Anti-bucle
-  if (pos == 0) {
-    giros_sin_avanzar_n0++;
-    // Intentar JUMP si llevamos mucho rato bloqueados
-    if (giros_sin_avanzar_n0 >= 24) {
-      // Intentar saltar: comprobar casilla a 2 de distancia
-      ubicacion u_jump = Delante(Delante(actual));
-      if (u_jump.f >= 0 && u_jump.f < (int)mapaResultado.size() &&
-          u_jump.c >= 0 && u_jump.c < (int)mapaResultado[0].size()) {
-        unsigned char destJump = mapaResultado[u_jump.f][u_jump.c];
-        if (destJump == 'C' || destJump == 'D' || destJump == 'U' || destJump == '?') {
-          giros_sin_avanzar_n0 = 0;
-          last_action = JUMP;
-          return JUMP;
+    // Anti-bucle
+    if (pos == 0) {
+        giros_sin_avanzar_n0++;
+        // Intentar JUMP si llevamos mucho tiempo bloqueados
+        if (giros_sin_avanzar_n0 > 24) {
+            ubicacion u_jump = Delante(Delante(actual));
+            if (u_jump.f >= 0 && u_jump.f < (int)mapaResultado.size() &&
+                u_jump.c >= 0 && u_jump.c < (int)mapaResultado[0].size()) {
+                unsigned char dest = mapaResultado[u_jump.f][u_jump.c];
+                if (dest=='C'||dest=='D'||dest=='U'||dest=='?') {
+                    giros_sin_avanzar_n0 = 0;
+                    last_action = JUMP;
+                    return JUMP;
+                }
+            }
         }
-      }
+        if (giros_sin_avanzar_n0 >= 16) {
+            girar_derecha_n0 = !girar_derecha_n0;
+            giros_sin_avanzar_n0 = 0;
+        }
     }
-    if (giros_sin_avanzar_n0 >= 16) {
-      girar_derecha_n0 = !girar_derecha_n0;
-      giros_sin_avanzar_n0 = 0;
+
+    switch (pos) {
+        case 2: accion = WALK;    break;
+        case 1: accion = TURN_SL; break;
+        case 3: accion = TURN_SR; break;
+        default: accion = girar_derecha_n0 ? TURN_SR : TURN_SL; break;
     }
-  }
 
-  switch (pos) {
-    case 2: accion = WALK; break;
-    case 1: accion = TURN_SL; break;
-    case 3: accion = TURN_SR; break;
-    default: accion = girar_derecha_n0 ? TURN_SR : TURN_SL; break;
-  }
-
-  last_action = accion;
-  return accion;
+    last_action = accion;
+    return accion;
 }
 
 
