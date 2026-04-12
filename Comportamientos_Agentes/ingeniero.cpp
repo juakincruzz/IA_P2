@@ -555,19 +555,13 @@ bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::li
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_4(Sensores sensores) {
     if (!plan_tuberias_hecho) {
-        cout << "[INGENIERO] Cerebro Arquitectónico activado." << endl;
-        cout << "[INGENIERO] Planificando red desde (" << sensores.BelPosF << ", " << sensores.BelPosC << ") hasta la planta 'U'..." << endl;
-        
         bool exito = EncontrarPlan_N4(sensores.BelPosF, sensores.BelPosC, plan_tuberias);
 
         if (exito) {
-            cout << "[INGENIERO] ¡Plan Maestro de Canalización Completado! Tramos necesarios: " << plan_tuberias.size() << endl;
-            
             // ¡ARREGLO! El código real de los profesores solo pide el plan, sin guion bajo y con 1 parámetro.
             VisualizaRedTuberias(plan_tuberias);
-        } else {
-            cout << "[INGENIERO] ¡ERROR CRÍTICO! Es físicamente imposible trazar la tubería por gravedad." << endl;
         }
+        
         plan_tuberias_hecho = true;
     }
 
