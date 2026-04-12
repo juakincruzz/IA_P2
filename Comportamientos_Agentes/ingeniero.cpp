@@ -124,10 +124,11 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores
     u_der.brujula = (Orientacion)((actual.brujula + 1) % 8);
     u_der = Delante(u_der);
 
-    bool desesperado = (giros_sin_avanzar_n0 > 5);
-    bool ok_i = (ci == 'C' || ci == 'D' || (desesperado && ci == 'S'));
-    bool ok_c = (cc == 'C' || cc == 'D' || (desesperado && cc == 'S'));
-    bool ok_d = (cd == 'C' || cd == 'D' || (desesperado && cd == 'S'));
+    bool desesperado_s = (giros_sin_avanzar_n0 > 5);   // Sendero tras 5 giros
+    bool desesperado_h = (giros_sin_avanzar_n0 > 12);   // Hierba tras 12 giros (más costoso)
+    bool ok_i = (ci == 'C' || ci == 'D' || (desesperado_s && ci == 'S') || (desesperado_h && ci == 'H'));
+    bool ok_c = (cc == 'C' || cc == 'D' || (desesperado_s && cc == 'S') || (desesperado_h && cc == 'H'));
+    bool ok_d = (cd == 'C' || cd == 'D' || (desesperado_s && cd == 'S') || (desesperado_h && cd == 'H'));
 
     int vis_i = ok_i ? matriz_visitas[u_izq.f][u_izq.c]    : 999999;
     int vis_c = ok_c ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
@@ -176,7 +177,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores
             if (destino.f >= 0 && destino.f < (int)mapaResultado.size() &&
                 destino.c >= 0 && destino.c < (int)mapaResultado[0].size()) {
                 unsigned char celda = mapaResultado[destino.f][destino.c];
-                if (celda == 'C' || celda == 'D' || celda == 'U' || celda == 'S') {
+                if (celda == 'C' || celda == 'D' || celda == 'U' || celda == 'S' || celda == 'H') {
                     int dif = abs(mapaCotas[destino.f][destino.c] - mapaCotas[sensores.posF][sensores.posC]);
                     int max_dif = tiene_zapatillas ? 2 : 1;
                     if (dif <= max_dif) {

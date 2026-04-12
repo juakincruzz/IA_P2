@@ -98,9 +98,9 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
 
     // Si llevamos mucho tiempo atascados, permitir sendero 'S' como escape
     bool desesperado = (giros_sin_avanzar_n0 > 20);
-    bool ok_i = (ci == 'C' || ci == 'D' || (desesperado && ci == 'S'));
-    bool ok_c = (cc == 'C' || cc == 'D' || (desesperado && cc == 'S'));
-    bool ok_d = (cd == 'C' || cd == 'D' || (desesperado && cd == 'S'));
+    bool ok_i = (ci == 'C' || ci == 'D' || (desesperado && (ci == 'S' || ci == 'H')));
+    bool ok_c = (cc == 'C' || cc == 'D' || (desesperado && (cc == 'S' || cc == 'H')));
+    bool ok_d = (cd == 'C' || cd == 'D' || (desesperado && (cd == 'S' || cd == 'H')));
 
     int vis_i = ok_i ? matriz_visitas[u_izq.f][u_izq.c]      : 999999;
     int vis_c = ok_c ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
@@ -211,7 +211,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
             if (destino.f >= 0 && destino.f < (int)mapaResultado.size() &&
                 destino.c >= 0 && destino.c < (int)mapaResultado[0].size()) {
                 unsigned char celda = mapaResultado[destino.f][destino.c];
-                if (celda == 'C' || celda == 'D' || celda == 'U' || celda == 'S') {
+                if (celda == 'C' || celda == 'D' || celda == 'U' || celda == 'S' || celda == 'H') {
                     int dif = abs(mapaCotas[destino.f][destino.c] - mapaCotas[sensores.posF][sensores.posC]);
                     if (dif <= 1) {
                         // Orientarme hacia esa dirección
