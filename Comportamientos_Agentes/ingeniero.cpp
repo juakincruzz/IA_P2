@@ -106,6 +106,14 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores
     if (ci == 'U') { last_action = TURN_SL; return TURN_SL; }
     if (cd == 'U') { last_action = TURN_SR; return TURN_SR; }
 
+    // Temporizador de espera acotada (usa giro45Izq como contador, libre en N0)
+    if (giro45Izq > 0) {
+        giro45Izq--;
+        matriz_visitas[sensores.posF][sensores.posC]++;
+        last_action = IDLE;
+        return IDLE;
+    }
+
     // Coordenadas adyacentes para leer visitas
     ubicacion actual = {sensores.posF, sensores.posC, sensores.rumbo};
     ubicacion u_izq = actual;
@@ -153,30 +161,48 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores
         else if (hay_izq && hay_der)            pos = girar_derecha_n0 ? 3 : 1; // ALTERNANCIA
     }
 
-    // Anti-bucle
-    if (pos == 0) {
+    // Anti-bucle — contar instantes sin avanzar de verdad
+    if (last_action != WALK && last_action != JUMP) {
         giros_sin_avanzar_n0++;
-        // Intentar JUMP si llevamos mucho tiempo bloqueados
-        if (giros_sin_avanzar_n0 > 24) {
-            ubicacion u_jump = Delante(Delante(actual));
-            if (u_jump.f >= 0 && u_jump.f < (int)mapaResultado.size() &&
-                u_jump.c >= 0 && u_jump.c < (int)mapaResultado[0].size()) {
-                unsigned char dest = mapaResultado[u_jump.f][u_jump.c];
-                if (dest=='C'||dest=='D'||dest=='U'||dest=='?') {
-                    giros_sin_avanzar_n0 = 0;
-                    last_action = JUMP;
-                    return JUMP;
-                }
+    }
+
+    // Intentar JUMP si llevamos mucho tiempo bloqueados
+    if (giros_sin_avanzar_n0 > 14) {
+        ubicacion u_jump = Delante(Delante(actual));
+        if (u_jump.f >= 0 && u_jump.f < (int)mapaResultado.size() &&
+            u_jump.c >= 0 && u_jump.c < (int)mapaResultado[0].size()) {
+            unsigned char dest = mapaResultado[u_jump.f][u_jump.c];
+            if (dest=='C'||dest=='D'||dest=='U'||dest=='?') {
+                giros_sin_avanzar_n0 = 0;
+                last_action = JUMP;
+                return JUMP;
             }
-        }
-        if (giros_sin_avanzar_n0 >= 16) {
-            girar_derecha_n0 = !girar_derecha_n0;
-            giros_sin_avanzar_n0 = 0;
         }
     }
 
+    if (giros_sin_avanzar_n0 >= 12) { // ← Reducido de 16 a 12
+        girar_derecha_n0 = !girar_derecha_n0;
+        giros_sin_avanzar_n0 = 0;
+    }
+
+    // NUEVO: escape basado en visitas
+    {
+      // Escape por visitas: ESPERAR (no girar) para que el Técnico tenga espacio
+      bool veo_tec = (sensores.agentes[1] == 't' ||
+                      sensores.agentes[2] == 't' ||
+                      sensores.agentes[3] == 't');
+      if (veo_tec && matriz_visitas[sensores.posF][sensores.posC] > 20) {
+          girar_derecha_n0 = !girar_derecha_n0;
+          giros_sin_avanzar_n0 = 0;
+          matriz_visitas[sensores.posF][sensores.posC] = 0; // reset total
+          giro45Izq = 8;   // esperar 8 turnos (bounded, no loop infinito)
+          last_action = IDLE;
+          return IDLE;
+      }
+    }
+
     switch (pos) {
-        case 2: accion = WALK;    break;
+        case 2: accion = WALK; break;
         case 1: accion = TURN_SL; break;
         case 3: accion = TURN_SR; break;
         default: accion = girar_derecha_n0 ? TURN_SR : TURN_SL; break;
@@ -554,19 +580,17 @@ bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::li
  * @return Acción a realizar.
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_4(Sensores sensores) {
-    if (!plan_tuberias_hecho) {
-        bool exito = EncontrarPlan_N4(sensores.BelPosF, sensores.BelPosC, plan_tuberias);
+  if (!plan_tuberias_hecho) {
+    bool exito = EncontrarPlan_N4(sensores.BelPosF, sensores.BelPosC, plan_tuberias);
 
-        if (exito) {
-            // ¡ARREGLO! El código real de los profesores solo pide el plan, sin guion bajo y con 1 parámetro.
-            VisualizaRedTuberias(plan_tuberias);
-        }
-        
-        plan_tuberias_hecho = true;
+    if (exito && !plan_tuberias.empty()) {
+      VisualizaRedTuberias(plan_tuberias);
     }
 
-    // En el Nivel 4 no nos movemos, solo pensamos y enviamos el plano.
-    return IDLE; 
+    plan_tuberias_hecho = true;
+  }
+
+  return IDLE; 
 }
 
 

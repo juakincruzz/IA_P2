@@ -150,21 +150,22 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
         for (int k = 13; k <= 15; k++)
             if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D') hay_der = true;
 
-        if      (hay_der && !hay_izq)  pos = 3;
-        else if (hay_izq && !hay_der)  pos = 1;
-        else if (hay_der &&  hay_izq)  pos = 3;
+        if (hay_der && !hay_izq) pos = 3;
+        else if (hay_izq && !hay_der) pos = 1;
+        else if (hay_der && hay_izq) pos = girar_derecha_n0 ? 3 : 1; // ALTERNANCIA
     }
 
-    // Anti-bucle
+    // Anti-bucle ORIGINAL (sin cambios de umbrales)
     if (pos == 0) {
         giros_sin_avanzar_n0++;
-        bool veo_ingeniero = false;
+        bool veo_ing = false;
         for (int k = 1; k <= 3; k++)
-            if (sensores.agentes[k] == 'i') veo_ingeniero = true;
+            if (sensores.agentes[k] == 'i') veo_ing = true;
 
-        if (veo_ingeniero && giros_sin_avanzar_n0 >= 3) {
+        if (veo_ing && giros_sin_avanzar_n0 >= 3) {
             retroceder_n0 = 7;
             giros_sin_avanzar_n0 = 0;
+            girar_derecha_n0 = !girar_derecha_n0;
             last_action = TURN_SR;
             return TURN_SR;
         }
@@ -174,13 +175,28 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
         }
     }
 
+    // NUEVO: escape basado en visitas — detecta ciclos que el contador clásico no ve
+    {
+        bool veo_ing = false;
+        for (int k = 1; k <= 3; k++)
+            if (sensores.agentes[k] == 'i') veo_ing = true;
+
+        if (veo_ing && matriz_visitas[sensores.posF][sensores.posC] > 10) {
+            retroceder_n0 = 10;
+            girar_derecha_n0 = !girar_derecha_n0;
+            giros_sin_avanzar_n0 = 0;
+            matriz_visitas[sensores.posF][sensores.posC] = 0; // ← AÑADIR esta línea
+            last_action = TURN_SR;
+            return TURN_SR;
+        }
+    }
+
     switch (pos) {
-        case 2: accion = WALK;    break;
+        case 2: accion = WALK; break;
         case 1: accion = TURN_SL; break;
         case 3: accion = TURN_SR; break;
         default: accion = girar_derecha_n0 ? TURN_SR : TURN_SL; break;
     }
-
     last_action = accion;
     return accion;
 }
@@ -493,7 +509,7 @@ bool ComportamientoTecnico::EsValida_N3(const EstadoN3& st, Action act, bool ign
         }
 
         unsigned char c = mapaResultado[destino.f][destino.c];
-        if (c == 'M' || c == 'P') return false;
+        if (c == 'M' || c == 'P' ) return false;
         if (c == 'B' && !st.zapatillas) return false; 
 
         unsigned char entidad = mapaEntidades[destino.f][destino.c];
