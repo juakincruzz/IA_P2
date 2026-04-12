@@ -60,6 +60,8 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
     Action accion = IDLE;
     ActualizarMapa(sensores);
 
+    
+
     if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
     if (sensores.superficie[0] == 'U') return IDLE;
 
@@ -94,14 +96,17 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
     u_der.brujula      = (Orientacion)((actual.brujula + 1) % 8);
     u_der              = Delante(u_der);
 
-    bool ok_i = (ci == 'C' || ci == 'D');
-    bool ok_c = (cc == 'C' || cc == 'D');
-    bool ok_d = (cd == 'C' || cd == 'D');
+    // Si llevamos mucho tiempo atascados, permitir sendero 'S' como escape
+    bool desesperado = (giros_sin_avanzar_n0 > 20);
+    bool ok_i = (ci == 'C' || ci == 'D' || (desesperado && ci == 'S'));
+    bool ok_c = (cc == 'C' || cc == 'D' || (desesperado && cc == 'S'));
+    bool ok_d = (cd == 'C' || cd == 'D' || (desesperado && cd == 'S'));
 
     int vis_i = ok_i ? matriz_visitas[u_izq.f][u_izq.c]      : 999999;
     int vis_c = ok_c ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
     int vis_d = ok_d ? matriz_visitas[u_der.f][u_der.c]       : 999999;
 
+    /*
     // === SESGO HACIA U: si la hemos visto en el mapa, acercarnos ===
     int u_f = -1, u_c = -1;
     for (int f = 0; f < (int)mapaResultado.size() && u_f == -1; f++)
@@ -125,6 +130,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
         }
     }
     // ===============================================================
+    */
 
     int min_vis = vis_c;
     if (vis_i < min_vis) min_vis = vis_i;
@@ -155,9 +161,12 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
         else if (hay_der && hay_izq) pos = girar_derecha_n0 ? 3 : 1; // ALTERNANCIA
     }
 
+    giros_sin_avanzar_n0++;
+
     // Anti-bucle ORIGINAL (sin cambios de umbrales)
     if (pos == 0) {
-        giros_sin_avanzar_n0++;
+        
+
         bool veo_ing = false;
         for (int k = 1; k <= 3; k++)
             if (sensores.agentes[k] == 'i') veo_ing = true;
@@ -169,7 +178,8 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
             last_action = TURN_SR;
             return TURN_SR;
         }
-        if (giros_sin_avanzar_n0 >= 16) {
+
+        if (giros_sin_avanzar_n0 >= 8) {
             girar_derecha_n0 = !girar_derecha_n0;
             giros_sin_avanzar_n0 = 0;
         }
@@ -188,6 +198,35 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
             matriz_visitas[sensores.posF][sensores.posC] = 0; // ← AÑADIR esta línea
             last_action = TURN_SR;
             return TURN_SR;
+        }
+    }
+
+    // Anti-oscilación: si llevamos mucho sin avanzar, forzar WALK a la primera casilla transitable
+    if (giros_sin_avanzar_n0 > 10) {
+        // Buscar en las 8 direcciones una casilla C/D/U/S accesible
+        for (int dir = 0; dir < 8; dir++) {
+            ubicacion test = actual;
+            test.brujula = (Orientacion)dir;
+            ubicacion destino = Delante(test);
+            if (destino.f >= 0 && destino.f < (int)mapaResultado.size() &&
+                destino.c >= 0 && destino.c < (int)mapaResultado[0].size()) {
+                unsigned char celda = mapaResultado[destino.f][destino.c];
+                if (celda == 'C' || celda == 'D' || celda == 'U' || celda == 'S') {
+                    int dif = abs(mapaCotas[destino.f][destino.c] - mapaCotas[sensores.posF][sensores.posC]);
+                    if (dif <= 1) {
+                        // Orientarme hacia esa dirección
+                        if (sensores.rumbo == (Orientacion)dir) {
+                            giros_sin_avanzar_n0 = 0;
+                            last_action = WALK;
+                            return WALK;
+                        } else {
+                            int giros = ((dir - (int)sensores.rumbo) + 8) % 8;
+                            last_action = (giros <= 4) ? TURN_SR : TURN_SL;
+                            return last_action;
+                        }
+                    }
+                }
+            }
         }
     }
 

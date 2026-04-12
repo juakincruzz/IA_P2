@@ -124,9 +124,10 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores
     u_der.brujula = (Orientacion)((actual.brujula + 1) % 8);
     u_der = Delante(u_der);
 
-    bool ok_i = (ci == 'C' || ci == 'D');
-    bool ok_c = (cc == 'C' || cc == 'D');
-    bool ok_d = (cd == 'C' || cd == 'D');
+    bool desesperado = (giros_sin_avanzar_n0 > 5);
+    bool ok_i = (ci == 'C' || ci == 'D' || (desesperado && ci == 'S'));
+    bool ok_c = (cc == 'C' || cc == 'D' || (desesperado && cc == 'S'));
+    bool ok_d = (cd == 'C' || cd == 'D' || (desesperado && cd == 'S'));
 
     int vis_i = ok_i ? matriz_visitas[u_izq.f][u_izq.c]    : 999999;
     int vis_c = ok_c ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
@@ -166,6 +167,34 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores
         giros_sin_avanzar_n0++;
     }
 
+    // Anti-oscilación: si llevamos mucho sin avanzar, forzar WALK a la primera casilla transitable
+    if (giros_sin_avanzar_n0 > 10) {
+        for (int dir = 0; dir < 8; dir++) {
+            ubicacion test = actual;
+            test.brujula = (Orientacion)dir;
+            ubicacion destino = Delante(test);
+            if (destino.f >= 0 && destino.f < (int)mapaResultado.size() &&
+                destino.c >= 0 && destino.c < (int)mapaResultado[0].size()) {
+                unsigned char celda = mapaResultado[destino.f][destino.c];
+                if (celda == 'C' || celda == 'D' || celda == 'U' || celda == 'S') {
+                    int dif = abs(mapaCotas[destino.f][destino.c] - mapaCotas[sensores.posF][sensores.posC]);
+                    int max_dif = tiene_zapatillas ? 2 : 1;
+                    if (dif <= max_dif) {
+                        if (sensores.rumbo == (Orientacion)dir) {
+                            giros_sin_avanzar_n0 = 0;
+                            last_action = WALK;
+                            return WALK;
+                        } else {
+                            int giros = ((dir - (int)sensores.rumbo) + 8) % 8;
+                            last_action = (giros <= 4) ? TURN_SR : TURN_SL;
+                            return last_action;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Intentar JUMP si llevamos mucho tiempo bloqueados
     if (giros_sin_avanzar_n0 > 14) {
         ubicacion u_jump = Delante(Delante(actual));
@@ -180,11 +209,12 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores
         }
     }
 
-    if (giros_sin_avanzar_n0 >= 12) { // ← Reducido de 16 a 12
+    if (giros_sin_avanzar_n0 >= 16) { // ← Reducido de 16 a 12
         girar_derecha_n0 = !girar_derecha_n0;
         giros_sin_avanzar_n0 = 0;
     }
 
+    /*
     // NUEVO: escape basado en visitas
     {
       // Escape por visitas: ESPERAR (no girar) para que el Técnico tenga espacio
@@ -200,6 +230,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores
           return IDLE;
       }
     }
+    */
 
     switch (pos) {
         case 2: accion = WALK; break;
