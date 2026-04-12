@@ -493,7 +493,7 @@ bool ComportamientoTecnico::EsValida_N3(const EstadoN3& st, Action act, bool ign
         }
 
         unsigned char c = mapaResultado[destino.f][destino.c];
-        if (c == 'M' || c == 'P' || c == 'A') return false;
+        if (c == 'M' || c == 'P') return false;
         if (c == 'B' && !st.zapatillas) return false; 
 
         unsigned char entidad = mapaEntidades[destino.f][destino.c];
