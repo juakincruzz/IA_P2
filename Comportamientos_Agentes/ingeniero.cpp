@@ -134,15 +134,6 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores
   if (giro45Izq > 0) {
     giro45Izq--;
     matriz_visitas[sensores.posF][sensores.posC]++;
-
-    /*
-    // Penalizar casillas que no son camino para volver a 'C' lo antes posible
-    unsigned char terreno_actual = sensores.superficie[0];
-    if (terreno_actual == 'H' || terreno_actual == 'S') {
-      matriz_visitas[sensores.posF][sensores.posC] += 50;
-    }
-    */
-
     last_action = IDLE;
     return IDLE;
   }
