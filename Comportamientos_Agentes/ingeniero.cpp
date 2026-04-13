@@ -260,31 +260,40 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores
 }
 
 
-// Filtro Nivel 1 Ingeniero
+
+// =========================================================================
+// FUNCIONES AUXILIARES - NIVEL 1 (Ingeniero)
+// =========================================================================
+
+/** @brief Comprueba si una casilla es transitable en nivel 1 (lista negra). */
+bool ComportamientoIngeniero::es_transitable_N1(unsigned char c) const {
+  // LISTA NEGRA: Todo es pisable menos los obstáculos duros y lo desconocido
+  return (c != 'M' && c != 'P' && c != 'A' && c != 'B' && c != '?');
+}
+
+/** @brief Filtro de altura para nivel 1. Máx desnivel 1, o 2 con zapatillas. */
+/*
 char ViablePorAlturaI_Nivel1(char casilla, int dif) {
   if (casilla == 'P' || casilla == 'M' || casilla == 'B' || casilla == 'A' || casilla == 'H') return 'P';
   if (abs(dif) <= 1) return casilla;
   return 'P';
 }
+*/
 
-// Curiosidad Nivel 1 Ingeniero
+char ComportamientoIngeniero::ViablePorAltura_N1(char casilla, int dif, bool zap) {
+  if (abs(dif) <= 1 || (zap && abs(dif) <= 2)) return casilla;
+  else return 'P'; 
+}
+
+/** @brief Elige dirección preferente entre 3 casillas (nivel 1). */
+/*
 int VeoCasillaInteresanteI_Nivel1(char i, char c, char d) {
   if (c != 'P') return 2; // 1. Recto
   if (i != 'P') return 1; // 2. Izquierda (ZURDO)
   if (d != 'P') return 3; // 3. Derecha
   return 0;
 }
-
-// --- FUNCIONES AUXILIARES NIVEL 1 (INGENIERO) ---
-bool ComportamientoIngeniero::es_transitable_N1(unsigned char c) const {
-  // LISTA NEGRA: Todo es pisable menos los obstáculos duros y lo desconocido
-  return (c != 'M' && c != 'P' && c != 'A' && c != 'B' && c != '?');
-}
-
-char ComportamientoIngeniero::ViablePorAltura_N1(char casilla, int dif, bool zap) {
-  if (abs(dif) <= 1 || (zap && abs(dif) <= 2)) return casilla;
-  else return 'P'; 
-}
+*/
 
 int ComportamientoIngeniero::VeoCasillaInteresante_N1(char i, char c, char d, bool zap) {
   if (es_transitable_N1(c)) return 2; // 1º Frente
@@ -297,77 +306,71 @@ bool ComportamientoIngeniero::es_camino(unsigned char c) const {
   return (c == 'C' || c == 'D' || c == 'U');
 }
 
-/**
- * @brief Comportamiento reactivo del ingeniero para el Nivel 1.
- * @param sensores Datos actuales de los sensores.
- * @return Acción a realizar.
-*/
+
+// =========================================================================
+// NIVEL 1 - EXPLORACIÓN CON MAPA DE FEROMONAS (Ingeniero)
+// =========================================================================
+// Estrategia similar al nivel 0 pero con reglas de transitabilidad más amplias
+// (nivel 1 permite pisar senderos 'S' y hierba 'H' directamente).
+// Usa ActualizarMapa para construir un mapa interno y matriz_visitas como feromonas.
+// Desempate en visitas: recto > izquierda > derecha (zurdo).
+// Callejón sin salida: gira 90° a la izquierda (4 giros de 45°).
+// =========================================================================
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores) {
-  // INICIO DEL MÉTODO ComportamientoIngenieroNivel_1
   Action accion = IDLE;
   ActualizarMapa(sensores);
 
   if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
-  // Si estamos en medio de un giro de 90º, lo terminamos
+  // Completar giro de 90 grados pendiente
   if (giro45Izq > 0) {
       giro45Izq--;
-      last_action = TURN_SL; // El ingeniero evade por la Izquierda
+      last_action = TURN_SL;
       return TURN_SL;
   }
 
-  // 1. ANOTAMOS QUE ACABAMOS DE PISAR ESTA CASILLA
+  // Actualizar feromonas
   matriz_visitas[sensores.posF][sensores.posC]++;
 
-  // 2. VISIÓN Y ANTICOLISIÓN (Igual que antes)
-  // (Nota: para el técnico, quita tiene_zapatillas de ViablePorAltura_N1)
+  // Evaluar las 3 casillas frontales (altura + tipo de terreno)
   char i = ViablePorAltura_N1(sensores.superficie[1], sensores.cota[1] - sensores.cota[0], tiene_zapatillas);
   char c = ViablePorAltura_N1(sensores.superficie[2], sensores.cota[2] - sensores.cota[0], tiene_zapatillas);
   char d = ViablePorAltura_N1(sensores.superficie[3], sensores.cota[3] - sensores.cota[0], tiene_zapatillas);
 
+  // Anticolisión: cualquier agente en las casillas frontales es obstáculo
   if (sensores.agentes[1] != '_') i = 'P';
   if (sensores.agentes[2] != '_') c = 'P';
   if (sensores.agentes[3] != '_') d = 'P';
 
-  // 3. CALCULAR COORDENADAS DE LAS CASILLAS ADYACENTES
+  // Calcular coordenadas adyacentes
   ubicacion actual = {sensores.posF, sensores.posC, sensores.rumbo};
   ubicacion u_frente = Delante(actual);
-  
   ubicacion u_izq = actual;
   u_izq.brujula = (Orientacion)((actual.brujula + 7) % 8);
   u_izq = Delante(u_izq);
-  
   ubicacion u_der = actual;
   u_der.brujula = (Orientacion)((actual.brujula + 1) % 8);
   u_der = Delante(u_der);
 
-  // 4. LEER EL MAPA DE FEROMONAS (999999 si no es transitable)
-  // ¡MAGIA MODULAR! Si estamos en Nivel 6, usamos la lista negra. Si no, tu lista blanca original.
+  // Transitabilidad según nivel (nivel 6 reutiliza este código con lista negra adaptada)
   bool trans_c = (sensores.nivel == 6) ? (c != 'M' && c != 'P' && c != 'A' && c != 'B' && c != '?') : es_transitable_N1(c);
   bool trans_i = (sensores.nivel == 6) ? (i != 'M' && i != 'P' && i != 'A' && i != 'B' && i != '?') : es_transitable_N1(i);
   bool trans_d = (sensores.nivel == 6) ? (d != 'M' && d != 'P' && d != 'A' && d != 'B' && d != '?') : es_transitable_N1(d);
 
+  // Consultar feromonas
   int vis_frente = trans_c ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
   int vis_izq = trans_i ? matriz_visitas[u_izq.f][u_izq.c] : 999999;
   int vis_der = trans_d ? matriz_visitas[u_der.f][u_der.c] : 999999;
 
-  // 5. ENCONTRAR LA RUTA MENOS PISADA
-  int min_visitas = vis_frente;
-  if (vis_izq < min_visitas) min_visitas = vis_izq;
-  if (vis_der < min_visitas) min_visitas = vis_der;
-
+  // Elegir la ruta menos visitada (desempate: recto > izquierda > derecha)
+  int min_visitas = min({vis_frente, vis_izq, vis_der});
   int pos = 0;
-  if (min_visitas == 999999) {
-      pos = 0; // Totalmente bloqueados
-  } else if (vis_frente == min_visitas) {
-      pos = 2; // ¡SÚPER CLAVE! En caso de empate, vamos recto para no gastar batería girando.
-  } else if (vis_izq == min_visitas) {
-      pos = 1;
-  } else {
-      pos = 3;
-  }
+  if (min_visitas == 999999)          pos = 0;
+  else if (vis_frente == min_visitas) pos = 2;
+  else if (vis_izq == min_visitas)    pos = 1;
+  else                                pos = 3;
 
-  // EL SWITCH FINAL 
+  // Ejecutar acción
   switch (pos) {
     case 2: accion = WALK; break;
     case 1: accion = TURN_SL; break;
