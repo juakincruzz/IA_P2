@@ -630,7 +630,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_3(Sensores sensores) {
     Action accion = IDLE;
 
     if (!hay_plan) {
-        cout << "[TÉCNICO] Cerebro A* activado: Buscando ruta económica hacia (" << sensores.BelPosF << ", " << sensores.BelPosC << ")..." << endl;
         EstadoN3 estado_inicial;
         estado_inicial.f = sensores.posF;
         estado_inicial.c = sensores.posC;
@@ -638,7 +637,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_3(Sensores sensores) {
         estado_inicial.zapatillas = false; 
         
         if (mapaResultado[sensores.posF][sensores.posC] == 'D') {
-             estado_inicial.zapatillas = true;
+            estado_inicial.zapatillas = true;
         }
 
         hay_plan = EncontrarPlan_N3(estado_inicial, sensores.BelPosF, sensores.BelPosC, plan, true);
@@ -863,6 +862,119 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c
     return false;
 }
 
+bool ComportamientoTecnico::EncontrarPlan_N5_Tecnico(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco) {
+    plan_resultante.clear();
+    std::priority_queue<NodoN4_Tecnico, std::vector<NodoN4_Tecnico>, std::greater<NodoN4_Tecnico>> abiertos;
+    std::set<EstadoN4_Tecnico> cerrados;
+
+    auto imp_install = [](unsigned char terreno) {
+        if (terreno == 'A') return 50;
+        if (terreno == 'H') return 45;
+        if (terreno == 'S') return 25;
+        if (terreno == 'C' || terreno == 'U') return 15;
+        return 30;
+    };
+
+    auto imp_op = [](unsigned char terreno, int op) {
+        if (op == 1) {
+            if (terreno == 'H') return 55;
+            if (terreno == 'S') return 30;
+            if (terreno == 'C' || terreno == 'U') return 10;
+            return 40;
+        } else if (op == -1) {
+            if (terreno == 'H') return 65;
+            if (terreno == 'S') return 40;
+            if (terreno == 'C' || terreno == 'U') return 25;
+            return 50;
+        }
+        return 0;
+    };
+
+    unsigned char start_terr = mapaResultado[start_f][start_c];
+    if (start_terr == 'M' || start_terr == 'P') return false; 
+    
+    int start_H = mapaCotas[start_f][start_c];
+    std::vector<int> alturas_inicio;
+    
+    if (start_terr == 'A') alturas_inicio.push_back(start_H);
+    else {
+        alturas_inicio.push_back(start_H);
+        if (start_H > 0) alturas_inicio.push_back(start_H - 1);
+        if (start_H < 9) alturas_inicio.push_back(start_H + 1);
+    }
+
+    for (int h : alturas_inicio) {
+        EstadoN4_Tecnico st = {start_f, start_c, h};
+        NodoN4_Tecnico nodo;
+        nodo.st = st;
+        int op = h - start_H;
+        Paso p = {start_f, start_c, op}; 
+        nodo.secuencia.push_back(p);
+        nodo.impacto = imp_op(start_terr, op);
+        if (nodo.impacto <= limite_eco)
+            abiertos.push(nodo);
+    }
+
+    int df[] = {-1, 1, 0, 0};
+    int dc[] = {0, 0, 1, -1};
+
+    while (!abiertos.empty()) {
+        NodoN4_Tecnico actual = abiertos.top();
+        abiertos.pop();
+
+        if (cerrados.find(actual.st) != cerrados.end()) continue;
+        cerrados.insert(actual.st);
+
+        if (mapaResultado[actual.st.f][actual.st.c] == 'U') {
+            plan_resultante = actual.secuencia;
+            return true;
+        }
+
+        unsigned char actual_terr = mapaResultado[actual.st.f][actual.st.c];
+
+        for (int i = 0; i < 4; i++) {
+            int nf = actual.st.f + df[i];
+            int nc = actual.st.c + dc[i];
+
+            if (nf < 0 || nf >= (int)mapaResultado.size() || nc < 0 || nc >= (int)mapaResultado[0].size()) continue;
+
+            unsigned char n_terr = mapaResultado[nf][nc];
+            if (n_terr == 'M' || n_terr == 'P' || n_terr == '?') continue; 
+
+            int nH = mapaCotas[nf][nc];
+            std::vector<int> alturas_vecino;
+            
+            if (n_terr == 'A') alturas_vecino.push_back(nH); 
+            else {
+                alturas_vecino.push_back(nH);
+                if (nH > 0) alturas_vecino.push_back(nH - 1);
+                if (nH < 9) alturas_vecino.push_back(nH + 1);
+            }
+
+            for (int nh : alturas_vecino) {
+                if (actual.st.h >= nh && (actual.st.h - nh) <= 1) {
+                    EstadoN4_Tecnico siguiente = {nf, nc, nh};
+                    if (cerrados.find(siguiente) != cerrados.end()) continue;
+                    
+                    int op = nh - nH;
+                    int impacto_tramo = imp_op(n_terr, op) + imp_install(n_terr) + imp_install(actual_terr);
+                    int nuevo_impacto = actual.impacto + impacto_tramo;
+
+                    if (nuevo_impacto <= limite_eco) {
+                        NodoN4_Tecnico hijo = actual;
+                        hijo.st = siguiente;
+                        Paso p_nuevo = {nf, nc, op};
+                        hijo.secuencia.push_back(p_nuevo);
+                        hijo.impacto = nuevo_impacto;
+                        abiertos.push(hijo);
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
 // =========================================================
 // FUNCIONES AUXILIARES DE ALINEACIÓN (NIVEL 5)
 // =========================================================
@@ -886,7 +998,75 @@ static int GirosNecesarios_Tec(Orientacion actual, Orientacion objetivo) {
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
-    return ComportamientoTecnicoNivel_6(sensores); // ¡Son exactamente idénticos en su lógica operativa!
+    if (sensores.tiempo == 0) {
+        estado_n6 = 0; destn6_f = -1; destn6_c = -1;
+        hay_plan = false; plan.clear();
+        plan_n5.clear(); tramo_n5 = 0;
+    }
+
+    // Calcular el plan de tuberías si no lo tenemos
+    if (plan_n5.empty()) {
+        std::list<Paso> listaplan;
+        EncontrarPlan_N5_Tecnico(sensores.BelPosF, sensores.BelPosC, listaplan, sensores.max_ecologico);
+        for (auto& p : listaplan) plan_n5.push_back(p);
+    }
+
+    // Cuando el Ingeniero llama (COME), buscamos en qué tramo está
+    if (sensores.venpaca) {
+        int ing_f = sensores.GotoF;
+        int ing_c = sensores.GotoC;
+        
+        // Buscar qué tramo del plan corresponde a la posición del Ingeniero
+        for (int i = 0; i < (int)plan_n5.size(); i++) {
+            if (plan_n5[i].fil == ing_f && plan_n5[i].col == ing_c && i >= 1) {
+                // El Técnico va al tramo ANTERIOR (aguas arriba)
+                destn6_f = plan_n5[i - 1].fil;
+                destn6_c = plan_n5[i - 1].col;
+                tramo_n5 = i;
+                estado_n6 = 1;
+                hay_plan = false; plan.clear();
+                break;
+            }
+        }
+    }
+
+    if (estado_n6 == 0) return IDLE;
+
+    if (estado_n6 == 1) { // IR A LA CASILLA AGUAS ARRIBA
+        if (sensores.posF == destn6_f && sensores.posC == destn6_c) {
+            estado_n6 = 2; return IDLE;
+        }
+        if (!hay_plan) {
+            EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, tiene_zapatillas};
+            EncontrarPlan_N3(inicio, destn6_f, destn6_c, plan, true, false);
+            hay_plan = true;
+        }
+        if (!plan.empty()) {
+            Action a = plan.front();
+            if (a == WALK && sensores.agentes[2] != '_') return IDLE;
+            plan.pop_front(); return a;
+        } else {
+            hay_plan = false; return TURN_SR;
+        }
+    }
+
+    if (estado_n6 == 2) { // MIRAR HACIA EL INGENIERO (aguas abajo)
+        Paso tramo_ing = plan_n5[tramo_n5];
+        Orientacion ori = OrientacionHacia_Tec(sensores.posF, sensores.posC, tramo_ing.fil, tramo_ing.col);
+        if (sensores.rumbo != ori) {
+            int giros = GirosNecesarios_Tec(sensores.rumbo, ori);
+            return (giros <= 4) ? TURN_SR : TURN_SL;
+        }
+        
+        if (sensores.enfrente) {
+            estado_n6 = 0;
+            hay_plan = false; plan.clear();
+            return INSTALL;
+        }
+        return IDLE; // Esperar a que el Ingeniero me mire
+    }
+
+    return IDLE;
 }
 
 /**

@@ -370,6 +370,8 @@ private:
 
   bool EncontrarPlan_N5_Arquitecto(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco);
 
+  bool EncontrarPlan_N5_Tecnico(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco);
+
   // =========================================================
   // === MÁQUINA DE ESTADOS NIVEL 5 (OPERARIO) ==============
   // =========================================================

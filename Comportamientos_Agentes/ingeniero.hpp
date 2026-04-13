@@ -382,6 +382,7 @@ private:
     std::vector<Paso> plan_n5; // Vector para acceder a los tramos fácilmente
 
     bool EncontrarPlan_N5(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco);
+    list<Action> BusquedaEnAnchura_N5(const estado &origen, const estado &destino, bool agua_permitida = false, bool ignorar_entidades = false);
 
     // =========================================================
     // === MÁQUINA DE ESTADOS NIVEL 5 (JEFE DE OBRA) ==========
