@@ -99,6 +99,7 @@ int ComportamientoIngeniero::VeoCasillaInteresante(char i, char c, char d, bool 
 //
 // Anticolisión: marca al Técnico como obstáculo ('P') en las 3 casillas frontales.
 // =========================================================================
+
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores) {
   Action accion = IDLE;
   ActualizarMapa(sensores);
@@ -314,8 +315,9 @@ bool ComportamientoIngeniero::es_camino(unsigned char c) const {
 // (nivel 1 permite pisar senderos 'S' y hierba 'H' directamente).
 // Usa ActualizarMapa para construir un mapa interno y matriz_visitas como feromonas.
 // Desempate en visitas: recto > izquierda > derecha (zurdo).
-// Callejón sin salida: gira 90° a la izquierda (4 giros de 45°).
+// Callejón sin salida: gira 90 grados a la izquierda (4 giros de 45 grados).
 // =========================================================================
+
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores) {
   Action accion = IDLE;
   ActualizarMapa(sensores);

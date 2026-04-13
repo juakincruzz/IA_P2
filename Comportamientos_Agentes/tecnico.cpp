@@ -5,6 +5,7 @@
 #include <set>
 #include <map>
 #include <vector>
+#include <algorithm>
 
 
 
@@ -15,84 +16,114 @@ using namespace std;
 // =========================================================================
 
 Action ComportamientoTecnico::think(Sensores sensores) {
-  Action accion = IDLE;
+    Action accion = IDLE;
 
 
-  // Decisión del agente según el nivel
-  switch (sensores.nivel) {
-    case 0: accion = ComportamientoTecnicoNivel_0(sensores); break;
-    case 1: accion = ComportamientoTecnicoNivel_1(sensores); break;
-    case 2: accion = ComportamientoTecnicoNivel_2(sensores); break;
-    case 3: accion = ComportamientoTecnicoNivel_3(sensores); break;
-    case 4: accion = ComportamientoTecnicoNivel_4(sensores); break;
-    case 5: accion = ComportamientoTecnicoNivel_5(sensores); break;
-    case 6: accion = ComportamientoTecnicoNivel_6(sensores); break;
-  }
+    // Decisión del agente según el nivel
+    switch (sensores.nivel) {
+        case 0: accion = ComportamientoTecnicoNivel_0(sensores); break;
+        case 1: accion = ComportamientoTecnicoNivel_1(sensores); break;
+        case 2: accion = ComportamientoTecnicoNivel_2(sensores); break;
+        case 3: accion = ComportamientoTecnicoNivel_3(sensores); break;
+        case 4: accion = ComportamientoTecnicoNivel_4(sensores); break;
+        case 5: accion = ComportamientoTecnicoNivel_5(sensores); break;
+        case 6: accion = ComportamientoTecnicoNivel_6(sensores); break;
+    }
 
-  return accion;
+    return accion;
 }
 
+// =========================================================================
+// FUNCIONES AUXILIARES - NIVEL 0 (Técnico)
+// =========================================================================
+
+/**
+    * @brief Comprueba accesibilidad por altura para el Técnico.
+    *        El Técnico siempre tiene desnivel máximo de 1 (sin mejora por zapatillas).
+*/
 char ComportamientoTecnico::ViablePorAltura(char casilla, int dif) {
-  // El técnico solo supera desniveles de 1, tenga o no zapatillas
-  if (abs(dif) <= 1) return casilla;
-  else return 'P';
+    if (abs(dif) <= 1) return casilla;
+    else return 'P';
 }
 
+/**
+    * @brief Evalúa las 3 casillas frontales y devuelve la dirección más interesante.
+    *        Prioridad: U (meta) > D (zapatillas) > C (camino).
+*/
 int ComportamientoTecnico::VeoCasillaInteresante(char i, char c, char d) {
-    // Prioridad: U > D (si no tenemos zapatillas) > C
-    if (c == 'U') return 2;
-    else if (i == 'U') return 1;
-    else if (d == 'U') return 3;
+    if (c == 'U')  return 2;
+    if (i == 'U')  return 1;
+    if (d == 'U')  return 3;
+
     // Buscar zapatillas si no las tenemos aún
     if (!tiene_zapatillas) {
         if (c == 'D') return 2;
-        else if (i == 'D') return 1;
-        else if (d == 'D') return 3;
+        if (i == 'D') return 1;
+        if (d == 'D') return 3;
     }
+
     if (c == 'C') return 2;
-    else if (i == 'C') return 1;
-    else if (d == 'C') return 3;
-    else return 0;
+    if (i == 'C') return 1;
+    if (d == 'C') return 3;
+
+    return 0;
 }
 
-// Niveles del técnico
+// =========================================================================
+// NIVEL 0 - COMPORTAMIENTO REACTIVO (Técnico)
+// =========================================================================
+// Estrategia: exploración guiada por feromonas, simétrica al Ingeniero pero
+// con desempate opuesto (recto > derecha > izquierda) para reducir colisiones.
+//
+// Mecanismos específicos del Técnico:
+//   - Protocolo de retroceso: ante deadlock con el Ingeniero, gira 180° y
+//     retrocede 3 pasos para despejar el camino.
+//   - Escape por visitas: si detecta que lleva muchas visitas en la misma
+//     casilla con el Ingeniero cerca, activa retroceso ampliado.
+//   - Anti-oscilación en 8 dirs con prioridad C/D/U > S > H (igual que Ingeniero).
+//   - Penalización de terreno no-camino (+50 visitas) para volver a 'C'.
+// =========================================================================
+
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
     Action accion = IDLE;
     ActualizarMapa(sensores);
 
-    
-
+    // Recoger zapatillas, parar si estamos en la meta
     if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
     if (sensores.superficie[0] == 'U') return IDLE;
 
-    // Protocolo de retroceso
+    // Protocolo de retroceso: 4 giros (180°) + 3 WALK hacia atrás
     if (retroceder_n0 > 0) {
         retroceder_n0--;
+
         if (retroceder_n0 >= 3) { last_action = TURN_SR; return TURN_SR; }
-        else                     { last_action = WALK;    return WALK;    }
+        else                    { last_action = WALK;    return WALK;    }
     }
 
+    // Actualizar feromonas y resetear bloqueo tras avanzar
     if (last_action == WALK) giros_sin_avanzar_n0 = 0;
     matriz_visitas[sensores.posF][sensores.posC]++;
 
-    // Penalizar casillas que no son camino para volver a 'C' lo antes posible
+    // Penalizar terreno no-camino para incentivar retorno a 'C'
     unsigned char terreno_actual = sensores.superficie[0];
-    if (terreno_actual == 'H' || terreno_actual == 'S') {
-        matriz_visitas[sensores.posF][sensores.posC] += 50;
-    }
+    if (terreno_actual == 'H' || terreno_actual == 'S') matriz_visitas[sensores.posF][sensores.posC] += 50;
 
+    // Evaluar accesibilidad por altura
     char ci = ViablePorAltura(sensores.superficie[1], sensores.cota[1] - sensores.cota[0]);
     char cc = ViablePorAltura(sensores.superficie[2], sensores.cota[2] - sensores.cota[0]);
     char cd = ViablePorAltura(sensores.superficie[3], sensores.cota[3] - sensores.cota[0]);
 
+    // Anticolisión: marcar al Ingeniero como obstáculo
     if (sensores.agentes[1] == 'i') ci = 'P';
     if (sensores.agentes[2] == 'i') cc = 'P';
     if (sensores.agentes[3] == 'i') cd = 'P';
 
+    // Si la meta está adyacente, ir directamente
     if (cc == 'U') { last_action = WALK;    return WALK;    }
     if (ci == 'U') { last_action = TURN_SL; return TURN_SL; }
     if (cd == 'U') { last_action = TURN_SR; return TURN_SR; }
 
+    // Calcular coordenadas adyacentes
     ubicacion actual   = {sensores.posF, sensores.posC, sensores.rumbo};
     ubicacion u_izq    = actual;
     u_izq.brujula      = (Orientacion)((actual.brujula + 7) % 8);
@@ -102,45 +133,20 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
     u_der.brujula      = (Orientacion)((actual.brujula + 1) % 8);
     u_der              = Delante(u_der);
 
+    // Casillas transitables: C/D siempre; S/H si bloqueado o fuera de camino
     bool desesperado = (giros_sin_avanzar_n0 > 5);
     bool fuera_de_camino = (sensores.superficie[0] == 'H' || sensores.superficie[0] == 'S');
     bool ok_i = (ci == 'C' || ci == 'D' || ((desesperado || fuera_de_camino) && (ci == 'S' || ci == 'H')));
     bool ok_c = (cc == 'C' || cc == 'D' || ((desesperado || fuera_de_camino) && (cc == 'S' || cc == 'H')));
     bool ok_d = (cd == 'C' || cd == 'D' || ((desesperado || fuera_de_camino) && (cd == 'S' || cd == 'H')));
 
+    // Consultar feromonas
     int vis_i = ok_i ? matriz_visitas[u_izq.f][u_izq.c]      : 999999;
     int vis_c = ok_c ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
     int vis_d = ok_d ? matriz_visitas[u_der.f][u_der.c]       : 999999;
 
-    /*
-    // === SESGO HACIA U: si la hemos visto en el mapa, acercarnos ===
-    int u_f = -1, u_c = -1;
-    for (int f = 0; f < (int)mapaResultado.size() && u_f == -1; f++)
-        for (int c = 0; c < (int)mapaResultado[0].size() && u_f == -1; c++)
-            if (mapaResultado[f][c] == 'U') { u_f = f; u_c = c; }
-
-    if (u_f != -1) {
-        int df = u_f - sensores.posF;
-        int dc = u_c - sensores.posC;
-        if (ok_i) {
-            int dfi = u_izq.f - sensores.posF, dci = u_izq.c - sensores.posC;
-            if ((df != 0 && dfi * df < 0) || (dc != 0 && dci * dc < 0)) vis_i += 500;
-        }
-        if (ok_c) {
-            int dfc = u_frente.f - sensores.posF, dcc = u_frente.c - sensores.posC;
-            if ((df != 0 && dfc * df < 0) || (dc != 0 && dcc * dc < 0)) vis_c += 500;
-        }
-        if (ok_d) {
-            int dfd = u_der.f - sensores.posF, dcd = u_der.c - sensores.posC;
-            if ((df != 0 && dfd * df < 0) || (dc != 0 && dcd * dc < 0)) vis_d += 500;
-        }
-    }
-    // ===============================================================
-    */
-
-    int min_vis = vis_c;
-    if (vis_i < min_vis) min_vis = vis_i;
-    if (vis_d < min_vis) min_vis = vis_d;
+    // Elegir dirección menos visitada (desempate: recto > derecha > izquierda)
+    int min_vis = min({vis_i, vis_c, vis_d});
 
     int pos = 0;
     if (min_vis < 999999) {
@@ -150,7 +156,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
         else                       pos = 1;
     }
 
-    // Mirar filas lejanas
+    // Fallback: buscar caminos en filas 2-3 del cono de visión
     if (pos == 0) {
         bool hay_izq = false, hay_der = false;
         for (int k = 4; k <= 5; k++)
@@ -164,16 +170,16 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
 
         if (hay_der && !hay_izq) pos = 3;
         else if (hay_izq && !hay_der) pos = 1;
-        else if (hay_der && hay_izq) pos = girar_derecha_n0 ? 3 : 1; // ALTERNANCIA
+        else if (hay_der && hay_izq) pos = girar_derecha_n0 ? 3 : 1; 
     }
 
+    // Contador de turnos sin avanzar
     giros_sin_avanzar_n0++;
 
-    // Anti-bucle ORIGINAL (sin cambios de umbrales)
+    // Deadlock con Ingeniero: activar retroceso
     if (pos == 0) {
-        
-
         bool veo_ing = false;
+
         for (int k = 1; k <= 3; k++)
             if (sensores.agentes[k] == 'i') veo_ing = true;
 
@@ -191,7 +197,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
         }
     }
 
-    // NUEVO: escape basado en visitas — detecta ciclos que el contador clásico no ve
+    // Escape por visitas: si muchas visitas en esta casilla con Ingeniero cerca
     {
         bool veo_ing = false;
         for (int k = 1; k <= 3; k++)
@@ -201,24 +207,25 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
             retroceder_n0 = 10;
             girar_derecha_n0 = !girar_derecha_n0;
             giros_sin_avanzar_n0 = 0;
-            matriz_visitas[sensores.posF][sensores.posC] = 0; // ← AÑADIR esta línea
+            matriz_visitas[sensores.posF][sensores.posC] = 0;
             last_action = TURN_SR;
             return TURN_SR;
         }
     }
 
-    // Anti-oscilación: si llevamos mucho sin avanzar, forzar WALK a la primera casilla transitable
+     // Anti-oscilación: búsqueda en 8 direcciones priorizando C/D/U > S > H
     if (giros_sin_avanzar_n0 > 10) {
-        // Buscar en las 8 direcciones una casilla C/D/U/S accesible
         for (int dir = 0; dir < 8; dir++) {
             ubicacion test = actual;
             test.brujula = (Orientacion)dir;
             ubicacion destino = Delante(test);
-            if (destino.f >= 0 && destino.f < (int)mapaResultado.size() &&
-                destino.c >= 0 && destino.c < (int)mapaResultado[0].size()) {
+
+            if (destino.f >= 0 && destino.f < (int)mapaResultado.size() && destino.c >= 0 && destino.c < (int)mapaResultado[0].size()) {
                 unsigned char celda = mapaResultado[destino.f][destino.c];
+
                 if (celda == 'C' || celda == 'D' || celda == 'U' || celda == 'S' || celda == 'H') {
                     int dif = abs(mapaCotas[destino.f][destino.c] - mapaCotas[sensores.posF][sensores.posC]);
+
                     if (dif <= 1) {
                         // Orientarme hacia esa dirección
                         if (sensores.rumbo == (Orientacion)dir) {
@@ -236,12 +243,14 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
         }
     }
 
+    // Ejecutar acción elegida
     switch (pos) {
         case 2: accion = WALK; break;
         case 1: accion = TURN_SL; break;
         case 3: accion = TURN_SR; break;
         default: accion = girar_derecha_n0 ? TURN_SR : TURN_SL; break;
     }
+
     last_action = accion;
     return accion;
 }
