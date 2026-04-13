@@ -781,16 +781,29 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c
     if (start_terr == 'M' || start_terr == 'P') return false; 
     
     int start_H = mapaCotas[start_f][start_c];
+    std::vector<int> alturas_inicio;
     
-    EstadoN4_Tecnico st = {start_f, start_c, start_H};
-    NodoN4_Tecnico nodo;
-    nodo.st = st;
-    Paso p = {start_f, start_c, 0}; 
-    nodo.secuencia.push_back(p);
-    nodo.impacto = 0;
+    if (start_terr == 'A') alturas_inicio.push_back(start_H);
+    else {
+        alturas_inicio.push_back(start_H);
+        if (start_H > 0) alturas_inicio.push_back(start_H - 1);
+        if (start_H < 9) alturas_inicio.push_back(start_H + 1);
+    }
 
-    abiertos.push(nodo);
-    cerrados[st] = 0;
+    for (int h : alturas_inicio) {
+        EstadoN4_Tecnico st = {start_f, start_c, h};
+        NodoN4_Tecnico nodo;
+        nodo.st = st;
+        int op = h - start_H;
+        Paso p = {start_f, start_c, op}; 
+        nodo.secuencia.push_back(p);
+        nodo.impacto = imp_op(start_terr, op);
+
+        if (nodo.impacto <= limite_eco) {
+            abiertos.push(nodo);
+            cerrados[st] = nodo.impacto;
+        }
+    }
 
     int df[] = {-1, 1, 0, 0};
     int dc[] = {0, 0, 1, -1};
@@ -873,116 +886,7 @@ static int GirosNecesarios_Tec(Orientacion actual, Orientacion objetivo) {
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
-
-    if (sensores.tiempo == 0) {
-        estado_obra_tec = TEC_ESPERAR_AVISO;
-        plan.clear();
-        hay_plan = false;
-        plan_n5.clear();
-        tramo_n5 = 0;
-        destn6_f = -1;
-        destn6_c = -1;
-        terraformado_n5 = false;
-    }
-
-    if (plan_n5.empty()) {
-        std::list<Paso> lista_plan;
-        // Faltaba añadir el 4º argumento aquí:
-        EncontrarPlan_N5_Arquitecto(sensores.BelPosF, sensores.BelPosC, lista_plan, sensores.max_ecologico);
-        
-        for (auto p : lista_plan) plan_n5.push_back(p);
-    }
-
-    // SI EL JEFE PITA (COME), REACCIONAMOS AL VUELO
-    if (sensores.venpaca) {
-        int ing_f = sensores.GotoF;
-        int ing_c = sensores.GotoC;
-        
-        int tramo_encontrado = -1;
-        for (int i = 1; i < (int)plan_n5.size(); i++) {
-            if (plan_n5[i].fil == ing_f && plan_n5[i].col == ing_c) {
-                tramo_encontrado = i - 1; 
-                break;
-            }
-        }
-
-        if (tramo_encontrado >= 0) {
-            if (destn6_f != plan_n5[tramo_encontrado].fil || destn6_c != plan_n5[tramo_encontrado].col) {
-                tramo_n5 = tramo_encontrado;
-                destn6_f = plan_n5[tramo_n5].fil; // El Técnico va aguas arriba
-                destn6_c = plan_n5[tramo_n5].col;
-                estado_obra_tec = TEC_IR_CASILLA;
-                plan.clear(); 
-                hay_plan = false;
-                terraformado_n5 = false;
-            }
-        }
-    }
-
-    if (estado_obra_tec == TEC_ESPERAR_AVISO) {
-        return IDLE;
-    }
-
-    if (estado_obra_tec == TEC_IR_CASILLA) {
-        if (sensores.posF == destn6_f && sensores.posC == destn6_c) {
-            Paso mi_obj = plan_n5[tramo_n5];
-            // El Técnico NO puede hacer DIG ni RAISE - solo el Ingeniero terraforma
-            terraformado_n5 = true;
-            estado_obra_tec = TEC_ALINEARSE;
-        } else {
-            if (!hay_plan) {
-                EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, false};
-                if (mapaResultado[sensores.posF][sensores.posC] == 'D') inicio.zapatillas = true;
-                EncontrarPlan_N3(inicio, destn6_f, destn6_c, plan, true); 
-                hay_plan = true;
-            }
-
-            if (!plan.empty()) {
-                Action a = plan.front();
-                if (a == WALK) {
-                    int nf = sensores.posF, nc = sensores.posC;
-                    switch(sensores.rumbo) {
-                        case norte: nf--; break; case noreste: nf--; nc++; break;
-                        case este: nc++; break; case sureste: nf++; nc++; break;
-                        case sur: nf++; break; case suroeste: nf++; nc--; break;
-                        case oeste: nc--; break; case noroeste: nf--; nc--; break;
-                    }
-                    if (nf >= 0 && nf < (int)mapaEntidades.size() && nc >= 0 && nc < (int)mapaEntidades[0].size()) {
-                        if (mapaEntidades[nf][nc] != '_' && mapaEntidades[nf][nc] != '?') {
-                            return IDLE; // Cedemos el paso temporalmente sin borrar el A-Estrella
-                        }
-                    }
-                }
-                plan.pop_front();
-                return a;
-            } else {
-                hay_plan = false;
-                return IDLE;
-            }
-        }
-    }
-
-    if (estado_obra_tec == TEC_ALINEARSE) {
-        Paso su_obj = plan_n5[tramo_n5 + 1]; // Miramos hacia aguas abajo
-        Orientacion ori_deseada = OrientacionHacia_Tec(sensores.posF, sensores.posC, su_obj.fil, su_obj.col);
-
-        if (sensores.rumbo != ori_deseada) {
-            int giros = GirosNecesarios_Tec(sensores.rumbo, ori_deseada);
-            return (giros <= 4) ? TURN_SR : TURN_SL;
-        }
-
-        if (sensores.enfrente) {
-            cout << "[TÉCNICO] Contacto visual mutuo. ¡INSTALANDO!" << endl;
-            estado_obra_tec = TEC_ESPERAR_AVISO;
-            hay_plan = false;
-            plan.clear();
-            return INSTALL;
-        } 
-        
-        return IDLE; // Esperamos pacientes al Jefe
-    }
-
-    return IDLE;
+    return ComportamientoTecnicoNivel_6(sensores); // ¡Son exactamente idénticos en su lógica operativa!
 }
 
 /**
@@ -994,11 +898,9 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
     ActualizarMapa(sensores);
     if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
-
     if (sensores.tiempo == 0) {
         estado_n6 = 0; destn6_f = -1; destn6_c = -1;
-        intento_orbita_n6 = 0;
-        hay_plan = false; plan.clear();
+        hay_plan = false; plan.clear(); 
     }
 
     if (sensores.venpaca) {
@@ -1017,35 +919,31 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
             case oeste: nc--; break; case noroeste: nf--; nc--; break;
         }
         if (nf < 0 || nf >= (int)mapaResultado.size() || nc < 0 || nc >= (int)mapaResultado[0].size()) return false;
-        
         unsigned char real_c = sens.superficie[2]; 
         if (real_c == 'P' || real_c == 'M' || real_c == 'A') return false;
         if (real_c == 'B' && !tiene_zapatillas) return false;
-        
         if (mapaResultado[nf][nc] != '?') {
-            if (abs(mapaCotas[nf][nc] - mapaCotas[sens.posF][sens.posC]) > 1) return false;
+            if (abs(mapaCotas[nf][nc] - mapaCotas[sens.posF][sens.posC]) > 1) return false; // El técnico SIEMPRE es 1
         }
         return true;
     };
 
     switch(estado_n6) {
-        case 0: // ESPERA PEREZOSA
-            return IDLE; 
+        case 0: return IDLE; 
 
-        case 1: // IR ADYACENTE AL TUBO
-            if (abs(sensores.posF - destn6_f) + abs(sensores.posC - destn6_c) == 1) {
-                estado_n6 = 2; intento_orbita_n6 = 0; return IDLE;
+        case 1: // IR AL TUBO
+            if (sensores.posF == destn6_f && sensores.posC == destn6_c) {
+                estado_n6 = 2; return IDLE;
             } else {
                 if (!hay_plan) {
                     EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, tiene_zapatillas};
-                    // parar_adyacente = TRUE para detenernos al lado del tubo
-                    EncontrarPlan_N3(inicio, destn6_f, destn6_c, plan, true, true); 
+                    EncontrarPlan_N3(inicio, destn6_f, destn6_c, plan, true, false); 
                     hay_plan = true;
                 }
                 if (!plan.empty()) {
                     Action a = plan.front();
                     if (a == WALK) {
-                        if (sensores.agentes[2] != '_' || sensores.choque) return IDLE; // Paciencia con NPCs
+                        if (sensores.agentes[2] != '_' || sensores.choque) return IDLE; 
                         if (!es_seguro(sensores)) { hay_plan = false; plan.clear(); return TURN_SR; }
                     }
                     plan.pop_front(); return a;
@@ -1054,65 +952,20 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
                 }
             }
 
-        case 2: // ALINEARSE Y ESPERAR CONTACTO VISUAL
-            {
-                Orientacion ori = OrientacionHacia_Tec(sensores.posF, sensores.posC, destn6_f, destn6_c);
-                if (sensores.rumbo != ori) return TURN_SR;
-                
+        case 2: // MIRAR AL JEFE Y ESPERAR A QUE ÉL NOS MIRE
+            // 'i' minúscula o 'I' mayúscula por si acaso
+            if (sensores.agentes[2] == 'i' || sensores.agentes[2] == 'I') {
                 if (sensores.enfrente) {
-                    cout << "[TÉCNICO N6] ¡Contacto visual! INSTALANDO." << endl;
-                    estado_n6 = 4; hay_plan = false; plan.clear(); return INSTALL;
+                    estado_n6 = 0; // Reset para el siguiente
+                    hay_plan = false; plan.clear(); 
+                    return INSTALL;
                 } else {
-                    // Si el Jefe no nos mira después de 5 turnos, estamos en el lado ciego. ¡Orbitamos!
-                    intento_orbita_n6++;
-                    if (intento_orbita_n6 > 5) {
-                        estado_n6 = 3; 
-                        hay_plan = false; plan.clear();
-                    }
-                    return IDLE;
+                    return IDLE; // Le veo, solo le miro fijamente hasta que se gire
                 }
             }
-
-        case 3: // ORBITAR (Cambiar a otra cara del tubo)
-            if (!hay_plan) {
-                std::vector<std::pair<int,int>> opciones;
-                int df[] = {-1, 1, 0, 0};
-                int dc[] = {0, 0, -1, 1};
-                for(int i=0; i<4; i++){
-                    int cand_f = destn6_f + df[i];
-                    int cand_c = destn6_c + dc[i];
-                    if(cand_f == sensores.posF && cand_c == sensores.posC) continue; // No elegir mi casilla actual
-                    if(cand_f >= 0 && cand_f < (int)mapaResultado.size() && cand_c >= 0 && cand_c < (int)mapaResultado[0].size()){
-                        unsigned char c = mapaResultado[cand_f][cand_c];
-                        if (c != 'M' && c != 'P' && c != 'A' && c != '?') opciones.push_back({cand_f, cand_c});
-                    }
-                }
-                if (!opciones.empty()) {
-                    // Elegir una al azar para moverse
-                    EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, tiene_zapatillas};
-                    unsigned char temp = mapaResultado[destn6_f][destn6_c];
-                    mapaResultado[destn6_f][destn6_c] = 'M'; // Evitar atravesar el tubo
-                    EncontrarPlan_N3(inicio, opciones[0].first, opciones[0].second, plan, true, false);
-                    mapaResultado[destn6_f][destn6_c] = temp;
-                    hay_plan = true;
-                } else {
-                    return TURN_SR;
-                }
-            }
-            if (hay_plan && !plan.empty()) {
-                Action a = plan.front();
-                if (a == WALK && (!es_seguro(sensores) || sensores.agentes[2] != '_')) {
-                    hay_plan = false; plan.clear(); return TURN_SR;
-                }
-                plan.pop_front(); return a;
-            } else {
-                hay_plan = false; estado_n6 = 1; return IDLE;
-            }
-
-        case 4: // ESPERA ENTRE TUBOS
-            return IDLE;
+            return TURN_SR; // Giro hasta encontrarlo
     }
-    return IDLE; 
+    return IDLE;
 }
 
 
