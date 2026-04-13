@@ -675,6 +675,121 @@ static int GirosNecesarios(Orientacion actual, Orientacion objetivo) {
     return ((int)objetivo - (int)actual + 8) % 8;
 }
 
+bool ComportamientoIngeniero::EncontrarPlan_N5(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco) {
+    plan_resultante.clear();
+    std::priority_queue<NodoN4, std::vector<NodoN4>, std::greater<NodoN4>> abiertos;
+    std::map<EstadoN4, int> cerrados;
+
+    auto imp_install = [](unsigned char terreno) {
+        if (terreno == 'A') return 50;
+        if (terreno == 'H') return 45;
+        if (terreno == 'S') return 25;
+        if (terreno == 'C' || terreno == 'U') return 15;
+        return 30;
+    };
+
+    auto imp_op = [](unsigned char terreno, int op) {
+        if (op == 1) {
+            if (terreno == 'H') return 55;
+            if (terreno == 'S') return 30;
+            if (terreno == 'C' || terreno == 'U') return 10;
+            return 40;
+        } else if (op == -1) {
+            if (terreno == 'H') return 65;
+            if (terreno == 'S') return 40;
+            if (terreno == 'C' || terreno == 'U') return 25;
+            return 50;
+        }
+        return 0;
+    };
+
+    unsigned char start_terr = mapaResultado[start_f][start_c];
+    if (start_terr == 'M' || start_terr == 'P') return false; 
+
+    int start_H = mapaCotas[start_f][start_c];
+    std::vector<int> alturas_inicio;
+
+    if (start_terr == 'A') {
+        alturas_inicio.push_back(start_H); 
+    } else {
+        alturas_inicio.push_back(start_H);
+        if (start_H > 0) alturas_inicio.push_back(start_H - 1);
+        if (start_H < 9) alturas_inicio.push_back(start_H + 1); 
+    }
+
+    for (int h : alturas_inicio) {
+        EstadoN4 st = {start_f, start_c, h};
+        NodoN4 nodo;
+        nodo.st = st;
+        int op = h - start_H;
+        Paso p = {start_f, start_c, op}; 
+        nodo.secuencia.push_back(p);
+        nodo.impacto = imp_op(start_terr, op);
+        
+        if (nodo.impacto <= limite_eco) {
+            abiertos.push(nodo);
+            cerrados[st] = nodo.impacto;
+        }
+    }
+
+    int df[] = {-1, 1, 0, 0};
+    int dc[] = {0, 0, 1, -1};
+
+    while (!abiertos.empty()) {
+        NodoN4 actual = abiertos.top();
+        abiertos.pop();
+
+        if (mapaResultado[actual.st.f][actual.st.c] == 'U') {
+            plan_resultante = actual.secuencia;
+            return true;
+        }
+
+        for (int i = 0; i < 4; i++) {
+            int nf = actual.st.f + df[i];
+            int nc = actual.st.c + dc[i];
+
+            if (nf < 0 || nf >= (int)mapaResultado.size() || nc < 0 || nc >= (int)mapaResultado[0].size()) continue;
+
+            unsigned char n_terr = mapaResultado[nf][nc];
+            if (n_terr == 'M' || n_terr == 'P' || n_terr == '?') continue; 
+            if (n_terr == 'B' && !tiene_zapatillas) continue;
+
+            int nH = mapaCotas[nf][nc];
+            std::vector<int> alturas_vecino;
+
+            if (n_terr == 'A') {
+                alturas_vecino.push_back(nH); 
+            } else {
+                alturas_vecino.push_back(nH);
+                if (nH > 0) alturas_vecino.push_back(nH - 1);
+                if (nH < 9) alturas_vecino.push_back(nH + 1);
+            }
+
+            for (int nh : alturas_vecino) {
+                if (abs(actual.st.h - nh) <= 1) {
+                    EstadoN4 siguiente = {nf, nc, nh};
+                    int op = nh - nH;
+                    
+                    int impacto_tramo = imp_op(n_terr, op) + imp_install(n_terr);
+                    int nuevo_impacto = actual.impacto + impacto_tramo;
+
+                    if (nuevo_impacto <= limite_eco) {
+                        if (cerrados.find(siguiente) == cerrados.end() || cerrados[siguiente] > nuevo_impacto) {
+                            cerrados[siguiente] = nuevo_impacto;
+                            NodoN4 hijo = actual;
+                            hijo.st = siguiente;
+                            Paso p_nuevo = {nf, nc, op};
+                            hijo.secuencia.push_back(p_nuevo);
+                            hijo.impacto = nuevo_impacto;
+                            abiertos.push(hijo);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return false; 
+}
 
 /**
  * @brief Comportamiento del ingeniero para el Nivel 5.
@@ -715,7 +830,8 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
 
     if (!plan_tuberias_hecho) {
         std::list<Paso> lista_plan;
-        if (EncontrarPlan_N4(sensores.BelPosF, sensores.BelPosC, lista_plan, sensores.max_ecologico)) {
+        // Usamos el nuevo cerebro modular exclusivo para Nivel 5 y 6
+        if (EncontrarPlan_N5(sensores.BelPosF, sensores.BelPosC, lista_plan, sensores.max_ecologico)) {
             plan_tuberias_hecho = true;
             for (auto p : lista_plan) plan_n5.push_back(p);
             est_n6 = 1; 

@@ -381,6 +381,8 @@ private:
     bool terraformado_n5 = false;
     std::vector<Paso> plan_n5; // Vector para acceder a los tramos fácilmente
 
+    bool EncontrarPlan_N5(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco);
+
     // =========================================================
     // === MÁQUINA DE ESTADOS NIVEL 5 (JEFE DE OBRA) ==========
     // =========================================================
