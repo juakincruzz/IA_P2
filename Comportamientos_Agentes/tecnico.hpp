@@ -359,6 +359,13 @@ private:
   struct NodoN4_Tecnico {
     EstadoN4_Tecnico st;
     std::list<Paso> secuencia;
+    int impacto = 0 ; // Impacto ecológico acumulado
+
+    bool operator>(const NodoN4_Tecnico& otro) const {
+      int coste_a = (int)secuencia.size() * 10000 + impacto;
+      int coste_b = (int)otro.secuencia.size() * 10000 + otro.impacto;
+      return coste_a > coste_b;
+    }
   };
 
   bool EncontrarPlan_N5_Arquitecto(int start_f, int start_c, std::list<Paso>& plan_resultante);

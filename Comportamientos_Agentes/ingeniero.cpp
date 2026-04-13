@@ -523,88 +523,83 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_3(Sensores sensores
 // =========================================================
 
 bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::list<Paso>& plan_resultante) {
-    plan_resultante.clear();
-    std::queue<NodoN4> abiertos;
-    std::set<EstadoN4> cerrados;
+  plan_resultante.clear();
+  std::priority_queue<NodoN4, std::vector<NodoN4>, std::greater<NodoN4>> abiertos;
+  std::set<EstadoN4> cerrados;
 
-    unsigned char start_terr = mapaResultado[start_f][start_c];
-    if (start_terr == 'M' || start_terr == 'P') return false; 
-    
-    int start_H = mapaCotas[start_f][start_c];
-    std::vector<int> alturas_inicio;
-    
-    if (start_terr == 'A') {
-        alturas_inicio.push_back(start_H); 
-    } else {
-        alturas_inicio.push_back(start_H);
-        if (start_H > 0) alturas_inicio.push_back(start_H - 1);
-        if (start_H < 9) alturas_inicio.push_back(start_H + 1); 
+  unsigned char start_terr = mapaResultado[start_f][start_c];
+  if (start_terr == 'M' || start_terr == 'P') return false; 
+
+  int start_H = mapaCotas[start_f][start_c];
+  std::vector<int> alturas_inicio;
+
+  if (start_terr == 'A') {
+    alturas_inicio.push_back(start_H); 
+  } else {
+    alturas_inicio.push_back(start_H);
+    if (start_H > 0) alturas_inicio.push_back(start_H - 1);
+    if (start_H < 9) alturas_inicio.push_back(start_H + 1); 
+  }
+
+  for (int h : alturas_inicio) {
+    EstadoN4 st = {start_f, start_c, h};
+    NodoN4 nodo;
+    nodo.st = st;
+    Paso p = {start_f, start_c, h - start_H}; 
+    nodo.secuencia.push_back(p);
+    abiertos.push(nodo);
+    cerrados.insert(st);
+  }
+
+  int df[] = {-1, 1, 0, 0};
+  int dc[] = {0, 0, 1, -1};
+
+  while (!abiertos.empty()) {
+    NodoN4 actual = abiertos.top();
+    abiertos.pop();
+
+    if (mapaResultado[actual.st.f][actual.st.c] == 'U') {
+      plan_resultante = actual.secuencia;
+      return true;
     }
 
-    for (int h : alturas_inicio) {
-        EstadoN4 st = {start_f, start_c, h};
-        NodoN4 nodo;
-        nodo.st = st;
-        Paso p = {start_f, start_c, h - start_H}; 
-        nodo.secuencia.push_back(p);
-        
-        abiertos.push(nodo);
-        cerrados.insert(st);
-    }
+    for (int i = 0; i < 4; i++) {
+      int nf = actual.st.f + df[i];
+      int nc = actual.st.c + dc[i];
 
-    int df[] = {-1, 1, 0, 0};
-    int dc[] = {0, 0, 1, -1};
+      if (nf < 0 || nf >= mapaResultado.size() || nc < 0 || nc >= mapaResultado[0].size()) continue;
 
-    while (!abiertos.empty()) {
-        NodoN4 actual = abiertos.front();
-        abiertos.pop();
+      unsigned char n_terr = mapaResultado[nf][nc];
+      if (n_terr == 'M' || n_terr == 'P' || n_terr == '?') continue; 
 
-        if (mapaResultado[actual.st.f][actual.st.c] == 'U') {
-            plan_resultante = actual.secuencia;
-            return true;
+      int nH = mapaCotas[nf][nc];
+      std::vector<int> alturas_vecino;
+
+      if (n_terr == 'A') {
+        alturas_vecino.push_back(nH); 
+      } else {
+        alturas_vecino.push_back(nH);
+        if (nH > 0) alturas_vecino.push_back(nH - 1);
+        if (nH < 9) alturas_vecino.push_back(nH + 1);
+      }
+
+      for (int nh : alturas_vecino) {
+        if (actual.st.h >= nh && (actual.st.h - nh) <= 1) {
+          EstadoN4 siguiente = {nf, nc, nh};
+
+          if (cerrados.find(siguiente) == cerrados.end()) {
+            cerrados.insert(siguiente);
+            NodoN4 hijo = actual;
+            hijo.st = siguiente;
+            Paso p = {nf, nc, nh - nH};
+            hijo.secuencia.push_back(p);
+            abiertos.push(hijo);
+          }
         }
-
-        for (int i = 0; i < 4; i++) {
-            int nf = actual.st.f + df[i];
-            int nc = actual.st.c + dc[i];
-
-            if (nf < 0 || nf >= mapaResultado.size() || nc < 0 || nc >= mapaResultado[0].size()) continue;
-
-            unsigned char n_terr = mapaResultado[nf][nc];
-            if (n_terr == 'M' || n_terr == 'P' || n_terr == '?') continue; 
-
-            int nH = mapaCotas[nf][nc];
-            std::vector<int> alturas_vecino;
-            
-            if (n_terr == 'A') {
-                alturas_vecino.push_back(nH); 
-            } else {
-                alturas_vecino.push_back(nH);
-                if (nH > 0) alturas_vecino.push_back(nH - 1);
-                if (nH < 9) alturas_vecino.push_back(nH + 1);
-            }
-
-            for (int nh : alturas_vecino) {
-                // ¡LA LEY DE LA GRAVEDAD Y LA FÍSICA DE ROBOTS! 
-                // El agua fluye (actual.st.h >= nh) Y el robot puede bajar a pie (actual.st.h - nh <= 1)
-                if (actual.st.h >= nh && (actual.st.h - nh) <= 1) {
-                    EstadoN4 siguiente = {nf, nc, nh};
-                    
-                    if (cerrados.find(siguiente) == cerrados.end()) {
-                        cerrados.insert(siguiente);
-                        
-                        NodoN4 hijo = actual;
-                        hijo.st = siguiente;
-                        Paso p = {nf, nc, nh - nH};
-                        hijo.secuencia.push_back(p);
-                        
-                        abiertos.push(hijo);
-                    }
-                }
-            }
-        }
+      }
     }
-    return false; 
+  }
+  return false; 
 }
 
 /**

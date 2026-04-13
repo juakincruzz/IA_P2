@@ -676,7 +676,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_4(Sensores sensores) {
 // Clon exacto del algoritmo del Ingeniero para que ambos deduzcan el mismo plan
 bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c, std::list<Paso>& plan_resultante) {
     plan_resultante.clear();
-    std::queue<NodoN4_Tecnico> abiertos;
+    std::priority_queue<NodoN4_Tecnico, std::vector<NodoN4_Tecnico>, std::greater<NodoN4_Tecnico>> abiertos;
     std::set<EstadoN4_Tecnico> cerrados;
 
     unsigned char start_terr = mapaResultado[start_f][start_c];
@@ -706,7 +706,7 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c
     int dc[] = {0, 0, 1, -1};
 
     while (!abiertos.empty()) {
-        NodoN4_Tecnico actual = abiertos.front();
+        NodoN4_Tecnico actual = abiertos.top();
         abiertos.pop();
 
         if (mapaResultado[actual.st.f][actual.st.c] == 'U') {
