@@ -18,7 +18,6 @@ using namespace std;
 Action ComportamientoTecnico::think(Sensores sensores) {
     Action accion = IDLE;
 
-
     // Decisión del agente según el nivel
     switch (sensores.nivel) {
         case 0: accion = ComportamientoTecnicoNivel_0(sensores); break;
@@ -38,7 +37,7 @@ Action ComportamientoTecnico::think(Sensores sensores) {
 // =========================================================================
 
 /**
-    * @brief Comprueba accesibilidad por altura para el Técnico.
+    * @brief Compruebo accesibilidad por altura para el Técnico.
     *        El Técnico siempre tiene desnivel máximo de 1 (sin mejora por zapatillas).
 */
 char ComportamientoTecnico::ViablePorAltura(char casilla, int dif) {
@@ -47,7 +46,7 @@ char ComportamientoTecnico::ViablePorAltura(char casilla, int dif) {
 }
 
 /**
-    * @brief Evalúa las 3 casillas frontales y devuelve la dirección más interesante.
+    * @brief Evalúo las 3 casillas frontales y devuelve la dirección más interesante.
     *        Prioridad: U (meta) > D (zapatillas) > C (camino).
 */
 int ComportamientoTecnico::VeoCasillaInteresante(char i, char c, char d) {
@@ -55,7 +54,7 @@ int ComportamientoTecnico::VeoCasillaInteresante(char i, char c, char d) {
     if (i == 'U')  return 1;
     if (d == 'U')  return 3;
 
-    // Buscar zapatillas si no las tenemos aún
+    // Busco zapatillas si no las tengo aún
     if (!tiene_zapatillas) {
         if (c == 'D') return 2;
         if (i == 'D') return 1;
@@ -88,7 +87,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
     Action accion = IDLE;
     ActualizarMapa(sensores);
 
-    // Recoger zapatillas, parar si estamos en la meta
+    // Recojo zapatillas, paro si estamos en la meta
     if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
     if (sensores.superficie[0] == 'U') return IDLE;
 
@@ -100,30 +99,30 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
         else                    { last_action = WALK;    return WALK;    }
     }
 
-    // Actualizar feromonas y resetear bloqueo tras avanzar
+    // Actualizo feromonas y reseteo bloqueo tras avanzar
     if (last_action == WALK) giros_sin_avanzar_n0 = 0;
     matriz_visitas[sensores.posF][sensores.posC]++;
 
-    // Penalizar terreno no-camino para incentivar retorno a 'C'
+    // Penalizo terreno no-camino para incentivar retorno a 'C'
     unsigned char terreno_actual = sensores.superficie[0];
     if (terreno_actual == 'H' || terreno_actual == 'S') matriz_visitas[sensores.posF][sensores.posC] += 50;
 
-    // Evaluar accesibilidad por altura
+    // Evalúo accesibilidad por altura
     char ci = ViablePorAltura(sensores.superficie[1], sensores.cota[1] - sensores.cota[0]);
     char cc = ViablePorAltura(sensores.superficie[2], sensores.cota[2] - sensores.cota[0]);
     char cd = ViablePorAltura(sensores.superficie[3], sensores.cota[3] - sensores.cota[0]);
 
-    // Anticolisión: marcar al Ingeniero como obstáculo
+    // Anticolisión: marco al Ingeniero como obstáculo
     if (sensores.agentes[1] == 'i') ci = 'P';
     if (sensores.agentes[2] == 'i') cc = 'P';
     if (sensores.agentes[3] == 'i') cd = 'P';
 
-    // Si la meta está adyacente, ir directamente
+    // Si la meta está adyacente, voy directamente
     if (cc == 'U') { last_action = WALK;    return WALK;    }
     if (ci == 'U') { last_action = TURN_SL; return TURN_SL; }
     if (cd == 'U') { last_action = TURN_SR; return TURN_SR; }
 
-    // Calcular coordenadas adyacentes
+    // Calculo coordenadas adyacentes
     ubicacion actual   = {sensores.posF, sensores.posC, sensores.rumbo};
     ubicacion u_izq    = actual;
     u_izq.brujula      = (Orientacion)((actual.brujula + 7) % 8);
@@ -140,12 +139,12 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
     bool ok_c = (cc == 'C' || cc == 'D' || ((desesperado || fuera_de_camino) && (cc == 'S' || cc == 'H')));
     bool ok_d = (cd == 'C' || cd == 'D' || ((desesperado || fuera_de_camino) && (cd == 'S' || cd == 'H')));
 
-    // Consultar feromonas
+    // Consulto feromonas
     int vis_i = ok_i ? matriz_visitas[u_izq.f][u_izq.c]      : 999999;
     int vis_c = ok_c ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
     int vis_d = ok_d ? matriz_visitas[u_der.f][u_der.c]       : 999999;
 
-    // Elegir dirección menos visitada (desempate: recto > derecha > izquierda)
+    // Elijo dirección menos visitada (desempate: recto > derecha > izquierda)
     int min_vis = min({vis_i, vis_c, vis_d});
 
     int pos = 0;
@@ -156,7 +155,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
         else                       pos = 1;
     }
 
-    // Fallback: buscar caminos en filas 2-3 del cono de visión
+    // Fallback: busco caminos en filas 2-3 del cono de visión
     if (pos == 0) {
         bool hay_izq = false, hay_der = false;
         for (int k = 4; k <= 5; k++)
@@ -176,7 +175,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
     // Contador de turnos sin avanzar
     giros_sin_avanzar_n0++;
 
-    // Deadlock con Ingeniero: activar retroceso
+    // Deadlock con Ingeniero: activo retroceso
     if (pos == 0) {
         bool veo_ing = false;
 
@@ -213,7 +212,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
         }
     }
 
-     // Anti-oscilación: búsqueda en 8 direcciones priorizando C/D/U > S > H
+    // Anti-oscilación: búsqueda en 8 direcciones priorizando C/D/U > S > H
     if (giros_sin_avanzar_n0 > 10) {
         for (int dir = 0; dir < 8; dir++) {
             ubicacion test = actual;
@@ -243,7 +242,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
         }
     }
 
-    // Ejecutar acción elegida
+    // Ejecuto acción elegida
     switch (pos) {
         case 2: accion = WALK; break;
         case 1: accion = TURN_SL; break;
@@ -257,116 +256,109 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
 
 
 
+// =========================================================================
+// FUNCIONES AUXILIARES - NIVEL 1 (Técnico)
+// =========================================================================
 
-
-
-
-// --- FUNCIONES AUXILIARES NIVEL 1 (TÉCNICO) ---
+/** @brief Transitabilidad nivel 1: lista negra (M, P, A, B sin zapatillas). */
 bool ComportamientoTecnico::es_transitable_N1(unsigned char c, bool zap) const {
-  // LISTA NEGRA: El técnico no puede pisar muros, agua ni precipicios
-  if (c == 'M' || c == 'P' || c == 'A' || c == '?') return false;
-  // El bosque es intransitable si no tiene zapatillas
-  if (c == 'B' && !zap) return false;
-  return true;
+    if (c == 'M' || c == 'P' || c == 'A' || c == '?') return false;
+    if (c == 'B' && !zap) return false;
+    return true;
 }
 
+/** @brief Filtro de altura para nivel 1 (Técnico siempre máx desnivel 1). */
 char ComportamientoTecnico::ViablePorAltura_N1(char casilla, int dif) {
-  // El técnico no mejora su salto con zapatillas, siempre máximo 1
-  if (abs(dif) <= 1) return casilla;
-  else return 'P';
+    if (abs(dif) <= 1) return casilla;
+    else return 'P';
 }
 
+/** @brief Elijo dirección preferente entre 3 casillas. */
 int ComportamientoTecnico::VeoCasillaInteresante_N1(char i, char c, char d, bool zap) {
-  if (es_transitable_N1(c, zap)) return 2; // 1º Frente
-  if (es_transitable_N1(d, zap)) return 3; // 2º DERECHA (Su mano dominante)
-  if (es_transitable_N1(i, zap)) return 1; // 3º Izquierda
-  return 0;
+    if (es_transitable_N1(c, zap)) return 2; 
+    if (es_transitable_N1(d, zap)) return 3; // Técnico prefiere derecha
+    if (es_transitable_N1(i, zap)) return 1; 
+    return 0;
 }
 
-/**
- * @brief Comportamiento reactivo del técnico para el Nivel 1.
- * @param sensores Datos actuales de los sensores.
- * @return Acción a realizar.
- */
+// =========================================================================
+// NIVEL 1 - EXPLORACIÓN CON MAPA DE FEROMONAS (Técnico)
+// =========================================================================
+// Misma estrategia que el Ingeniero nivel 1 pero con diferencias clave:
+//   - Desempate en visitas: recto > izquierda > derecha (igual que Ingeniero)
+//   - Giro de callejón sin salida: a la derecha (opuesto al Ingeniero)
+//   - El Técnico no mejora su desnivel con zapatillas (siempre máx 1)
+//   - El bosque 'B' es transitable si tiene zapatillas
+// =========================================================================
+
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_1(Sensores sensores) {
-  // INICIO DEL MÉTODO ComportamientoTecnicoNivel_1
-  Action accion = IDLE;
-  ActualizarMapa(sensores);
+    Action accion = IDLE;
+    ActualizarMapa(sensores);
 
-  if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
+    if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
-  // Si estamos en medio de un giro de 90º, lo terminamos (HACIA LA DERECHA)
-  if (giro45Izq > 0) {
-      giro45Izq--;
-      last_action = TURN_SR; 
-      return TURN_SR;
-  }
+    // Completo giro de 90 grados pendiente (el Técnico gira a la derecha)
+    if (giro45Izq > 0) {
+        giro45Izq--;
+        last_action = TURN_SR; 
+        return TURN_SR;
+    }
 
-  // 1. ANOTAMOS QUE ACABAMOS DE PISAR ESTA CASILLA
-  matriz_visitas[sensores.posF][sensores.posC]++;
+    // Actualizo feromonas
+    matriz_visitas[sensores.posF][sensores.posC]++;
 
-  // 2. VISIÓN Y ANTICOLISIÓN (Igual que antes)
-  // (Nota: para el técnico, quita tiene_zapatillas de ViablePorAltura_N1)
-  char i = ViablePorAltura_N1(sensores.superficie[1], sensores.cota[1] - sensores.cota[0]);
-  char c = ViablePorAltura_N1(sensores.superficie[2], sensores.cota[2] - sensores.cota[0]);
-  char d = ViablePorAltura_N1(sensores.superficie[3], sensores.cota[3] - sensores.cota[0]);
+    // Evalúo las 3 casillas frontales
+    char i = ViablePorAltura_N1(sensores.superficie[1], sensores.cota[1] - sensores.cota[0]);
+    char c = ViablePorAltura_N1(sensores.superficie[2], sensores.cota[2] - sensores.cota[0]);
+    char d = ViablePorAltura_N1(sensores.superficie[3], sensores.cota[3] - sensores.cota[0]);
 
-  if (sensores.agentes[1] != '_') i = 'P';
-  if (sensores.agentes[2] != '_') c = 'P';
-  if (sensores.agentes[3] != '_') d = 'P';
+    // Anticolisión
+    if (sensores.agentes[1] != '_') i = 'P';
+    if (sensores.agentes[2] != '_') c = 'P';
+    if (sensores.agentes[3] != '_') d = 'P';
 
-  // 3. CALCULAR COORDENADAS DE LAS CASILLAS ADYACENTES
-  ubicacion actual = {sensores.posF, sensores.posC, sensores.rumbo};
-  ubicacion u_frente = Delante(actual);
-  
-  ubicacion u_izq = actual;
-  u_izq.brujula = (Orientacion)((actual.brujula + 7) % 8);
-  u_izq = Delante(u_izq);
-  
-  ubicacion u_der = actual;
-  u_der.brujula = (Orientacion)((actual.brujula + 1) % 8);
-  u_der = Delante(u_der);
+    // Calcular coordenadas adyacentes
+    ubicacion actual = {sensores.posF, sensores.posC, sensores.rumbo};
+    ubicacion u_frente = Delante(actual);
+    ubicacion u_izq = actual;
+    u_izq.brujula = (Orientacion)((actual.brujula + 7) % 8);
+    u_izq = Delante(u_izq);
+    ubicacion u_der = actual;
+    u_der.brujula = (Orientacion)((actual.brujula + 1) % 8);
+    u_der = Delante(u_der);
 
-  // 4. LEER EL MAPA DE FEROMONAS (999999 si no es transitable)
-  // ¡MAGIA MODULAR! Si estamos en Nivel 6, usamos la lista negra adaptada al Técnico.
-  bool trans_c = (sensores.nivel == 6) ? (c != 'M' && c != 'P' && c != 'A' && c != '?' && (tiene_zapatillas || c != 'B')) : es_transitable_N1(c, tiene_zapatillas);
-  bool trans_i = (sensores.nivel == 6) ? (i != 'M' && i != 'P' && i != 'A' && i != '?' && (tiene_zapatillas || i != 'B')) : es_transitable_N1(i, tiene_zapatillas);
-  bool trans_d = (sensores.nivel == 6) ? (d != 'M' && d != 'P' && d != 'A' && d != '?' && (tiene_zapatillas || d != 'B')) : es_transitable_N1(d, tiene_zapatillas);
+    // Transitabilidad (nivel 6 reutiliza este código con lista negra adaptada)
+    bool trans_c = (sensores.nivel == 6) ? (c != 'M' && c != 'P' && c != 'A' && c != '?' && (tiene_zapatillas || c != 'B')) : es_transitable_N1(c, tiene_zapatillas);
+    bool trans_i = (sensores.nivel == 6) ? (i != 'M' && i != 'P' && i != 'A' && i != '?' && (tiene_zapatillas || i != 'B')) : es_transitable_N1(i, tiene_zapatillas);
+    bool trans_d = (sensores.nivel == 6) ? (d != 'M' && d != 'P' && d != 'A' && d != '?' && (tiene_zapatillas || d != 'B')) : es_transitable_N1(d, tiene_zapatillas);
 
-  int vis_frente = trans_c ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
-  int vis_izq = trans_i ? matriz_visitas[u_izq.f][u_izq.c] : 999999;
-  int vis_der = trans_d ? matriz_visitas[u_der.f][u_der.c] : 999999;
+    // Consulto feromonas
+    int vis_frente = trans_c ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
+    int vis_izq = trans_i ? matriz_visitas[u_izq.f][u_izq.c] : 999999;
+    int vis_der = trans_d ? matriz_visitas[u_der.f][u_der.c] : 999999;
 
-  // 5. ENCONTRAR LA RUTA MENOS PISADA
-  int min_visitas = vis_frente;
-  if (vis_izq < min_visitas) min_visitas = vis_izq;
-  if (vis_der < min_visitas) min_visitas = vis_der;
+    // Elijo ruta menos visitada
+    int min_visitas = min({vis_frente, vis_izq, vis_der});
+    int pos = 0;
+    if (min_visitas == 999999)          pos = 0; 
+    else if (vis_frente == min_visitas) pos = 2; 
+    else if (vis_izq == min_visitas)    pos = 1;
+    else                                pos = 3;
 
-  int pos = 0;
-  if (min_visitas == 999999) {
-      pos = 0; // Totalmente bloqueados
-  } else if (vis_frente == min_visitas) {
-      pos = 2; // ¡SÚPER CLAVE! En caso de empate, vamos recto para no gastar batería girando.
-  } else if (vis_izq == min_visitas) {
-      pos = 1;
-  } else {
-      pos = 3;
-  }
+    // Ejecuto acción
+    switch (pos) {
+        case 2: accion = WALK; break;
+        case 1: accion = TURN_SL; break;
+        case 3: accion = TURN_SR; break;
+        default: 
+            // Callejón sin salida: doy la vuelta
+            giro45Izq = 3; 
+            accion = TURN_SL; 
+            break; 
+    }
 
-  // EL SWITCH FINAL 
-  switch (pos) {
-    case 2: accion = WALK; break;
-    case 1: accion = TURN_SL; break;
-    case 3: accion = TURN_SR; break;
-    default: 
-        // Callejón sin salida: damos la vuelta
-        giro45Izq = 3; 
-        accion = TURN_SL; 
-        break; 
-  }
-
-  last_action = accion;
-  return accion;
+    last_action = accion;
+    return accion;
 }
 
 

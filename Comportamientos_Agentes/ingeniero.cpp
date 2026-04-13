@@ -17,36 +17,21 @@ Action ComportamientoIngeniero::think(Sensores sensores)
   Action accion = IDLE;
 
   // Decisión del agente según el nivel
-  switch (sensores.nivel)
-  {
-  case 0:
-    accion = ComportamientoIngenieroNivel_0(sensores);
-    break;
-  case 1:
-    accion = ComportamientoIngenieroNivel_1(sensores);
-    break;
-  case 2:
-    accion = ComportamientoIngenieroNivel_2(sensores);
-    break;
-  case 3:
-    accion = ComportamientoIngenieroNivel_3(sensores);
-    break;
-  case 4:
-    accion = ComportamientoIngenieroNivel_4(sensores);
-    break;
-  case 5:
-    accion = ComportamientoIngenieroNivel_5(sensores);
-    break;
-  case 6:
-    accion = ComportamientoIngenieroNivel_6(sensores);
-    break;
+  switch (sensores.nivel) {
+    case 0: accion = ComportamientoIngenieroNivel_0(sensores); break;
+    case 1: accion = ComportamientoIngenieroNivel_1(sensores); break;
+    case 2: accion = ComportamientoIngenieroNivel_2(sensores); break;
+    case 3: accion = ComportamientoIngenieroNivel_3(sensores); break;
+    case 4: accion = ComportamientoIngenieroNivel_4(sensores); break;
+    case 5: accion = ComportamientoIngenieroNivel_5(sensores); break;
+    case 6: accion = ComportamientoIngenieroNivel_6(sensores); break;
   }
 
   return accion;
 }
 
 /**
-  * @brief Comprueba si una casilla adyacente es accesible según la diferencia de altura.
+  * @brief Compruebo si una casilla adyacente es accesible según la diferencia de altura.
   *        Desnivel máximo: 1 sin zapatillas, 2 con zapatillas.
   * @param casilla Tipo de terreno de la casilla destino.
   * @param dif     Diferencia de cota (destino - origen).
@@ -60,7 +45,7 @@ char ComportamientoIngeniero::ViablePorAltura(char casilla, int dif, bool zap) {
 }
 
 /**
-  * @brief Evalúa las 3 casillas frontales y devuelve la dirección más interesante.
+  * @brief Evalúo las 3 casillas frontales y devuelve la dirección más interesante.
   *        Prioridad: U (meta) > D (zapatillas, si no las tiene) > C (camino).
   * @return 1=izquierda, 2=centro, 3=derecha, 0=ninguna interesante.
 */
@@ -104,29 +89,29 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores
   Action accion = IDLE;
   ActualizarMapa(sensores);
 
-  // Recoger zapatillas si pisamos 'D'; parar si ya estamos en la meta
+  // Recojo zapatillas si pisamos 'D'; paro si ya estamos en la meta
   if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
   if (sensores.superficie[0] == 'U') return IDLE;
 
-  // Actualizar feromonas y resetear contador de bloqueo tras avanzar
+  // Actualizo feromonas y reseto contador de bloqueo tras avanzar
   matriz_visitas[sensores.posF][sensores.posC]++;
   if (last_action == WALK || last_action == JUMP) giros_sin_avanzar_n0 = 0;
 
-  // Penalizar terreno no-camino para incentivar el retorno a 'C'
+  // Penalizo terreno no-camino para incentivar el retorno a 'C'
   unsigned char terreno_actual = sensores.superficie[0];
   if (terreno_actual == 'H' || terreno_actual == 'S') matriz_visitas[sensores.posF][sensores.posC] += 50;
 
-  // Evaluar accesibilidad por altura de las 3 casillas frontales
+  // Evalúo accesibilidad por altura de las 3 casillas frontales
   char ci = ViablePorAltura(sensores.superficie[1], sensores.cota[1] - sensores.cota[0], tiene_zapatillas);
   char cc = ViablePorAltura(sensores.superficie[2], sensores.cota[2] - sensores.cota[0], tiene_zapatillas);
   char cd = ViablePorAltura(sensores.superficie[3], sensores.cota[3] - sensores.cota[0], tiene_zapatillas);
 
-  // Anticolisión: marcar al Técnico como obstáculo
+  // Anticolisión: marco al Técnico como obstáculo
   if (sensores.agentes[1] == 't') ci = 'P';
   if (sensores.agentes[2] == 't') cc = 'P';
   if (sensores.agentes[3] == 't') cd = 'P';
 
-  // Si la meta está en una casilla adyacente, ir directamente
+  // Si la meta está en una casilla adyacente, voy directamente
   if (cc == 'U') { last_action = WALK;    return WALK;    }
   if (ci == 'U') { last_action = TURN_SL; return TURN_SL; }
   if (cd == 'U') { last_action = TURN_SR; return TURN_SR; }
@@ -139,7 +124,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores
     return IDLE;
   }
 
-  // Calcular coordenadas de las 3 casillas adyacentes
+  // Calculo coordenadas de las 3 casillas adyacentes
   ubicacion actual = {sensores.posF, sensores.posC, sensores.rumbo};
   ubicacion u_izq = actual;
   u_izq.brujula = (Orientacion)((actual.brujula + 7) % 8);
@@ -149,22 +134,22 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores
   u_der.brujula = (Orientacion)((actual.brujula + 1) % 8);
   u_der = Delante(u_der);
 
-  // Determinar casillas transitables: C/D siempre; S/H solo si estamos
-  // bloqueados (desesperado) o ya estamos fuera de camino
+  // Determino casillas transitables: C/D siempre; S/H solo si estoy
+  // bloqueado (desesperado) o ya estoy fuera de camino
   bool desesperado = (giros_sin_avanzar_n0 > 5);
   bool fuera_de_camino = (sensores.superficie[0] == 'H' || sensores.superficie[0] == 'S');
   bool ok_i = (ci == 'C' || ci == 'D' || ((desesperado || fuera_de_camino) && (ci == 'S' || ci == 'H')));
   bool ok_c = (cc == 'C' || cc == 'D' || ((desesperado || fuera_de_camino) && (cc == 'S' || cc == 'H')));
   bool ok_d = (cd == 'C' || cd == 'D' || ((desesperado || fuera_de_camino) && (cd == 'S' || cd == 'H')));
 
-  // Consultar feromonas de cada casilla transitable
+  // Consulto feromonas de cada casilla transitable
   int vis_i = ok_i ? matriz_visitas[u_izq.f][u_izq.c]    : 999999;
   int vis_c = ok_c ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
   int vis_d = ok_d ? matriz_visitas[u_der.f][u_der.c]    : 999999;
 
   int min_vis = min({vis_i, vis_c, vis_d});
 
-  // Elegir dirección con menos visitas (desempate: recto > izquierda > derecha)
+  // Elijo dirección con menos visitas (desempate: recto > izquierda > derecha)
   int pos = 0;
   if (min_vis < 999999) {
     // Empate: preferir recto -> izq -> der
@@ -172,7 +157,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores
     else if (vis_i == min_vis) pos = 1;
     else                       pos = 3;
   } else  {
-    // Fallback: buscar caminos en filas 2-3 del cono de visión
+    // Fallback: busco caminos en filas 2-3 del cono de visión
     bool hay_izq = false, hay_der = false;
 
     for (int k = 4; k <= 5; k++)
@@ -227,7 +212,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores
     }
   }
 
-  // JUMP de emergencia: saltar 2 casillas si hay camino al otro lado
+  // JUMP de emergencia: salto 2 casillas si hay camino al otro lado
   if (giros_sin_avanzar_n0 > 14) {
     ubicacion u_jump = Delante(Delante(actual));
 
@@ -266,36 +251,18 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores
 // FUNCIONES AUXILIARES - NIVEL 1 (Ingeniero)
 // =========================================================================
 
-/** @brief Comprueba si una casilla es transitable en nivel 1 (lista negra). */
+/** @brief Compruebo si una casilla es transitable en nivel 1. */
 bool ComportamientoIngeniero::es_transitable_N1(unsigned char c) const {
-  // LISTA NEGRA: Todo es pisable menos los obstáculos duros y lo desconocido
   return (c != 'M' && c != 'P' && c != 'A' && c != 'B' && c != '?');
 }
 
 /** @brief Filtro de altura para nivel 1. Máx desnivel 1, o 2 con zapatillas. */
-/*
-char ViablePorAlturaI_Nivel1(char casilla, int dif) {
-  if (casilla == 'P' || casilla == 'M' || casilla == 'B' || casilla == 'A' || casilla == 'H') return 'P';
-  if (abs(dif) <= 1) return casilla;
-  return 'P';
-}
-*/
-
 char ComportamientoIngeniero::ViablePorAltura_N1(char casilla, int dif, bool zap) {
   if (abs(dif) <= 1 || (zap && abs(dif) <= 2)) return casilla;
   else return 'P'; 
 }
 
-/** @brief Elige dirección preferente entre 3 casillas (nivel 1). */
-/*
-int VeoCasillaInteresanteI_Nivel1(char i, char c, char d) {
-  if (c != 'P') return 2; // 1. Recto
-  if (i != 'P') return 1; // 2. Izquierda (ZURDO)
-  if (d != 'P') return 3; // 3. Derecha
-  return 0;
-}
-*/
-
+/** @brief Elijo dirección preferente entre 3 casillas. */
 int ComportamientoIngeniero::VeoCasillaInteresante_N1(char i, char c, char d, bool zap) {
   if (es_transitable_N1(c)) return 2; // 1º Frente
   if (es_transitable_N1(i)) return 1; // 2º Izquierda
@@ -303,6 +270,7 @@ int ComportamientoIngeniero::VeoCasillaInteresante_N1(char i, char c, char d, bo
   return 0;
 }
 
+/** @brief Compruebo si una casilla es un camino (no un obstáculo). */
 bool ComportamientoIngeniero::es_camino(unsigned char c) const {
   return (c == 'C' || c == 'D' || c == 'U');
 }
@@ -313,7 +281,7 @@ bool ComportamientoIngeniero::es_camino(unsigned char c) const {
 // =========================================================================
 // Estrategia similar al nivel 0 pero con reglas de transitabilidad más amplias
 // (nivel 1 permite pisar senderos 'S' y hierba 'H' directamente).
-// Usa ActualizarMapa para construir un mapa interno y matriz_visitas como feromonas.
+// Uso ActualizarMapa para construir un mapa interno y matriz_visitas como feromonas.
 // Desempate en visitas: recto > izquierda > derecha (zurdo).
 // Callejón sin salida: gira 90 grados a la izquierda (4 giros de 45 grados).
 // =========================================================================
@@ -324,17 +292,17 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores
 
   if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
-  // Completar giro de 90 grados pendiente
+  // Completo giro de 90 grados pendiente
   if (giro45Izq > 0) {
       giro45Izq--;
       last_action = TURN_SL;
       return TURN_SL;
   }
 
-  // Actualizar feromonas
+  // Actualizo feromonas
   matriz_visitas[sensores.posF][sensores.posC]++;
 
-  // Evaluar las 3 casillas frontales (altura + tipo de terreno)
+  // Evalúo las 3 casillas frontales (altura + tipo de terreno)
   char i = ViablePorAltura_N1(sensores.superficie[1], sensores.cota[1] - sensores.cota[0], tiene_zapatillas);
   char c = ViablePorAltura_N1(sensores.superficie[2], sensores.cota[2] - sensores.cota[0], tiene_zapatillas);
   char d = ViablePorAltura_N1(sensores.superficie[3], sensores.cota[3] - sensores.cota[0], tiene_zapatillas);
@@ -344,7 +312,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores
   if (sensores.agentes[2] != '_') c = 'P';
   if (sensores.agentes[3] != '_') d = 'P';
 
-  // Calcular coordenadas adyacentes
+  // Calculo coordenadas adyacentes
   ubicacion actual = {sensores.posF, sensores.posC, sensores.rumbo};
   ubicacion u_frente = Delante(actual);
   ubicacion u_izq = actual;
@@ -354,17 +322,17 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores
   u_der.brujula = (Orientacion)((actual.brujula + 1) % 8);
   u_der = Delante(u_der);
 
-  // Transitabilidad según nivel (nivel 6 reutiliza este código con lista negra adaptada)
+  // Transitabilidad según nivel (nivel 6 reutiliza este código con otra lista de obstáculos)
   bool trans_c = (sensores.nivel == 6) ? (c != 'M' && c != 'P' && c != 'A' && c != 'B' && c != '?') : es_transitable_N1(c);
   bool trans_i = (sensores.nivel == 6) ? (i != 'M' && i != 'P' && i != 'A' && i != 'B' && i != '?') : es_transitable_N1(i);
   bool trans_d = (sensores.nivel == 6) ? (d != 'M' && d != 'P' && d != 'A' && d != 'B' && d != '?') : es_transitable_N1(d);
 
-  // Consultar feromonas
+  // Consulto feromonas
   int vis_frente = trans_c ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
   int vis_izq = trans_i ? matriz_visitas[u_izq.f][u_izq.c] : 999999;
   int vis_der = trans_d ? matriz_visitas[u_der.f][u_der.c] : 999999;
 
-  // Elegir la ruta menos visitada (desempate: recto > izquierda > derecha)
+  // Elijo la ruta menos visitada (desempate: recto > izquierda > derecha)
   int min_visitas = min({vis_frente, vis_izq, vis_der});
   int pos = 0;
   if (min_visitas == 999999)          pos = 0;
@@ -372,13 +340,13 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores
   else if (vis_izq == min_visitas)    pos = 1;
   else                                pos = 3;
 
-  // Ejecutar acción
+  // Ejecuto acción
   switch (pos) {
     case 2: accion = WALK; break;
     case 1: accion = TURN_SL; break;
     case 3: accion = TURN_SR; break;
     default: 
-        // Callejón sin salida: damos la vuelta
+        // Callejón sin salida: doy la vuelta
         giro45Izq = 3; 
         accion = TURN_SL; 
         break; 
