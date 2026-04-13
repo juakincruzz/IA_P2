@@ -522,10 +522,35 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_3(Sensores sensores
 // === MOTOR DE PLANIFICACIÓN DE TUBERÍAS (NIVEL 4) ===
 // =========================================================
 
-bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::list<Paso>& plan_resultante) {
+bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco) {
   plan_resultante.clear();
   std::priority_queue<NodoN4, std::vector<NodoN4>, std::greater<NodoN4>> abiertos;
-  std::set<EstadoN4> cerrados;
+  std::map<EstadoN4, int> cerrados; // Guarda el menor impacto acumulado para cada estado
+
+  // Función Lambda para calcular el impacto según la tabla del manual
+  auto coste_impacto = [](unsigned char terreno, int op) {
+    int imp = 0;
+    // Impacto de INSTALL
+    if (terreno == 'A') imp += 50;
+    else if (terreno == 'H') imp += 45;
+    else if (terreno == 'S') imp += 25;
+    else if (terreno == 'C' || terreno == 'U') imp += 15;
+    else imp += 30; // Resto (D, X)
+
+    // Impacto de RAISE (1) o DIG (-1)
+    if (op == 1) {
+        if (terreno == 'H') imp += 55;
+        else if (terreno == 'S') imp += 30;
+        else if (terreno == 'C' || terreno == 'U') imp += 10;
+        else imp += 40;
+    } else if (op == -1) {
+        if (terreno == 'H') imp += 65;
+        else if (terreno == 'S') imp += 40;
+        else if (terreno == 'C' || terreno == 'U') imp += 25;
+        else imp += 50;
+    }
+    return imp;
+  };
 
   unsigned char start_terr = mapaResultado[start_f][start_c];
   if (start_terr == 'M' || start_terr == 'P') return false; 
@@ -545,10 +570,16 @@ bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::li
     EstadoN4 st = {start_f, start_c, h};
     NodoN4 nodo;
     nodo.st = st;
-    Paso p = {start_f, start_c, h - start_H}; 
+    int op = h - start_H;
+    Paso p = {start_f, start_c, op}; 
     nodo.secuencia.push_back(p);
-    abiertos.push(nodo);
-    cerrados.insert(st);
+    nodo.impacto = coste_impacto(start_terr, op);
+    
+    // Si el nodo inicial ya supera el límite, ni lo miramos
+    if (nodo.impacto <= limite_eco) {
+        abiertos.push(nodo);
+        cerrados[st] = nodo.impacto;
+    }
   }
 
   int df[] = {-1, 1, 0, 0};
@@ -567,7 +598,7 @@ bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::li
       int nf = actual.st.f + df[i];
       int nc = actual.st.c + dc[i];
 
-      if (nf < 0 || nf >= mapaResultado.size() || nc < 0 || nc >= mapaResultado[0].size()) continue;
+      if (nf < 0 || nf >= (int)mapaResultado.size() || nc < 0 || nc >= (int)mapaResultado[0].size()) continue;
 
       unsigned char n_terr = mapaResultado[nf][nc];
       if (n_terr == 'M' || n_terr == 'P' || n_terr == '?') continue; 
@@ -586,14 +617,21 @@ bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::li
       for (int nh : alturas_vecino) {
         if (actual.st.h >= nh && (actual.st.h - nh) <= 1) {
           EstadoN4 siguiente = {nf, nc, nh};
+          int op = nh - nH;
+          int nuevo_impacto = actual.impacto + coste_impacto(n_terr, op);
 
-          if (cerrados.find(siguiente) == cerrados.end()) {
-            cerrados.insert(siguiente);
-            NodoN4 hijo = actual;
-            hijo.st = siguiente;
-            Paso p = {nf, nc, nh - nH};
-            hijo.secuencia.push_back(p);
-            abiertos.push(hijo);
+          // ¡LA MAGIA! Solo seguimos si NO superamos el límite ecológico
+          if (nuevo_impacto <= limite_eco) {
+              // Y solo lo añadimos si no habíamos llegado aquí antes con menos impacto
+              if (cerrados.find(siguiente) == cerrados.end() || cerrados[siguiente] > nuevo_impacto) {
+                  cerrados[siguiente] = nuevo_impacto;
+                  NodoN4 hijo = actual;
+                  hijo.st = siguiente;
+                  Paso p = {nf, nc, op};
+                  hijo.secuencia.push_back(p);
+                  hijo.impacto = nuevo_impacto;
+                  abiertos.push(hijo);
+              }
           }
         }
       }
@@ -609,15 +647,14 @@ bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::li
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_4(Sensores sensores) {
   if (!plan_tuberias_hecho) {
-    bool exito = EncontrarPlan_N4(sensores.BelPosF, sensores.BelPosC, plan_tuberias);
+    // Aquí es donde estaba el error de sintaxis. Añadido el 4º argumento correctamente:
+    bool exito = EncontrarPlan_N4(sensores.BelPosF, sensores.BelPosC, plan_tuberias, sensores.max_ecologico);
 
     if (exito && !plan_tuberias.empty()) {
       VisualizaRedTuberias(plan_tuberias);
     }
-
     plan_tuberias_hecho = true;
   }
-
   return IDLE; 
 }
 
@@ -657,12 +694,12 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
 
     if (estado_obra_ing == ING_CALCULAR_PLAN) {
         std::list<Paso> lista_plan;
-        EncontrarPlan_N4(sensores.BelPosF, sensores.BelPosC, lista_plan);
+        // Faltaba añadir el 4º argumento aquí:
+        EncontrarPlan_N4(sensores.BelPosF, sensores.BelPosC, lista_plan, sensores.max_ecologico);
+        
         for (auto p : lista_plan) plan_n5.push_back(p);
-
-        if (plan_n5.empty()) return IDLE; // No hay plan, no hacemos nada
-
-        estado_obra_ing = ING_IR_CASILLA; // Pasamos al siguiente estado para empezar a ejecutar el plan
+        if (plan_n5.empty()) return IDLE;
+        estado_obra_ing = ING_IR_CASILLA; 
     }
 
     if (estado_obra_ing == ING_IR_CASILLA) {
@@ -788,7 +825,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
     if (!plan_tuberias_hecho) {
         std::list<Paso> lista_plan;
         if (mapaResultado[sensores.BelPosF][sensores.BelPosC] != '?') {
-            if (EncontrarPlan_N4(sensores.BelPosF, sensores.BelPosC, lista_plan)) {
+            if (EncontrarPlan_N4(sensores.BelPosF, sensores.BelPosC, lista_plan, sensores.max_ecologico)) {
                 plan_tuberias_hecho = true;
                 for (auto p : lista_plan) plan_n5.push_back(p);
                 est_n6 = 1; // Arrancamos la máquina de coser

@@ -664,7 +664,82 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_3(Sensores sensores) {
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_4(Sensores sensores) {
-  return IDLE;
+    // Inicialización al primer instante
+    if (sensores.tiempo == 0) {
+        plan_n5.clear();
+        tramo_n5 = 0;
+        hay_plan = false;
+        plan.clear();
+    }
+
+    // Calcular el plan de tubería si no lo tenemos aún
+    if (plan_n5.empty()) {
+        std::list<Paso> listaplan;
+        // Faltaba añadir el 4º argumento aquí:
+        EncontrarPlan_N5_Arquitecto(sensores.BelPosF, sensores.BelPosC, listaplan, sensores.max_ecologico);
+        
+        for (auto& p : listaplan)
+            plan_n5.push_back(p);
+        if (plan_n5.empty()) return IDLE;
+    }
+
+    // Fin de obra
+    if (tramo_n5 >= (int)plan_n5.size()) return IDLE;
+
+    Paso objetivo = plan_n5[tramo_n5];
+
+    // --- FASE 1: Desplazarse a la casilla del tramo ---
+    if (sensores.posF != objetivo.fil || sensores.posC != objetivo.col) {
+        if (!hay_plan) {
+            EstadoN3 inicio;
+            inicio.f        = sensores.posF;
+            inicio.c        = sensores.posC;
+            inicio.brujula  = sensores.rumbo;
+            inicio.zapatillas = (mapaResultado[sensores.posF][sensores.posC] == 'D');
+            if (!EncontrarPlan_N3(inicio, objetivo.fil, objetivo.col, plan, false))
+                EncontrarPlan_N3(inicio, objetivo.fil, objetivo.col, plan, true);
+            hay_plan = true;
+        }
+        if (!plan.empty()) {
+            Action a = plan.front();
+            if (a == WALK &&
+                sensores.agentes[2] != '_' && sensores.agentes[2] != '?')
+                return IDLE; // ceder paso
+            plan.pop_front();
+            return a;
+        } else {
+            hay_plan = false;
+            return IDLE;
+        }
+    }
+
+    // --- FASE 2: Alinearse mirando al siguiente tramo ---
+    if (tramo_n5 + 1 < (int)plan_n5.size()) {
+        Paso siguiente = plan_n5[tramo_n5 + 1];
+        // Calcular orientación deseada manualmente (sin static helper)
+        Orientacion oriDeseada = norte;
+        int df = siguiente.fil - sensores.posF;
+        int dc = siguiente.col - sensores.posC;
+        if      (df < 0 && dc == 0) oriDeseada = norte;
+        else if (df > 0 && dc == 0) oriDeseada = sur;
+        else if (df == 0 && dc > 0) oriDeseada = este;
+        else if (df == 0 && dc < 0) oriDeseada = oeste;
+        else if (df < 0 && dc > 0)  oriDeseada = noreste;
+        else if (df < 0 && dc < 0)  oriDeseada = noroeste;
+        else if (df > 0 && dc > 0)  oriDeseada = sureste;
+        else if (df > 0 && dc < 0)  oriDeseada = suroeste;
+
+        if (sensores.rumbo != oriDeseada) {
+            int giros = ((int)oriDeseada - (int)sensores.rumbo + 8) % 8;
+            return (giros <= 4) ? TURN_SR : TURN_SL;
+        }
+    }
+
+    // --- FASE 3: Instalar y avanzar ---
+    hay_plan = false;
+    plan.clear();
+    tramo_n5++;
+    return INSTALL;
 }
 
 
@@ -674,10 +749,32 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_4(Sensores sensores) {
 // =========================================================
 
 // Clon exacto del algoritmo del Ingeniero para que ambos deduzcan el mismo plan
-bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c, std::list<Paso>& plan_resultante) {
+bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco) {
     plan_resultante.clear();
     std::priority_queue<NodoN4_Tecnico, std::vector<NodoN4_Tecnico>, std::greater<NodoN4_Tecnico>> abiertos;
-    std::set<EstadoN4_Tecnico> cerrados;
+    std::map<EstadoN4_Tecnico, int> cerrados;
+
+    auto coste_impacto = [](unsigned char terreno, int op) {
+        int imp = 0;
+        if (terreno == 'A') imp += 50;
+        else if (terreno == 'H') imp += 45;
+        else if (terreno == 'S') imp += 25;
+        else if (terreno == 'C' || terreno == 'U') imp += 15;
+        else imp += 30;
+
+        if (op == 1) {
+            if (terreno == 'H') imp += 55;
+            else if (terreno == 'S') imp += 30;
+            else if (terreno == 'C' || terreno == 'U') imp += 10;
+            else imp += 40;
+        } else if (op == -1) {
+            if (terreno == 'H') imp += 65;
+            else if (terreno == 'S') imp += 40;
+            else if (terreno == 'C' || terreno == 'U') imp += 25;
+            else imp += 50;
+        }
+        return imp;
+    };
 
     unsigned char start_terr = mapaResultado[start_f][start_c];
     if (start_terr == 'M' || start_terr == 'P') return false; 
@@ -696,10 +793,15 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c
         EstadoN4_Tecnico st = {start_f, start_c, h};
         NodoN4_Tecnico nodo;
         nodo.st = st;
-        Paso p = {start_f, start_c, h - start_H}; 
+        int op = h - start_H;
+        Paso p = {start_f, start_c, op}; 
         nodo.secuencia.push_back(p);
-        abiertos.push(nodo);
-        cerrados.insert(st);
+        nodo.impacto = coste_impacto(start_terr, op);
+
+        if (nodo.impacto <= limite_eco) {
+            abiertos.push(nodo);
+            cerrados[st] = nodo.impacto;
+        }
     }
 
     int df[] = {-1, 1, 0, 0};
@@ -718,10 +820,10 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c
             int nf = actual.st.f + df[i];
             int nc = actual.st.c + dc[i];
 
-            if (nf < 0 || nf >= mapaResultado.size() || nc < 0 || nc >= mapaResultado[0].size()) continue;
+            if (nf < 0 || nf >= (int)mapaResultado.size() || nc < 0 || nc >= (int)mapaResultado[0].size()) continue;
 
             unsigned char n_terr = mapaResultado[nf][nc];
-            if (n_terr == 'M' || n_terr == 'P') continue; 
+            if (n_terr == 'M' || n_terr == 'P' || n_terr == '?') continue; 
 
             int nH = mapaCotas[nf][nc];
             std::vector<int> alturas_vecino;
@@ -734,16 +836,21 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c
             }
 
             for (int nh : alturas_vecino) {
-                // GRAVEDAD Y CAMINABILIDAD
                 if (actual.st.h >= nh && (actual.st.h - nh) <= 1) {
                     EstadoN4_Tecnico siguiente = {nf, nc, nh};
-                    if (cerrados.find(siguiente) == cerrados.end()) {
-                        cerrados.insert(siguiente);
-                        NodoN4_Tecnico hijo = actual;
-                        hijo.st = siguiente;
-                        Paso p = {nf, nc, nh - nH};
-                        hijo.secuencia.push_back(p);
-                        abiertos.push(hijo);
+                    int op = nh - nH;
+                    int nuevo_impacto = actual.impacto + coste_impacto(n_terr, op);
+
+                    if (nuevo_impacto <= limite_eco) {
+                        if (cerrados.find(siguiente) == cerrados.end() || cerrados[siguiente] > nuevo_impacto) {
+                            cerrados[siguiente] = nuevo_impacto;
+                            NodoN4_Tecnico hijo = actual;
+                            hijo.st = siguiente;
+                            Paso p = {nf, nc, op};
+                            hijo.secuencia.push_back(p);
+                            hijo.impacto = nuevo_impacto;
+                            abiertos.push(hijo);
+                        }
                     }
                 }
             }
@@ -789,7 +896,9 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
 
     if (plan_n5.empty()) {
         std::list<Paso> lista_plan;
-        EncontrarPlan_N5_Arquitecto(sensores.BelPosF, sensores.BelPosC, lista_plan);
+        // Faltaba añadir el 4º argumento aquí:
+        EncontrarPlan_N5_Arquitecto(sensores.BelPosF, sensores.BelPosC, lista_plan, sensores.max_ecologico);
+        
         for (auto p : lista_plan) plan_n5.push_back(p);
     }
 

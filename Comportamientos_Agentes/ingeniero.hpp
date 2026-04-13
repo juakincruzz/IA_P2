@@ -371,7 +371,7 @@ private:
         }
     };
 
-    bool EncontrarPlan_N4(int start_f, int start_c, std::list<Paso>& plan_resultante);
+    bool EncontrarPlan_N4(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco);
 
     // =========================================================
     // === VARIABLES NIVEL 5 (MÁQUINA DE ESTADOS) =============
