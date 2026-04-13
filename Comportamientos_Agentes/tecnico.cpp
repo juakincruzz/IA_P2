@@ -754,55 +754,43 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c
     std::priority_queue<NodoN4_Tecnico, std::vector<NodoN4_Tecnico>, std::greater<NodoN4_Tecnico>> abiertos;
     std::map<EstadoN4_Tecnico, int> cerrados;
 
-    auto coste_impacto = [](unsigned char terreno, int op) {
-        int imp = 0;
-        if (terreno == 'A') imp += 50;
-        else if (terreno == 'H') imp += 45;
-        else if (terreno == 'S') imp += 25;
-        else if (terreno == 'C' || terreno == 'U') imp += 15;
-        else imp += 30;
+    auto imp_install = [](unsigned char terreno) {
+        if (terreno == 'A') return 50;
+        if (terreno == 'H') return 45;
+        if (terreno == 'S') return 25;
+        if (terreno == 'C' || terreno == 'U') return 15;
+        return 30;
+    };
 
+    auto imp_op = [](unsigned char terreno, int op) {
         if (op == 1) {
-            if (terreno == 'H') imp += 55;
-            else if (terreno == 'S') imp += 30;
-            else if (terreno == 'C' || terreno == 'U') imp += 10;
-            else imp += 40;
+            if (terreno == 'H') return 55;
+            if (terreno == 'S') return 30;
+            if (terreno == 'C' || terreno == 'U') return 10;
+            return 40;
         } else if (op == -1) {
-            if (terreno == 'H') imp += 65;
-            else if (terreno == 'S') imp += 40;
-            else if (terreno == 'C' || terreno == 'U') imp += 25;
-            else imp += 50;
+            if (terreno == 'H') return 65;
+            if (terreno == 'S') return 40;
+            if (terreno == 'C' || terreno == 'U') return 25;
+            return 50;
         }
-        return imp;
+        return 0;
     };
 
     unsigned char start_terr = mapaResultado[start_f][start_c];
     if (start_terr == 'M' || start_terr == 'P') return false; 
     
     int start_H = mapaCotas[start_f][start_c];
-    std::vector<int> alturas_inicio;
     
-    if (start_terr == 'A') alturas_inicio.push_back(start_H);
-    else {
-        alturas_inicio.push_back(start_H);
-        if (start_H > 0) alturas_inicio.push_back(start_H - 1);
-        if (start_H < 9) alturas_inicio.push_back(start_H + 1);
-    }
+    EstadoN4_Tecnico st = {start_f, start_c, start_H};
+    NodoN4_Tecnico nodo;
+    nodo.st = st;
+    Paso p = {start_f, start_c, 0}; 
+    nodo.secuencia.push_back(p);
+    nodo.impacto = 0;
 
-    for (int h : alturas_inicio) {
-        EstadoN4_Tecnico st = {start_f, start_c, h};
-        NodoN4_Tecnico nodo;
-        nodo.st = st;
-        int op = h - start_H;
-        Paso p = {start_f, start_c, op}; 
-        nodo.secuencia.push_back(p);
-        nodo.impacto = coste_impacto(start_terr, op);
-
-        if (nodo.impacto <= limite_eco) {
-            abiertos.push(nodo);
-            cerrados[st] = nodo.impacto;
-        }
-    }
+    abiertos.push(nodo);
+    cerrados[st] = 0;
 
     int df[] = {-1, 1, 0, 0};
     int dc[] = {0, 0, 1, -1};
@@ -815,6 +803,8 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c
             plan_resultante = actual.secuencia;
             return true;
         }
+
+        unsigned char actual_terr = mapaResultado[actual.st.f][actual.st.c];
 
         for (int i = 0; i < 4; i++) {
             int nf = actual.st.f + df[i];
@@ -839,15 +829,16 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c
                 if (actual.st.h >= nh && (actual.st.h - nh) <= 1) {
                     EstadoN4_Tecnico siguiente = {nf, nc, nh};
                     int op = nh - nH;
-                    int nuevo_impacto = actual.impacto + coste_impacto(n_terr, op);
+                    int impacto_tramo = imp_op(n_terr, op) + imp_install(n_terr) + imp_install(actual_terr);
+                    int nuevo_impacto = actual.impacto + impacto_tramo;
 
                     if (nuevo_impacto <= limite_eco) {
                         if (cerrados.find(siguiente) == cerrados.end() || cerrados[siguiente] > nuevo_impacto) {
                             cerrados[siguiente] = nuevo_impacto;
                             NodoN4_Tecnico hijo = actual;
                             hijo.st = siguiente;
-                            Paso p = {nf, nc, op};
-                            hijo.secuencia.push_back(p);
+                            Paso p_nuevo = {nf, nc, op};
+                            hijo.secuencia.push_back(p_nuevo);
                             hijo.impacto = nuevo_impacto;
                             abiertos.push(hijo);
                         }
