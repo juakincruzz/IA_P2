@@ -75,6 +75,12 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
     if (last_action == WALK) giros_sin_avanzar_n0 = 0;
     matriz_visitas[sensores.posF][sensores.posC]++;
 
+    // Penalizar casillas que no son camino para volver a 'C' lo antes posible
+    unsigned char terreno_actual = sensores.superficie[0];
+    if (terreno_actual == 'H' || terreno_actual == 'S') {
+        matriz_visitas[sensores.posF][sensores.posC] += 50;
+    }
+
     char ci = ViablePorAltura(sensores.superficie[1], sensores.cota[1] - sensores.cota[0]);
     char cc = ViablePorAltura(sensores.superficie[2], sensores.cota[2] - sensores.cota[0]);
     char cd = ViablePorAltura(sensores.superficie[3], sensores.cota[3] - sensores.cota[0]);
@@ -96,11 +102,11 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
     u_der.brujula      = (Orientacion)((actual.brujula + 1) % 8);
     u_der              = Delante(u_der);
 
-    // Si llevamos mucho tiempo atascados, permitir sendero 'S' como escape
-    bool desesperado = (giros_sin_avanzar_n0 > 20);
-    bool ok_i = (ci == 'C' || ci == 'D' || (desesperado && (ci == 'S' || ci == 'H')));
-    bool ok_c = (cc == 'C' || cc == 'D' || (desesperado && (cc == 'S' || cc == 'H')));
-    bool ok_d = (cd == 'C' || cd == 'D' || (desesperado && (cd == 'S' || cd == 'H')));
+    bool desesperado = (giros_sin_avanzar_n0 > 5);
+    bool fuera_de_camino = (sensores.superficie[0] == 'H' || sensores.superficie[0] == 'S');
+    bool ok_i = (ci == 'C' || ci == 'D' || ((desesperado || fuera_de_camino) && (ci == 'S' || ci == 'H')));
+    bool ok_c = (cc == 'C' || cc == 'D' || ((desesperado || fuera_de_camino) && (cc == 'S' || cc == 'H')));
+    bool ok_d = (cd == 'C' || cd == 'D' || ((desesperado || fuera_de_camino) && (cd == 'S' || cd == 'H')));
 
     int vis_i = ok_i ? matriz_visitas[u_izq.f][u_izq.c]      : 999999;
     int vis_c = ok_c ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
