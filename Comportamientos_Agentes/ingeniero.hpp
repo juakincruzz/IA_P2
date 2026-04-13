@@ -248,21 +248,30 @@ private:
     // =========================================================================
     // VARIABLES DE ESTADO (PUEDEN SER EXTENDIDAS POR EL ALUMNO)
     // =========================================================================
-    // Nivel 0
+
+    // =========================================================
+    // === VARIABLES Y ESTRUCTURAS NIVEL 0  ====================
+    // =========================================================
+    // Variables para el Nivel 0
     Action last_action ;
     bool tiene_zapatillas ;
     int giros_sin_avanzar_n0;
     bool girar_derecha_n0;
 
-    // Nivel 1
-    int giro45Izq; // Indica el número de giros a la izquierda que quedan por dar
-    int matriz_visitas[200][200];
-
-    // MÉTODOS AUXILIARES PARA EL NIVEL 0
+    // Métodos auxiliares para el Nivel 0
     char ViablePorAltura(char casilla, int dif, bool zap);
     int VeoCasillaInteresante(char i, char c, char d, bool zap);
 
-    // MÉTODOS AUXILIARES PARA EL NIVEL 1
+
+
+    // =========================================================
+    // === VARIABLES Y ESTRUCTURAS NIVEL 1  ====================
+    // =========================================================
+    // Variables para el Nivel 1 
+    int giro45Izq; // Indica el número de giros a la izquierda que quedan por dar
+    int matriz_visitas[200][200];
+
+    // Métodos auxiliares para el Nivel 1
     bool es_transitable_N1(unsigned char c) const;
     char ViablePorAltura_N1(char casilla, int dif, bool zap);
     int VeoCasillaInteresante_N1(char i, char c, char d, bool zap);
