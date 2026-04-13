@@ -231,6 +231,11 @@ private:
   // =========================================================================
   // VARIABLES DE ESTADO (PUEDEN SER EXTENDIDAS POR EL ALUMNO)
   // =========================================================================
+
+  // =========================================================
+  // === VARIABLES Y ESTRUCTURAS NIVEL 0  ====================
+  // =========================================================
+  // Variables para el Nivel 0
   Action last_action;
   bool tiene_zapatillas;
   int giros_sin_avanzar_n0;
@@ -238,19 +243,20 @@ private:
   int turnos_viendo_ingeniero_n0;
   int retroceder_n0;  // Turnos que quedan de retroceso
 
-  // Nivel 1
-    int giro45Izq; // Indica el número de giros a la izquierda que quedan por dar
-    int matriz_visitas[200][200];
-
-  // =========================================================================
-  // FUNCIONES AUXILIARES PARA EL NIVEL 0 
-  // =========================================================================
-  char ViablePorAltura(char casilla, int dif); // No necesita 'zap'
+  // Métodos auxiliares para el Nivel 0
+  char ViablePorAltura(char casilla, int dif); 
   int VeoCasillaInteresante(char i, char c, char d);
 
-  // =========================================================================
-  // FUNCIONES AUXILIARES PARA EL NIVEL 1
-  // =========================================================================
+
+
+  // =========================================================
+  // === VARIABLES Y ESTRUCTURAS NIVEL 1  ====================
+  // =========================================================
+  // Variables para el Nivel 1
+  int giro45Izq; // Indica el número de giros a la izquierda que quedan por dar
+  int matriz_visitas[200][200];
+
+  // Métodos auxiliares para el Nivel 1
   bool es_transitable_N1(unsigned char c, bool zap) const; // El técnico usa zap para el bosque
   char ViablePorAltura_N1(char casilla, int dif); 
   int VeoCasillaInteresante_N1(char i, char c, char d, bool zap);
