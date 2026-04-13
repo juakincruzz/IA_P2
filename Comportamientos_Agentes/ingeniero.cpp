@@ -45,11 +45,25 @@ Action ComportamientoIngeniero::think(Sensores sensores)
   return accion;
 }
 
+/**
+  * @brief Comprueba si una casilla adyacente es accesible según la diferencia de altura.
+  *        Desnivel máximo: 1 sin zapatillas, 2 con zapatillas.
+  * @param casilla Tipo de terreno de la casilla destino.
+  * @param dif     Diferencia de cota (destino - origen).
+  * @param zap     true si el agente tiene zapatillas.
+  * @return El tipo de casilla original si es accesible, 'P' si no lo es.
+*/
 char ComportamientoIngeniero::ViablePorAltura(char casilla, int dif, bool zap) {
   if (abs(dif) <= 1 || (zap && abs(dif) <= 2)) return casilla;
-  else return 'P'; // Si no es viable, la tratamos como un precipicio
+
+  else return 'P';
 }
 
+/**
+  * @brief Evalúa las 3 casillas frontales y devuelve la dirección más interesante.
+  *        Prioridad: U (meta) > D (zapatillas, si no las tiene) > C (camino).
+  * @return 1=izquierda, 2=centro, 3=derecha, 0=ninguna interesante.
+*/
 int ComportamientoIngeniero::VeoCasillaInteresante(char i, char c, char d, bool zap) {
   if (c == 'U') return 2;
   else if (i == 'U') return 1;
@@ -65,194 +79,210 @@ int ComportamientoIngeniero::VeoCasillaInteresante(char i, char c, char d, bool 
   else return 0;
 }
 
+// =========================================================================
+// NIVEL 0 - COMPORTAMIENTO REACTIVO (Ingeniero)
+// =========================================================================
+// Estrategia: exploración guiada por mapa de feromonas (matriz_visitas).
+//
+// El agente elige la casilla adyacente menos visitada entre las transitables.
+// Preferencia de terreno: C/D/U (camino) > S (sendero, si bloqueado) > H (hierba, si bloqueado).
+// Cuando está fuera de camino (en H o S), se permite moverse por H/S sin esperar bloqueo
+// para evitar quedarse atascado; la penalización de +50 visitas en H/S empuja al agente
+// a volver a caminos 'C' en cuanto los encuentra.
+//
+// Mecanismos anti-bloqueo:
+//   1. Búsqueda en 8 direcciones: si lleva >6 turnos sin avanzar, busca la casilla
+//      transitable más cercana en cualquier orientación (prioridad C/D/U > S > H).
+//   2. JUMP de emergencia: si lleva >14 turnos bloqueado, intenta saltar 2 casillas.
+//   3. Alternancia de giro: cada 16 turnos sin avanzar, alterna la dirección de giro
+//      por defecto para no quedar en bucle.
+//
+// Anticolisión: marca al Técnico como obstáculo ('P') en las 3 casillas frontales.
+// =========================================================================
+Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores) {
+  Action accion = IDLE;
+  ActualizarMapa(sensores);
+
+  // Recoger zapatillas si pisamos 'D'; parar si ya estamos en la meta
+  if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
+  if (sensores.superficie[0] == 'U') return IDLE;
+
+  // Actualizar feromonas y resetear contador de bloqueo tras avanzar
+  matriz_visitas[sensores.posF][sensores.posC]++;
+  if (last_action == WALK || last_action == JUMP) giros_sin_avanzar_n0 = 0;
+
+  // Penalizar terreno no-camino para incentivar el retorno a 'C'
+  unsigned char terreno_actual = sensores.superficie[0];
+  if (terreno_actual == 'H' || terreno_actual == 'S') matriz_visitas[sensores.posF][sensores.posC] += 50;
+
+  // Evaluar accesibilidad por altura de las 3 casillas frontales
+  char ci = ViablePorAltura(sensores.superficie[1], sensores.cota[1] - sensores.cota[0], tiene_zapatillas);
+  char cc = ViablePorAltura(sensores.superficie[2], sensores.cota[2] - sensores.cota[0], tiene_zapatillas);
+  char cd = ViablePorAltura(sensores.superficie[3], sensores.cota[3] - sensores.cota[0], tiene_zapatillas);
+
+  // Anticolisión: marcar al Técnico como obstáculo
+  if (sensores.agentes[1] == 't') ci = 'P';
+  if (sensores.agentes[2] == 't') cc = 'P';
+  if (sensores.agentes[3] == 't') cd = 'P';
+
+  // Si la meta está en una casilla adyacente, ir directamente
+  if (cc == 'U') { last_action = WALK;    return WALK;    }
+  if (ci == 'U') { last_action = TURN_SL; return TURN_SL; }
+  if (cd == 'U') { last_action = TURN_SR; return TURN_SR; }
+
+  // Temporizador de espera (se activa ante deadlocks con el Técnico)
+  if (giro45Izq > 0) {
+    giro45Izq--;
+    matriz_visitas[sensores.posF][sensores.posC]++;
+
+    /*
+    // Penalizar casillas que no son camino para volver a 'C' lo antes posible
+    unsigned char terreno_actual = sensores.superficie[0];
+    if (terreno_actual == 'H' || terreno_actual == 'S') {
+      matriz_visitas[sensores.posF][sensores.posC] += 50;
+    }
+    */
+
+    last_action = IDLE;
+    return IDLE;
+  }
+
+  // Calcular coordenadas de las 3 casillas adyacentes
+  ubicacion actual = {sensores.posF, sensores.posC, sensores.rumbo};
+  ubicacion u_izq = actual;
+  u_izq.brujula = (Orientacion)((actual.brujula + 7) % 8);
+  u_izq = Delante(u_izq);
+  ubicacion u_frente = Delante(actual);
+  ubicacion u_der = actual;
+  u_der.brujula = (Orientacion)((actual.brujula + 1) % 8);
+  u_der = Delante(u_der);
+
+  // Determinar casillas transitables: C/D siempre; S/H solo si estamos
+  // bloqueados (desesperado) o ya estamos fuera de camino
+  bool desesperado = (giros_sin_avanzar_n0 > 5);
+  bool fuera_de_camino = (sensores.superficie[0] == 'H' || sensores.superficie[0] == 'S');
+  bool ok_i = (ci == 'C' || ci == 'D' || ((desesperado || fuera_de_camino) && (ci == 'S' || ci == 'H')));
+  bool ok_c = (cc == 'C' || cc == 'D' || ((desesperado || fuera_de_camino) && (cc == 'S' || cc == 'H')));
+  bool ok_d = (cd == 'C' || cd == 'D' || ((desesperado || fuera_de_camino) && (cd == 'S' || cd == 'H')));
+
+  // Consultar feromonas de cada casilla transitable
+  int vis_i = ok_i ? matriz_visitas[u_izq.f][u_izq.c]    : 999999;
+  int vis_c = ok_c ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
+  int vis_d = ok_d ? matriz_visitas[u_der.f][u_der.c]    : 999999;
+
+  int min_vis = min({vis_i, vis_c, vis_d});
+
+  // Elegir dirección con menos visitas (desempate: recto > izquierda > derecha)
+  int pos = 0;
+  if (min_vis < 999999) {
+    // Empate: preferir recto -> izq -> der
+    if      (vis_c == min_vis) pos = 2;
+    else if (vis_i == min_vis) pos = 1;
+    else                       pos = 3;
+  } else  {
+    // Fallback: buscar caminos en filas 2-3 del cono de visión
+    bool hay_izq = false, hay_der = false;
+
+    for (int k = 4; k <= 5; k++)
+      if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D') { hay_izq = true; break; }
+
+    for (int k = 9; k <= 11; k++)
+      if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D') { hay_izq = true; break; }
+
+    for (int k = 7; k <= 8; k++)
+      if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D') { hay_der = true; break; }
+
+    for (int k = 13; k <= 15; k++)
+      if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D') { hay_der = true; break; }
+
+    if      (hay_izq && !hay_der)           pos = 1;
+    else if (hay_der && !hay_izq)           pos = 3;
+    else if (hay_izq && hay_der)            pos = girar_derecha_n0 ? 3 : 1;
+  }
+
+  // Contador de turnos sin avanzar
+  if (last_action != WALK && last_action != JUMP) {
+    giros_sin_avanzar_n0++;
+  }
+
+  // Anti-oscilación: búsqueda en 8 direcciones priorizando C/D/U > S > H
+  if (giros_sin_avanzar_n0 > 10) {
+    for (int dir = 0; dir < 8; dir++) {
+      ubicacion test = actual;
+      test.brujula = (Orientacion)dir;
+      ubicacion destino = Delante(test);
+
+      if (destino.f >= 0 && destino.f < (int)mapaResultado.size() && destino.c >= 0 && destino.c < (int)mapaResultado[0].size()) {
+        unsigned char celda = mapaResultado[destino.f][destino.c];
+
+        if (celda == 'C' || celda == 'D' || celda == 'U' || celda == 'S' || celda == 'H') {
+          int dif = abs(mapaCotas[destino.f][destino.c] - mapaCotas[sensores.posF][sensores.posC]);
+          int max_dif = tiene_zapatillas ? 2 : 1;
+
+          if (dif <= max_dif) {
+            if (sensores.rumbo == (Orientacion)dir) {
+              giros_sin_avanzar_n0 = 0;
+              last_action = WALK;
+              return WALK;
+            } else {
+              int giros = ((dir - (int)sensores.rumbo) + 8) % 8;
+              last_action = (giros <= 4) ? TURN_SR : TURN_SL;
+              return last_action;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // JUMP de emergencia: saltar 2 casillas si hay camino al otro lado
+  if (giros_sin_avanzar_n0 > 14) {
+    ubicacion u_jump = Delante(Delante(actual));
+
+    if (u_jump.f >= 0 && u_jump.f < (int)mapaResultado.size() && u_jump.c >= 0 && u_jump.c < (int)mapaResultado[0].size()) {
+      unsigned char dest = mapaResultado[u_jump.f][u_jump.c];
+
+      if (dest=='C'||dest=='D'||dest=='U'||dest=='?') {
+        giros_sin_avanzar_n0 = 0;
+        last_action = JUMP;
+        return JUMP;
+      }
+    }
+  }
+
+  // Alternancia de dirección de giro por defecto cada 16 turnos
+  if (giros_sin_avanzar_n0 >= 16) {
+    girar_derecha_n0 = !girar_derecha_n0;
+    giros_sin_avanzar_n0 = 0;
+  }
+
+  // Ejecutar la acción elegida
+  switch (pos) {
+    case 2: accion = WALK; break;
+    case 1: accion = TURN_SL; break;
+    case 3: accion = TURN_SR; break;
+    default: accion = girar_derecha_n0 ? TURN_SR : TURN_SL; break;
+  }
+
+  last_action = accion;
+  return accion;
+}
+
+
 // Filtro Nivel 1 Ingeniero
 char ViablePorAlturaI_Nivel1(char casilla, int dif) {
-    if (casilla == 'P' || casilla == 'M' || casilla == 'B' || casilla == 'A' || casilla == 'H') return 'P';
-    if (abs(dif) <= 1) return casilla;
-    return 'P';
+  if (casilla == 'P' || casilla == 'M' || casilla == 'B' || casilla == 'A' || casilla == 'H') return 'P';
+  if (abs(dif) <= 1) return casilla;
+  return 'P';
 }
 
 // Curiosidad Nivel 1 Ingeniero
 int VeoCasillaInteresanteI_Nivel1(char i, char c, char d) {
-    if (c != 'P') return 2; // 1. Recto
-    if (i != 'P') return 1; // 2. Izquierda (ZURDO)
-    if (d != 'P') return 3; // 3. Derecha
-    return 0;
+  if (c != 'P') return 2; // 1. Recto
+  if (i != 'P') return 1; // 2. Izquierda (ZURDO)
+  if (d != 'P') return 3; // 3. Derecha
+  return 0;
 }
-
-// Niveles iniciales (Comportamientos reactivos simples)
-Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores) {
-    Action accion = IDLE;
-    ActualizarMapa(sensores);
-
-    if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
-    if (sensores.superficie[0] == 'U') return IDLE;
-
-    // Siempre incrementar visitas
-    matriz_visitas[sensores.posF][sensores.posC]++;
-    if (last_action == WALK || last_action == JUMP) giros_sin_avanzar_n0 = 0;
-
-    char ci = ViablePorAltura(sensores.superficie[1], sensores.cota[1] - sensores.cota[0], tiene_zapatillas);
-    char cc = ViablePorAltura(sensores.superficie[2], sensores.cota[2] - sensores.cota[0], tiene_zapatillas);
-    char cd = ViablePorAltura(sensores.superficie[3], sensores.cota[3] - sensores.cota[0], tiene_zapatillas);
-
-    // Anticolisión
-    if (sensores.agentes[1] == 't') ci = 'P';
-    if (sensores.agentes[2] == 't') cc = 'P';
-    if (sensores.agentes[3] == 't') cd = 'P';
-
-    // Prioridad absoluta: U visible
-    if (cc == 'U') { last_action = WALK;    return WALK;    }
-    if (ci == 'U') { last_action = TURN_SL; return TURN_SL; }
-    if (cd == 'U') { last_action = TURN_SR; return TURN_SR; }
-
-    // Temporizador de espera acotada (usa giro45Izq como contador, libre en N0)
-    if (giro45Izq > 0) {
-      giro45Izq--;
-      matriz_visitas[sensores.posF][sensores.posC]++;
-
-      // Penalizar casillas que no son camino para volver a 'C' lo antes posible
-      unsigned char terreno_actual = sensores.superficie[0];
-      if (terreno_actual == 'H' || terreno_actual == 'S') {
-        matriz_visitas[sensores.posF][sensores.posC] += 50;
-      }
-
-      last_action = IDLE;
-      return IDLE;
-    }
-
-    // Coordenadas adyacentes para leer visitas
-    ubicacion actual = {sensores.posF, sensores.posC, sensores.rumbo};
-    ubicacion u_izq = actual;
-    u_izq.brujula = (Orientacion)((actual.brujula + 7) % 8);
-    u_izq = Delante(u_izq);
-    ubicacion u_frente = Delante(actual);
-    ubicacion u_der = actual;
-    u_der.brujula = (Orientacion)((actual.brujula + 1) % 8);
-    u_der = Delante(u_der);
-
-    bool desesperado = (giros_sin_avanzar_n0 > 5);
-    bool fuera_de_camino = (sensores.superficie[0] == 'H' || sensores.superficie[0] == 'S');
-    bool ok_i = (ci == 'C' || ci == 'D' || ((desesperado || fuera_de_camino) && (ci == 'S' || ci == 'H')));
-    bool ok_c = (cc == 'C' || cc == 'D' || ((desesperado || fuera_de_camino) && (cc == 'S' || cc == 'H')));
-    bool ok_d = (cd == 'C' || cd == 'D' || ((desesperado || fuera_de_camino) && (cd == 'S' || cd == 'H')));
-
-    int vis_i = ok_i ? matriz_visitas[u_izq.f][u_izq.c]    : 999999;
-    int vis_c = ok_c ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
-    int vis_d = ok_d ? matriz_visitas[u_der.f][u_der.c]    : 999999;
-
-    int min_vis = min({vis_i, vis_c, vis_d});
-
-    int pos = 0;
-    if (min_vis < 999999) {
-        // Empate: preferir recto → izq → der
-        if      (vis_c == min_vis) pos = 2;
-        else if (vis_i == min_vis) pos = 1;
-        else                       pos = 3;
-    } else {
-        // FALLBACK: mirar filas 2 y 3 con alternancia para no crear bucle
-        bool hay_izq = false, hay_der = false;
-        for (int k = 4; k <= 5; k++)
-            if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D')
-                { hay_izq = true; break; }
-        for (int k = 9; k <= 11; k++)
-            if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D')
-                { hay_izq = true; break; }
-        for (int k = 7; k <= 8; k++)
-            if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D')
-                { hay_der = true; break; }
-        for (int k = 13; k <= 15; k++)
-            if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D')
-                { hay_der = true; break; }
-
-        if      (hay_izq && !hay_der)           pos = 1;
-        else if (hay_der && !hay_izq)           pos = 3;
-        else if (hay_izq && hay_der)            pos = girar_derecha_n0 ? 3 : 1; // ALTERNANCIA
-    }
-
-    // Anti-bucle — contar instantes sin avanzar de verdad
-    if (last_action != WALK && last_action != JUMP) {
-        giros_sin_avanzar_n0++;
-    }
-
-    // Anti-oscilación: si llevamos mucho sin avanzar, forzar WALK a la primera casilla transitable
-    if (giros_sin_avanzar_n0 > 10) {
-        for (int dir = 0; dir < 8; dir++) {
-            ubicacion test = actual;
-            test.brujula = (Orientacion)dir;
-            ubicacion destino = Delante(test);
-            if (destino.f >= 0 && destino.f < (int)mapaResultado.size() &&
-                destino.c >= 0 && destino.c < (int)mapaResultado[0].size()) {
-                unsigned char celda = mapaResultado[destino.f][destino.c];
-                if (celda == 'C' || celda == 'D' || celda == 'U' || celda == 'S' || celda == 'H') {
-                    int dif = abs(mapaCotas[destino.f][destino.c] - mapaCotas[sensores.posF][sensores.posC]);
-                    int max_dif = tiene_zapatillas ? 2 : 1;
-                    if (dif <= max_dif) {
-                        if (sensores.rumbo == (Orientacion)dir) {
-                            giros_sin_avanzar_n0 = 0;
-                            last_action = WALK;
-                            return WALK;
-                        } else {
-                            int giros = ((dir - (int)sensores.rumbo) + 8) % 8;
-                            last_action = (giros <= 4) ? TURN_SR : TURN_SL;
-                            return last_action;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Intentar JUMP si llevamos mucho tiempo bloqueados
-    if (giros_sin_avanzar_n0 > 14) {
-        ubicacion u_jump = Delante(Delante(actual));
-        if (u_jump.f >= 0 && u_jump.f < (int)mapaResultado.size() &&
-            u_jump.c >= 0 && u_jump.c < (int)mapaResultado[0].size()) {
-            unsigned char dest = mapaResultado[u_jump.f][u_jump.c];
-            if (dest=='C'||dest=='D'||dest=='U'||dest=='?') {
-                giros_sin_avanzar_n0 = 0;
-                last_action = JUMP;
-                return JUMP;
-            }
-        }
-    }
-
-    if (giros_sin_avanzar_n0 >= 16) { // ← Reducido de 16 a 12
-        girar_derecha_n0 = !girar_derecha_n0;
-        giros_sin_avanzar_n0 = 0;
-    }
-
-    /*
-    // NUEVO: escape basado en visitas
-    {
-      // Escape por visitas: ESPERAR (no girar) para que el Técnico tenga espacio
-      bool veo_tec = (sensores.agentes[1] == 't' ||
-                      sensores.agentes[2] == 't' ||
-                      sensores.agentes[3] == 't');
-      if (veo_tec && matriz_visitas[sensores.posF][sensores.posC] > 20) {
-          girar_derecha_n0 = !girar_derecha_n0;
-          giros_sin_avanzar_n0 = 0;
-          matriz_visitas[sensores.posF][sensores.posC] = 0; // reset total
-          giro45Izq = 8;   // esperar 8 turnos (bounded, no loop infinito)
-          last_action = IDLE;
-          return IDLE;
-      }
-    }
-    */
-
-    switch (pos) {
-        case 2: accion = WALK; break;
-        case 1: accion = TURN_SL; break;
-        case 3: accion = TURN_SR; break;
-        default: accion = girar_derecha_n0 ? TURN_SR : TURN_SL; break;
-    }
-
-    last_action = accion;
-    return accion;
-}
-
-
-
 
 // --- FUNCIONES AUXILIARES NIVEL 1 (INGENIERO) ---
 bool ComportamientoIngeniero::es_transitable_N1(unsigned char c) const {
