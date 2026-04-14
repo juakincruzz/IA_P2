@@ -510,10 +510,27 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_2(Sensores sensores
  * @return Acción a realizar.
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_3(Sensores sensores) {
-    // En nivel 3, el Ingeniero solo debe apartarse del Técnico
-    if (sensores.agentes[2] == 't') return TURN_SR;
-    if (sensores.agentes[1] == 't') return TURN_SR;
-    if (sensores.agentes[3] == 't') return TURN_SL;
+    ActualizarMapa(sensores);
+    if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
+
+    // Si detectamos al Técnico en nuestra visión o chocamos con él
+    bool veo_tecnico = false;
+    for (int i = 1; i <= 15; i++) {
+        if (sensores.agentes[i] == 't' || sensores.agentes[i] == 'T') veo_tecnico = true;
+    }
+    
+    if (veo_tecnico || sensores.choque) {
+        unsigned char c = sensores.superficie[2];
+        int dif = sensores.cota[2] - sensores.cota[0];
+        int max_dif = tiene_zapatillas ? 2 : 1;
+        
+        // Si el hueco de enfrente es seguro, avanzamos para dejar paso
+        if (c != 'M' && c != 'P' && c != 'B' && c != 'A' && abs(dif) <= max_dif && sensores.agentes[2] == '_') {
+            return WALK;
+        } else {
+            return TURN_SR;
+        }
+    }
     return IDLE;
 }
 
@@ -678,7 +695,7 @@ static int GirosNecesarios(Orientacion actual, Orientacion objetivo) {
 bool ComportamientoIngeniero::EncontrarPlan_N5(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco) {
     plan_resultante.clear();
     std::priority_queue<NodoN4, std::vector<NodoN4>, std::greater<NodoN4>> abiertos;
-    std::set<EstadoN4> cerrados;
+    std::map<EstadoN4, int> cerrados;
 
     auto imp_install = [](unsigned char terreno) {
         if (terreno == 'A') return 50;
@@ -728,6 +745,7 @@ bool ComportamientoIngeniero::EncontrarPlan_N5(int start_f, int start_c, std::li
         
         if (nodo.impacto <= limite_eco) {
             abiertos.push(nodo);
+            cerrados[st] = nodo.impacto;
         }
     }
 
@@ -738,8 +756,7 @@ bool ComportamientoIngeniero::EncontrarPlan_N5(int start_f, int start_c, std::li
         NodoN4 actual = abiertos.top();
         abiertos.pop();
 
-        if (cerrados.find(actual.st) != cerrados.end()) continue;
-        cerrados.insert(actual.st);
+        if (cerrados[actual.st] < actual.impacto) continue;
 
         if (mapaResultado[actual.st.f][actual.st.c] == 'U') {
             plan_resultante = actual.secuencia;
@@ -768,16 +785,18 @@ bool ComportamientoIngeniero::EncontrarPlan_N5(int start_f, int start_c, std::li
             }
 
             for (int nh : alturas_vecino) {
-                if (abs(actual.st.h - nh) <= 1) {
+                // GRAVEDAD ESTRICTA: El tubo actual debe ser igual o 1 unidad más alto que el siguiente
+                if (actual.st.h >= nh && (actual.st.h - nh) <= 1) {
                     EstadoN4 siguiente = {nf, nc, nh};
                     int op = nh - nH;
                     
+                    // IMPACTO SIMPLE
                     int impacto_tramo = imp_op(n_terr, op) + imp_install(n_terr);
                     int nuevo_impacto = actual.impacto + impacto_tramo;
 
                     if (nuevo_impacto <= limite_eco) {
-                        if (cerrados.find(siguiente) == cerrados.end()) {
-                            cerrados.insert(siguiente);
+                        if (cerrados.find(siguiente) == cerrados.end() || cerrados[siguiente] > nuevo_impacto) {
+                            cerrados[siguiente] = nuevo_impacto;
                             NodoN4 hijo = actual;
                             hijo.st = siguiente;
                             Paso p_nuevo = {nf, nc, op};

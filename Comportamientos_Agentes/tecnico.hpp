@@ -298,6 +298,12 @@ private:
   // =========================================================
   // === VARIABLES Y ESTRUCTURAS NIVEL 3 (A-ESTRELLA) ========
   // =========================================================
+  // Variables auxiliares Nivel 3
+    int ultimaPosFN3 = -1;
+    int ultimaPosN3 = -1;  // (renombra a ultimaPosCC3 si prefieres)
+    int ultimaPosCN3 = -1;
+    Action ultimaAccionN3 = IDLE;
+
   struct EstadoN3 {
     int f;
     int c;
@@ -372,11 +378,16 @@ private:
 
   bool EncontrarPlan_N5_Tecnico(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco);
 
+  // Herramientas exclusivas para Nivel 5 y 6
+  bool EsValida_N5(const EstadoN3& st, Action act, bool ignorarentidades = false);
+  bool EncontrarPlan_N5_Caminar(EstadoN3 inicio, int dest_f, int dest_c, std::list<Action>& plan, bool ignorarentidades = false, bool parar_adyacente = false);
+
   // =========================================================
   // === MÁQUINA DE ESTADOS NIVEL 5 (OPERARIO) ==============
   // =========================================================
   enum EstadoObraTec { TEC_ESPERAR_AVISO, TEC_IR_CASILLA, TEC_ALINEARSE };
   EstadoObraTec estado_obra_tec = TEC_ESPERAR_AVISO;
+
 
   // =========================================================
   // === NIVEL 6 (COOPERACIÓN COMPLETA) =========================
