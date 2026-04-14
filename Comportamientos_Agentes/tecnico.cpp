@@ -1100,22 +1100,32 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
         plan_n5.clear(); tramo_n5 = 0;
     }
 
+    if ((3000 - sensores.vida) % 100 == 0)
+        cout << "[TEC5] inst=" << (3000 - sensores.vida) << " estado=" << estado_n6 
+             << " pos=(" << sensores.posF << "," << sensores.posC 
+             << ") dest=(" << destn6_f << "," << destn6_c << ")" << endl;
+
+    // Calcular el plan de tuberías si no lo tenemos
     // Calcular el plan de tuberías si no lo tenemos
     if (plan_n5.empty()) {
         std::list<Paso> listaplan;
-        EncontrarPlan_N5_Tecnico(sensores.BelPosF, sensores.BelPosC, listaplan, sensores.max_ecologico);
+        EncontrarPlan_N5_Arquitecto(sensores.BelPosF, sensores.BelPosC, listaplan, sensores.max_ecologico);
         for (auto& p : listaplan) plan_n5.push_back(p);
+        if (!plan_n5.empty()) {
+            // Ir directamente al primer tramo del plan sin esperar COME
+            destn6_f = plan_n5[0].fil;
+            destn6_c = plan_n5[0].col;
+            estado_n6 = 1;  // Empezar a navegar inmediatamente
+        }
     }
 
     // Cuando el Ingeniero llama (COME), buscamos en qué tramo está
     if (sensores.venpaca) {
         int ing_f = sensores.GotoF;
         int ing_c = sensores.GotoC;
-        
-        // Buscar qué tramo del plan corresponde a la posición del Ingeniero
+
         for (int i = 0; i < (int)plan_n5.size(); i++) {
             if (plan_n5[i].fil == ing_f && plan_n5[i].col == ing_c && i >= 1) {
-                // El Técnico va al tramo ANTERIOR (aguas arriba)
                 destn6_f = plan_n5[i - 1].fil;
                 destn6_c = plan_n5[i - 1].col;
                 tramo_n5 = i;

@@ -923,6 +923,7 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura_N5(const estado& origen,
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores) {
     ActualizarMapa(sensores);
+    
     if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
     if (sensores.tiempo == 0) {
@@ -956,7 +957,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
     if (!plan_tuberias_hecho) {
         std::list<Paso> lista_plan;
         // Usamos el nuevo cerebro modular exclusivo para Nivel 5 y 6
-        if (EncontrarPlan_N5(sensores.BelPosF, sensores.BelPosC, lista_plan, sensores.max_ecologico)) {
+        if (EncontrarPlan_N4(sensores.BelPosF, sensores.BelPosC, lista_plan, sensores.max_ecologico)) {
             plan_tuberias_hecho = true;
             for (auto p : lista_plan) plan_n5.push_back(p);
             est_n6 = 1; 
@@ -971,21 +972,31 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
 
     if (est_n6 == 1) { // 1. IR A LA CASILLA DEL TRAMO ACTUAL
         if (sensores.posF == tubo.fil && sensores.posC == tubo.col) {
-            est_n6 = 2; return IDLE;
-        }
-        if (!hayPlan) {
-            estado inicio = {sensores.posF, sensores.posC, (int)sensores.rumbo};
-            estado destino = {tubo.fil, tubo.col, 0};
-            plan = BusquedaEnAnchura_N5(inicio, destino, true, true);
-            hayPlan = true;
-        }
-        if (!plan.empty()) {
-            Action a = plan.front();
-            if (a == WALK && (sensores.agentes[2] != '_' || !es_seguro(sensores))) {
-                hayPlan = false; plan.clear(); return IDLE;
+            cout << "[ING5] Llegó al tramo " << tramo_n5 << " vida=" << sensores.vida << endl;
+            est_n6 = 2;
+        } else {
+            // ATAJO: si el tramo está justo delante, WALK directo sin BFS
+            ubicacion delante = Delante({sensores.posF, sensores.posC, sensores.rumbo});
+            if (delante.f == tubo.fil && delante.c == tubo.col && es_seguro(sensores)) {
+                hayPlan = false; plan.clear();
+                last_action = WALK;
+                return WALK;
             }
-            plan.pop_front(); return a;
-        } else { hayPlan = false; return TURN_SR; }
+            // Si no, usar BFS
+            if (!hayPlan) {
+                estado inicio = {sensores.posF, sensores.posC, (int)sensores.rumbo};
+                estado destino = {tubo.fil, tubo.col, 0};
+                plan = BusquedaEnAnchura_N5(inicio, destino, true, true);
+                hayPlan = true;
+            }
+            if (!plan.empty()) {
+                Action a = plan.front();
+                if (a == WALK && (sensores.agentes[2] != '_' || !es_seguro(sensores))) {
+                    hayPlan = false; plan.clear(); return IDLE;
+                }
+                plan.pop_front(); return a;
+            } else { hayPlan = false; return TURN_SR; }
+        }
     }
 
     if (est_n6 == 2) { // 2. TERRAFORMAR
@@ -994,23 +1005,16 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
             if (tubo.op == 1) return RAISE;
             if (tubo.op == -1) return DIG;
         }
-        est_n6 = 3; return IDLE;
-    }
-
-    if (est_n6 == 3) { // 3. LLAMAR AL TÉCNICO
-        // Verificar que estamos en la casilla del tramo antes de llamar
-        if (sensores.posF != tubo.fil || sensores.posC != tubo.col) {
-            est_n6 = 1; // Volver a navegar al tramo
-            hayPlan = false; plan.clear();
-            return IDLE;
-        }
+        // Caer directamente al COME sin perder turno
         terraformado_n5 = false;
         hayPlan = false; plan.clear();
         est_n6 = 4;
         return COME;
     }
 
-    if (est_n6 == 4) { // 4. MIRAR HACIA AGUAS ARRIBA (tramo anterior)
+    // Estado 3 eliminado — fusionado con estado 2
+
+    if (est_n6 == 4) { // 4. MIRAR HACIA AGUAS ARRIBA
         if (tramo_n5 > 0) {
             Paso anterior = plan_n5[tramo_n5 - 1];
             Orientacion ori = OrientacionHacia(sensores.posF, sensores.posC, anterior.fil, anterior.col);
@@ -1018,26 +1022,17 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
                 return (GirosNecesarios(sensores.rumbo, ori) <= 4) ? TURN_SR : TURN_SL;
             }
         }
-        est_n6 = 5;
+        est_n6 = 5; // Cae directamente al estado 5
     }
 
     if (est_n6 == 5) { // 5. ESPERAR AL TÉCNICO Y COSER
-        // Primero asegurar que miramos hacia aguas arriba
-        if (tramo_n5 > 0) {
-            Paso anterior = plan_n5[tramo_n5 - 1];
-            Orientacion ori = OrientacionHacia(sensores.posF, sensores.posC, anterior.fil, anterior.col);
-            if (sensores.rumbo != ori) {
-                return (GirosNecesarios(sensores.rumbo, ori) <= 4) ? TURN_SR : TURN_SL;
-            }
-        }
-        
         if (sensores.enfrente) {
             tramo_n5++;
             terraformado_n5 = false; hayPlan = false; plan.clear();
             est_n6 = 1;
             return INSTALL;
         }
-        return IDLE;  // IDLE, no TURN_SR — quedarse quieto mirando
+        return IDLE;
     }
 
   return IDLE;
@@ -1056,7 +1051,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
     if (sensores.tiempo == 0) {
         plan_tuberias_hecho = false;
         est_n6 = 0; plan_n5.clear();
-        tramo_n5 = 1; terraformado_n5 = false;
+        tramo_n5 = 0; terraformado_n5 = false;
         hayPlan = false; plan.clear();
     }
 
