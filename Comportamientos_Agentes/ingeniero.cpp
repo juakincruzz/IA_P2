@@ -364,7 +364,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores
 // =========================================================================
 // ALGORITMOS DE BÚSQUEDA (NIVEL 2)
 // =========================================================================
-
+/*
 list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, const estado& destino, bool agua_permitida, bool ignorar_entidades, bool tiene_zap_inicio) {
     queue<nodo_ext> abierta;
     set<estado_ext> cerrados;
@@ -473,7 +473,7 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, co
     }
     return list<Action>();
 }
-
+*/
 
 // Niveles avanzados (Uso de búsqueda)
 /**
@@ -482,7 +482,8 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, co
  * @return Acción a realizar.
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_2(Sensores sensores) {
-    Action accion = IDLE;
+  /*
+  Action accion = IDLE;
 
     if (!hayPlan) {
         estado origen = {sensores.posF, sensores.posC, (int)sensores.rumbo};
@@ -502,6 +503,8 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_2(Sensores sensores
         accion = plan.front(); plan.pop_front();
     }
     return accion;
+  */
+  return IDLE; // Placeholder para compilar sin errores
 }
 
 /**
@@ -510,6 +513,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_2(Sensores sensores
  * @return Acción a realizar.
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_3(Sensores sensores) {
+  /*
     ActualizarMapa(sensores);
     if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
@@ -531,6 +535,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_3(Sensores sensores
             return TURN_SR;
         }
     }
+  */
     return IDLE;
 }
 
@@ -539,6 +544,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_3(Sensores sensores
 // === MOTOR DE PLANIFICACIÓN DE TUBERÍAS (NIVEL 4) ===
 // =========================================================
 
+/*
 bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco) {
     plan_resultante.clear();
     std::priority_queue<NodoN4, std::vector<NodoN4>, std::greater<NodoN4>> abiertos;
@@ -655,6 +661,7 @@ bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::li
     }
     return false; 
 }
+*/
 
 /**
  * @brief Comportamiento del ingeniero para el Nivel 4.
@@ -662,6 +669,7 @@ bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::li
  * @return Acción a realizar.
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_4(Sensores sensores) {
+  /*
   if (!plan_tuberias_hecho) {
     // Aquí es donde estaba el error de sintaxis. Añadido el 4º argumento correctamente:
     bool exito = EncontrarPlan_N4(sensores.BelPosF, sensores.BelPosC, plan_tuberias, sensores.max_ecologico);
@@ -671,6 +679,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_4(Sensores sensores
     }
     plan_tuberias_hecho = true;
   }
+  */
   return IDLE; 
 }
 
@@ -680,6 +689,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_4(Sensores sensores
 // FUNCIONES AUXILIARES DE ALINEACIÓN (NIVEL 5)
 // =========================================================
 
+/*
 static Orientacion OrientacionHacia(int fromF, int fromC, int toF, int toC) {
     if (toF < fromF) return norte;
     if (toF > fromF) return sur;
@@ -687,11 +697,15 @@ static Orientacion OrientacionHacia(int fromF, int fromC, int toF, int toC) {
     if (toC < fromC) return oeste;
     return norte; 
 }
+*/
 
+/*
 static int GirosNecesarios(Orientacion actual, Orientacion objetivo) {
     return ((int)objetivo - (int)actual + 8) % 8;
 }
+*/
 
+/*
 bool ComportamientoIngeniero::EncontrarPlan_N5(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco) {
     plan_resultante.clear();
     std::priority_queue<NodoN4, std::vector<NodoN4>, std::greater<NodoN4>> abiertos;
@@ -811,7 +825,9 @@ bool ComportamientoIngeniero::EncontrarPlan_N5(int start_f, int start_c, std::li
     }
     return false; 
 }
+*/
 
+/*
 list<Action> ComportamientoIngeniero::BusquedaEnAnchura_N5(const estado& origen, const estado& destino, bool agua_permitida, bool ignorar_entidades) {
     map<estado_ext, pair<estado_ext, Action>> padres;
     queue<estado_ext> abierta;
@@ -915,6 +931,7 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura_N5(const estado& origen,
     }
     return camino;
 }
+*/
 
 /**
  * @brief Comportamiento del ingeniero para el Nivel 5.
@@ -922,7 +939,8 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura_N5(const estado& origen,
  * @return Acción a realizar.
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores) {
-    ActualizarMapa(sensores);
+  /*
+  ActualizarMapa(sensores);
     
     if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
@@ -1034,7 +1052,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
         }
         return IDLE;
     }
-
+  */
   return IDLE;
 }
 
@@ -1045,7 +1063,8 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
  * @return Acción a realizar.
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores) {
-    ActualizarMapa(sensores);
+  /*
+  ActualizarMapa(sensores);
     if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
     if (sensores.tiempo == 0) {
@@ -1213,6 +1232,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
         }
         return IDLE;
     }
+  */
     return IDLE;
 }
 
