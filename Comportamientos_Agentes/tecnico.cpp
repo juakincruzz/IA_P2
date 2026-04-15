@@ -364,7 +364,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_1(Sensores sensores) {
 
 
 
-/*
+
 ComportamientoTecnico::Estado ComportamientoTecnico::AplicaAccion_N2(const Estado& st, Action act) {
     Estado nuevo = st;
     if (act == TURN_SL) {
@@ -385,9 +385,7 @@ ComportamientoTecnico::Estado ComportamientoTecnico::AplicaAccion_N2(const Estad
     }
     return nuevo;
 }
-*/
 
-/*
 bool ComportamientoTecnico::EsValida_N2(const Estado& st, Action act, bool aguaPermitida) {
     if (act == TURN_SL || act == TURN_SR) return true;
 
@@ -417,9 +415,7 @@ bool ComportamientoTecnico::EsValida_N2(const Estado& st, Action act, bool aguaP
     }
     return false;
 }
-*/
 
-/*
 bool ComportamientoTecnico::EncontrarPlan_N2(const Estado& inicio, int dest_f, int dest_c, std::list<Action>& plan_resultante, bool aguaPermitida) {
     plan_resultante.clear();
     std::queue<Nodo> abiertos;
@@ -464,7 +460,6 @@ bool ComportamientoTecnico::EncontrarPlan_N2(const Estado& inicio, int dest_f, i
     }
     return false;
 }
-*/
 
 /**
  * @brief Comportamiento del técnico para el Nivel 2.
@@ -472,12 +467,10 @@ bool ComportamientoTecnico::EncontrarPlan_N2(const Estado& inicio, int dest_f, i
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_2(Sensores sensores) {
-    /*
     // En nivel 2, el Técnico solo debe apartarse del Ingeniero
     if (sensores.agentes[2] == 'i') return TURN_SR;
     if (sensores.agentes[1] == 'i') return TURN_SR;
     if (sensores.agentes[3] == 'i') return TURN_SL;
-    */
     return IDLE;
 }
 
@@ -486,7 +479,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_2(Sensores sensores) {
 // =========================================================
 // === MOTOR DE BÚSQUEDA A* NIVEL 3 (TÉCNICO) ===
 // =========================================================
-/*
+
 int ComportamientoTecnico::CostoBateria_N3(const EstadoN3& st, Action act) {
     unsigned char terreno = mapaResultado[st.f][st.c];
     int coste = 0;
@@ -517,16 +510,12 @@ int ComportamientoTecnico::CostoBateria_N3(const EstadoN3& st, Action act) {
     }
     return coste;
 }
-*/
 
-/*
 int ComportamientoTecnico::Heuristica(const EstadoN3& actual, int dest_f, int dest_c) {
     // Distancia Chebyshev multiplicada por el coste mínimo de movimiento (1)
     return max(abs(actual.f - dest_f), abs(actual.c - dest_c));
 }
-*/
 
-/*
 ComportamientoTecnico::EstadoN3 ComportamientoTecnico::AplicaAccion_N3(const EstadoN3& st, Action act) {
     EstadoN3 nuevo = st;
     if (act == TURN_SL) {
@@ -553,9 +542,7 @@ ComportamientoTecnico::EstadoN3 ComportamientoTecnico::AplicaAccion_N3(const Est
     }
     return nuevo;
 }
-*/
 
-/*
 bool ComportamientoTecnico::EsValida_N3(const EstadoN3& st, Action act, bool ignorarentidades) {
     if (act == TURN_SL || act == TURN_SR) return true;
     if (act == WALK) {
@@ -582,9 +569,7 @@ bool ComportamientoTecnico::EsValida_N3(const EstadoN3& st, Action act, bool ign
     }
     return false;
 }
-*/
 
-/*
 bool ComportamientoTecnico::EncontrarPlan_N3(const EstadoN3& inicio, int dest_f, int dest_c, std::list<Action>& plan_resultante, bool ignorar_entidades, bool parar_adyacente) {
     plan_resultante.clear();
     std::priority_queue<NodoN3, std::vector<NodoN3>, std::greater<NodoN3>> abiertos;
@@ -634,7 +619,6 @@ bool ComportamientoTecnico::EncontrarPlan_N3(const EstadoN3& inicio, int dest_f,
     }
     return false;
 }
-*/
 
 /**
  * @brief Comportamiento del técnico para el Nivel 3.
@@ -642,7 +626,6 @@ bool ComportamientoTecnico::EncontrarPlan_N3(const EstadoN3& inicio, int dest_f,
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_3(Sensores sensores) {
-    /*
     // Replanificar si el plan anterior causó error
     if (hay_plan && !plan.empty()) {
         if (sensores.posF == ultimaPosFN3 && sensores.posC == ultimaPosCN3 && ultimaAccionN3 == WALK) {
@@ -684,7 +667,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_3(Sensores sensores) {
     }
 
     hay_plan = false;
-    */
     return IDLE;
 }
 
@@ -694,7 +676,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_3(Sensores sensores) {
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_4(Sensores sensores) {
-    /*
     // Inicialización al primer instante
     if (sensores.tiempo == 0) {
         plan_n5.clear();
@@ -771,8 +752,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_4(Sensores sensores) {
     plan.clear();
     tramo_n5++;
     return INSTALL;
-    */
-    return IDLE;
 }
 
 
@@ -781,7 +760,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_4(Sensores sensores) {
 // === MÁQUINA DE ESTADOS COOPERATIVA (NIVEL 5) ===
 // =========================================================
 
-/*
 // Clon exacto del algoritmo del Ingeniero para que ambos deduzcan el mismo plan
 bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco) {
     plan_resultante.clear();
@@ -896,9 +874,7 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c
     }
     return false;
 }
-*/
 
-/*
 bool ComportamientoTecnico::EncontrarPlan_N5_Tecnico(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco) {
     plan_resultante.clear();
     std::priority_queue<NodoN4_Tecnico, std::vector<NodoN4_Tecnico>, std::greater<NodoN4_Tecnico>> abiertos;
@@ -1016,12 +992,11 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Tecnico(int start_f, int start_c, s
     }
     return false;
 }
-*/
 
 // =========================================================
 // FUNCIONES AUXILIARES DE ALINEACIÓN (NIVEL 5)
 // =========================================================
-/*
+
 static Orientacion OrientacionHacia_Tec(int fromF, int fromC, int toF, int toC) {
     if (toF < fromF) return norte;
     if (toF > fromF) return sur;
@@ -1029,14 +1004,12 @@ static Orientacion OrientacionHacia_Tec(int fromF, int fromC, int toF, int toC) 
     if (toC < fromC) return oeste;
     return norte;
 }
-*/
-/*
+
 static int GirosNecesarios_Tec(Orientacion actual, Orientacion objetivo) {
     return ((int)objetivo - (int)actual + 8) % 8;
 }
-*/
 
-/*
+
 bool ComportamientoTecnico::EsValida_N5(const EstadoN3& st, Action act, bool ignorarentidades) {
     if (act == TURN_SL || act == TURN_SR) return true;
     if (act == WALK) {
@@ -1063,9 +1036,7 @@ bool ComportamientoTecnico::EsValida_N5(const EstadoN3& st, Action act, bool ign
     }
     return false;
 }
-*/
 
-/*
 bool ComportamientoTecnico::EncontrarPlan_N5_Caminar(EstadoN3 inicio, int dest_f, int dest_c, std::list<Action>& plan_resultante, bool ignorar_entidades, bool parar_adyacente) {
     plan_resultante.clear();
     std::priority_queue<NodoN3, std::vector<NodoN3>, std::greater<NodoN3>> abiertos;
@@ -1116,7 +1087,6 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Caminar(EstadoN3 inicio, int dest_f
     }
     return false;
 }
-*/
 
 /**
  * @brief Comportamiento del técnico para el Nivel 5.
@@ -1124,7 +1094,6 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Caminar(EstadoN3 inicio, int dest_f
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
-    /*
     if (sensores.tiempo == 0) {
         estado_n6 = 0; destn6_f = -1; destn6_c = -1;
         hay_plan = false; plan.clear();
@@ -1202,7 +1171,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
         }
         return IDLE; // Esperar a que el Ingeniero me mire
     }
-    */
+
     return IDLE;
 }
 
@@ -1212,7 +1181,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
-    /*
     ActualizarMapa(sensores);
     if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
@@ -1283,7 +1251,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
             }
             return TURN_SR; // Giro hasta encontrarlo
     }
-    */
     return IDLE;
 }
 
