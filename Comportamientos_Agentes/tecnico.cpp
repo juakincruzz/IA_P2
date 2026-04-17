@@ -791,15 +791,16 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c
 
     unsigned char start_terr = mapaResultado[start_f][start_c];
     if (start_terr == 'M' || start_terr == 'P') return false; 
-    
+
     int start_H = mapaCotas[start_f][start_c];
     std::vector<int> alturas_inicio;
-    
-    if (start_terr == 'A') alturas_inicio.push_back(start_H);
-    else {
+
+    if (start_terr == 'A') {
+        alturas_inicio.push_back(start_H); 
+    } else {
         alturas_inicio.push_back(start_H);
         if (start_H > 0) alturas_inicio.push_back(start_H - 1);
-        if (start_H < 9) alturas_inicio.push_back(start_H + 1);
+        if (start_H < 9) alturas_inicio.push_back(start_H + 1); 
     }
 
     for (int h : alturas_inicio) {
@@ -810,7 +811,7 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c
         Paso p = {start_f, start_c, op}; 
         nodo.secuencia.push_back(p);
         nodo.impacto = imp_op(start_terr, op);
-
+        
         if (nodo.impacto <= limite_eco) {
             abiertos.push(nodo);
             cerrados[st] = nodo.impacto;
@@ -824,12 +825,12 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c
         NodoN4_Tecnico actual = abiertos.top();
         abiertos.pop();
 
+        if (cerrados[actual.st] < actual.impacto) continue;
+
         if (mapaResultado[actual.st.f][actual.st.c] == 'U') {
             plan_resultante = actual.secuencia;
             return true;
         }
-
-        unsigned char actual_terr = mapaResultado[actual.st.f][actual.st.c];
 
         for (int i = 0; i < 4; i++) {
             int nf = actual.st.f + df[i];
@@ -839,12 +840,14 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c
 
             unsigned char n_terr = mapaResultado[nf][nc];
             if (n_terr == 'M' || n_terr == 'P' || n_terr == '?') continue; 
+            if (n_terr == 'B') continue;
 
             int nH = mapaCotas[nf][nc];
             std::vector<int> alturas_vecino;
-            
-            if (n_terr == 'A') alturas_vecino.push_back(nH); 
-            else {
+
+            if (n_terr == 'A') {
+                alturas_vecino.push_back(nH); 
+            } else {
                 alturas_vecino.push_back(nH);
                 if (nH > 0) alturas_vecino.push_back(nH - 1);
                 if (nH < 9) alturas_vecino.push_back(nH + 1);
@@ -854,7 +857,8 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c
                 if (actual.st.h >= nh && (actual.st.h - nh) <= 1) {
                     EstadoN4_Tecnico siguiente = {nf, nc, nh};
                     int op = nh - nH;
-                    int impacto_tramo = imp_op(n_terr, op) + imp_install(n_terr) + imp_install(actual_terr);
+                    
+                    int impacto_tramo = imp_op(n_terr, op) + imp_install(n_terr);
                     int nuevo_impacto = actual.impacto + impacto_tramo;
 
                     if (nuevo_impacto <= limite_eco) {
@@ -872,7 +876,7 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c
             }
         }
     }
-    return false;
+    return false; 
 }
 
 bool ComportamientoTecnico::EncontrarPlan_N5_Tecnico(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco) {

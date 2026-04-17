@@ -957,7 +957,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
     if (!plan_tuberias_hecho) {
         std::list<Paso> lista_plan;
         // Usamos el nuevo cerebro modular exclusivo para Nivel 5 y 6
-        if (EncontrarPlan_N4(sensores.BelPosF, sensores.BelPosC, lista_plan, sensores.max_ecologico)) {
+        if (EncontrarPlan_N5(sensores.BelPosF, sensores.BelPosC, lista_plan, sensores.max_ecologico)) {
             plan_tuberias_hecho = true;
             for (auto p : lista_plan) plan_n5.push_back(p);
             est_n6 = 1; 
