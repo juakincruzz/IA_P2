@@ -395,10 +395,12 @@ int Entidad::fixBateria_sig_accion_jugador(unsigned char celdaJugador,
       bateria_sig_accion = 1;
       break;
     }
-    if (difAltura > 0)
-      bateria_sig_accion += 5;
-    else if (difAltura < 0)
-      bateria_sig_accion -= 2;
+    if (celdaJugador == 'A' or celdaJugador == 'H' or celdaJugador == 'S') {
+      if (difAltura > 0)
+        bateria_sig_accion += 5;
+      else if (difAltura < 0)
+        bateria_sig_accion -= 2;
+    }
     break;
 
   case JUMP:

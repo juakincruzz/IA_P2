@@ -1044,37 +1044,55 @@ bool MonitorJuego::checkPipeConnection(int startF, int startC) {
     int f = curr.first;
     int c = curr.second;
 
-    if (mapa->getCelda(f, c) == 'U')
-      return true;
+    // Si la casilla actual es el destino FINAL ('U'), hemos tenido éxito.
+    // Solo permitimos esto si NO es la casilla de inicio, o si la casilla de inicio
+    // tiene al menos un bit de tubería puesto (para evitar victorias con 0 tuberías)
+    if (mapa->getCelda(f, c) == 'U') {
+      if (f != startF || c != startC || mapaTuberias[f][c] != 0) {
+        return true;
+      }
+    }
 
     unsigned char mask = mapaTuberias[f][c];
 
-    // Norte (bit 1)
+    // Norte (bit 1) -> Sur (bit 16)
     if ((mask & 1) && f > 0) {
-      if (visited.find({f - 1, c}) == visited.end()) {
-        visited.insert({f - 1, c});
-        q.push({f - 1, c});
+      int nf = f - 1, nc = c;
+      if (visited.find({nf, nc}) == visited.end()) {
+        if (mapa->getCelda(nf, nc) == 'U' || (mapaTuberias[nf][nc] & 16)) {
+          visited.insert({nf, nc});
+          q.push({nf, nc});
+        }
       }
     }
-    // Este (bit 4)
+    // Este (bit 4) -> Oeste (bit 64)
     if ((mask & 4) && c < (int)mapa->getNCols() - 1) {
-      if (visited.find({f, c + 1}) == visited.end()) {
-        visited.insert({f, c + 1});
-        q.push({f, c + 1});
+      int nf = f, nc = c + 1;
+      if (visited.find({nf, nc}) == visited.end()) {
+        if (mapa->getCelda(nf, nc) == 'U' || (mapaTuberias[nf][nc] & 64)) {
+          visited.insert({nf, nc});
+          q.push({nf, nc});
+        }
       }
     }
-    // Sur (bit 16)
+    // Sur (bit 16) -> Norte (bit 1)
     if ((mask & 16) && f < (int)mapa->getNFils() - 1) {
-      if (visited.find({f + 1, c}) == visited.end()) {
-        visited.insert({f + 1, c});
-        q.push({f + 1, c});
+      int nf = f + 1, nc = c;
+      if (visited.find({nf, nc}) == visited.end()) {
+        if (mapa->getCelda(nf, nc) == 'U' || (mapaTuberias[nf][nc] & 1)) {
+          visited.insert({nf, nc});
+          q.push({nf, nc});
+        }
       }
     }
-    // Oeste (bit 64)
+    // Oeste (bit 64) -> Este (bit 4)
     if ((mask & 64) && c > 0) {
-      if (visited.find({f, c - 1}) == visited.end()) {
-        visited.insert({f, c - 1});
-        q.push({f, c - 1});
+      int nf = f, nc = c - 1;
+      if (visited.find({nf, nc}) == visited.end()) {
+        if (mapa->getCelda(nf, nc) == 'U' || (mapaTuberias[nf][nc] & 4)) {
+          visited.insert({nf, nc});
+          q.push({nf, nc});
+        }
       }
     }
   }
