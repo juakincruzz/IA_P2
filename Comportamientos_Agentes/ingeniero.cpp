@@ -366,112 +366,107 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores
 // =========================================================================
 
 list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, const estado& destino, bool agua_permitida, bool ignorar_entidades, bool tiene_zap_inicio) {
-    queue<nodo_ext> abierta;
+    map<estado_ext, pair<estado_ext, Action>> padres;
+    queue<estado_ext> abierta;
     set<estado_ext> cerrados;
 
-    nodo_ext inicial;
-    inicial.st = {origen.fila, origen.columna, origen.orientacion, tiene_zap_inicio};
-    abierta.push(inicial);
-    cerrados.insert(inicial.st);
+    estado_ext ini = {origen.fila, origen.columna, origen.orientacion, tiene_zap_inicio};
+    abierta.push(ini);
+    cerrados.insert(ini);
 
-    int nodos_expandidos = 0;
+    estado_ext meta;
+    bool encontrado = false;
 
-    while (!abierta.empty() && nodos_expandidos < 100000) {
-        nodos_expandidos++;
-        nodo_ext actual = abierta.front();
+    while (!abierta.empty()) {
+        estado_ext act = abierta.front();
         abierta.pop();
 
-        if (actual.st.fila == destino.fila && actual.st.columna == destino.columna)
-            return actual.secuencia;
-
-        bool zap = actual.st.zapatillas;
-        int max_desnivel = zap ? 2 : 1;
-
-        // HIJO 1: GIRAR IZQUIERDA
-        {
-            nodo_ext hijo = actual;
-            hijo.st.orientacion = (actual.st.orientacion + 7) % 8;
-            if (cerrados.find(hijo.st) == cerrados.end()) {
-                hijo.secuencia.push_back(TURN_SL);
-                cerrados.insert(hijo.st);
-                abierta.push(hijo);
-            }
+        if (act.fila == destino.fila && act.columna == destino.columna) {
+            meta = act;
+            encontrado = true;
+            break;
         }
 
-        // HIJO 2: GIRAR DERECHA
-        {
-            nodo_ext hijo = actual;
-            hijo.st.orientacion = (actual.st.orientacion + 1) % 8;
-            if (cerrados.find(hijo.st) == cerrados.end()) {
-                hijo.secuencia.push_back(TURN_SR);
-                cerrados.insert(hijo.st);
-                abierta.push(hijo);
-            }
-        }
+        int max_desnivel = act.zapatillas ? 2 : 1;
 
-        // HIJO 3: WALK
-        {
-            int nf = actual.st.fila, nc = actual.st.columna;
-            switch(actual.st.orientacion) {
-                case 0: nf--; break; case 1: nf--; nc++; break;
-                case 2: nc++; break; case 3: nf++; nc++; break;
-                case 4: nf++; break; case 5: nf++; nc--; break;
-                case 6: nc--; break; case 7: nf--; nc--; break;
-            }
-            if (nf >= 0 && nf < (int)mapaResultado.size() && nc >= 0 && nc < (int)mapaResultado[0].size()) {
-                unsigned char celda = mapaResultado[nf][nc];
-                unsigned char entidad = mapaEntidades[nf][nc];
-                if (ignorar_entidades || (entidad == '_' || entidad == '?')) {
-                    if (celda != 'P' && celda != 'M' && celda != 'B' && (agua_permitida || celda != 'A')) {
-                        int dif_cota = mapaCotas[nf][nc] - mapaCotas[actual.st.fila][actual.st.columna];
-                        if (celda == '?' || abs(dif_cota) <= max_desnivel) {
-                            nodo_ext hijo = actual;
-                            hijo.st.fila = nf; hijo.st.columna = nc;
-                            if (celda == 'D') hijo.st.zapatillas = true;
-                            if (cerrados.find(hijo.st) == cerrados.end()) {
-                                hijo.secuencia.push_back(WALK);
-                                cerrados.insert(hijo.st);
-                                abierta.push(hijo);
-                            }
+        Action acciones[] = {TURN_SL, TURN_SR, WALK, JUMP};
+        for (Action accion : acciones) {
+            estado_ext hijo = act;
+            bool valido = true;
+
+            if (accion == TURN_SL) {
+                hijo.orientacion = (act.orientacion + 7) % 8;
+            } else if (accion == TURN_SR) {
+                hijo.orientacion = (act.orientacion + 1) % 8;
+            } else if (accion == WALK) {
+                int nf = act.fila, nc = act.columna;
+                switch(act.orientacion) {
+                    case 0: nf--; break; case 1: nf--; nc++; break;
+                    case 2: nc++; break; case 3: nf++; nc++; break;
+                    case 4: nf++; break; case 5: nf++; nc--; break;
+                    case 6: nc--; break; case 7: nf--; nc--; break;
+                }
+                if (nf < 0 || nf >= (int)mapaResultado.size() || nc < 0 || nc >= (int)mapaResultado[0].size()) valido = false;
+                else {
+                    unsigned char celda = mapaResultado[nf][nc];
+                    if (celda == 'P' || celda == 'M' || celda == 'B' || (!agua_permitida && celda == 'A')) valido = false;
+                    else if (!ignorar_entidades && mapaEntidades[nf][nc] != '_' && mapaEntidades[nf][nc] != '?') valido = false;
+                    else {
+                        int dif = mapaCotas[nf][nc] - mapaCotas[act.fila][act.columna];
+                        if (celda != '?' && abs(dif) > max_desnivel) valido = false;
+                        else {
+                            hijo.fila = nf; hijo.columna = nc;
+                            if (celda == 'D') hijo.zapatillas = true;
+                        }
+                    }
+                }
+            } else if (accion == JUMP) {
+                int jf = act.fila, jc = act.columna, mf = act.fila, mc = act.columna;
+                switch(act.orientacion) {
+                    case 0: jf-=2; mf--; break; case 1: jf-=2; jc+=2; mf--; mc++; break;
+                    case 2: jc+=2; mc++; break; case 3: jf+=2; jc+=2; mf++; mc++; break;
+                    case 4: jf+=2; mf++; break; case 5: jf+=2; jc-=2; mf++; mc--; break;
+                    case 6: jc-=2; mc--; break; case 7: jf-=2; jc-=2; mf--; mc--; break;
+                }
+                if (jf < 0 || jf >= (int)mapaResultado.size() || jc < 0 || jc >= (int)mapaResultado[0].size()) valido = false;
+                else {
+                    unsigned char c_mid = mapaResultado[mf][mc], c_fin = mapaResultado[jf][jc];
+                    if (c_mid == 'M' || c_mid == 'P' || c_mid == 'B' || (!agua_permitida && c_mid == 'A') ||
+                        c_fin == 'M' || c_fin == 'P' || c_fin == 'B' || (!agua_permitida && c_fin == 'A')) valido = false;
+                    else if (!ignorar_entidades) {
+                        unsigned char e_mid = mapaEntidades[mf][mc], e_fin = mapaEntidades[jf][jc];
+                        if ((e_mid != '_' && e_mid != '?') || (e_fin != '_' && e_fin != '?')) valido = false;
+                    }
+                    if (valido) {
+                        int dif = mapaCotas[jf][jc] - mapaCotas[act.fila][act.columna];
+                        if (c_fin != '?' && abs(dif) > max_desnivel) valido = false;
+                        else {
+                            hijo.fila = jf; hijo.columna = jc;
+                            if (c_fin == 'D') hijo.zapatillas = true;
                         }
                     }
                 }
             }
-        }
 
-        // HIJO 4: JUMP
-        {
-            int jf = actual.st.fila, jc = actual.st.columna;
-            int mf = actual.st.fila, mc = actual.st.columna;
-            switch(actual.st.orientacion) {
-                case 0: jf-=2; mf--; break; case 1: jf-=2; jc+=2; mf--; mc++; break;
-                case 2: jc+=2; mc++; break; case 3: jf+=2; jc+=2; mf++; mc++; break;
-                case 4: jf+=2; mf++; break; case 5: jf+=2; jc-=2; mf++; mc--; break;
-                case 6: jc-=2; mc--; break; case 7: jf-=2; jc-=2; mf--; mc--; break;
-            }
-            if (jf >= 0 && jf < (int)mapaResultado.size() && jc >= 0 && jc < (int)mapaResultado[0].size()) {
-                unsigned char c_mid = mapaResultado[mf][mc], c_fin = mapaResultado[jf][jc];
-                unsigned char e_mid = mapaEntidades[mf][mc], e_fin = mapaEntidades[jf][jc];
-                if (c_mid != 'M' && c_mid != 'P' && c_mid != 'B' && (agua_permitida || c_mid != 'A') &&
-                    c_fin != 'M' && c_fin != 'P' && c_fin != 'B' && (agua_permitida || c_fin != 'A')) {
-                    if (ignorar_entidades || ((e_mid == '_' || e_mid == '?') && (e_fin == '_' || e_fin == '?'))) {
-                        int dif_cota_fin = mapaCotas[jf][jc] - mapaCotas[actual.st.fila][actual.st.columna];
-                        if (c_fin == '?' || abs(dif_cota_fin) <= max_desnivel) {
-                            nodo_ext hijo = actual;
-                            hijo.st.fila = jf; hijo.st.columna = jc;
-                            if (c_fin == 'D') hijo.st.zapatillas = true;
-                            if (cerrados.find(hijo.st) == cerrados.end()) {
-                                hijo.secuencia.push_back(JUMP);
-                                cerrados.insert(hijo.st);
-                                abierta.push(hijo);
-                            }
-                        }
-                    }
-                }
+            if (valido && cerrados.find(hijo) == cerrados.end()) {
+                cerrados.insert(hijo);
+                padres[hijo] = {act, accion};
+                abierta.push(hijo);
             }
         }
     }
-    return list<Action>();
+
+    if (!encontrado) return list<Action>();
+
+    list<Action> camino;
+    estado_ext cur = meta;
+    while (!(cur.fila == ini.fila && cur.columna == ini.columna &&
+             cur.orientacion == ini.orientacion && cur.zapatillas == ini.zapatillas)) {
+        auto& p = padres[cur];
+        camino.push_front(p.second);
+        cur = p.first;
+    }
+    return camino;
 }
 
 
