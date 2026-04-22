@@ -934,14 +934,14 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
     ActualizarMapa(sensores);
     
     if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
-
+ 
     if (sensores.tiempo == 0) {
         plan_tuberias_hecho = false;
         est_n6 = 0; plan_n5.clear();
         tramo_n5 = 1; terraformado_n5 = false;
         hayPlan = false; plan.clear();
     }
-
+ 
     auto es_seguro = [&](Sensores sens) {
         int nf = sens.posF, nc = sens.posC;
         switch(sens.rumbo) {
@@ -962,23 +962,26 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
         }
         return true;
     };
-
+ 
     if (!plan_tuberias_hecho) {
         std::list<Paso> lista_plan;
         // Usamos el nuevo cerebro modular exclusivo para Nivel 5 y 6
         if (EncontrarPlan_N5(sensores.BelPosF, sensores.BelPosC, lista_plan, sensores.max_ecologico)) {
             plan_tuberias_hecho = true;
             for (auto p : lista_plan) plan_n5.push_back(p);
+            cout << "[ING5 PLAN TUBERIA] size=" << plan_n5.size() << endl;
+            for (int i = 0; i < (int)plan_n5.size(); i++)
+                cout << "  [" << i << "] (" << plan_n5[i].fil << "," << plan_n5[i].col << ") op=" << plan_n5[i].op << endl;
             est_n6 = 1; 
             hayPlan = false; plan.clear();
             return IDLE; 
         }
         return IDLE;
     }
-
+ 
     if (tramo_n5 >= (int)plan_n5.size()) return IDLE; // ¡CLAVE NARANJA! Sin el -1 para hacer el último tubo
     Paso tubo = plan_n5[tramo_n5]; 
-
+ 
     if (est_n6 == 1) { // 1. IR A LA CASILLA DEL TRAMO ACTUAL
         if (sensores.posF == tubo.fil && sensores.posC == tubo.col) {
             cout << "[ING5] Llegó al tramo " << tramo_n5 << " vida=" << sensores.vida << endl;
@@ -1007,12 +1010,12 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
             } else { hayPlan = false; return TURN_SR; }
         }
     }
-
+ 
     if (est_n6 == 2) { // 2. TERRAFORMAR
         cout << "[TEC5 EST2] tramo=" << tramo_n5 << " pos=(" << sensores.posF << "," << sensores.posC
              << ") rumbo=" << sensores.rumbo << " enfrente=" << sensores.enfrente
              << " agente[2]=" << sensores.agentes[2] << endl;
-
+ 
         if (!terraformado_n5 && tubo.op != 0) {
             terraformado_n5 = true;
             if (tubo.op == 1) return RAISE;
@@ -1024,9 +1027,9 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
         est_n6 = 4;
         return COME;
     }
-
+ 
     // Estado 3 eliminado — fusionado con estado 2
-
+ 
     if (est_n6 == 4) { // 4. MIRAR HACIA AGUAS ARRIBA
         if (tramo_n5 > 0) {
             Paso anterior = plan_n5[tramo_n5 - 1];
@@ -1037,7 +1040,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
         }
         est_n6 = 5; // Cae directamente al estado 5
     }
-
+ 
     if (est_n6 == 5) { // 5. ESPERAR AL TÉCNICO Y COSER
         cout << "[ING5 EST5] tramo=" << tramo_n5 << " pos=(" << sensores.posF << "," << sensores.posC 
              << ") rumbo=" << sensores.rumbo << " enfrente=" << sensores.enfrente 
@@ -1050,7 +1053,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
         }
         return IDLE;
     }
-
+ 
   return IDLE;
 }
 
@@ -1098,6 +1101,9 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
           if (EncontrarPlan_N5(sensores.BelPosF, sensores.BelPosC, lista_plan, sensores.max_ecologico)) {
                 plan_tuberias_hecho = true;
                 for (auto p : lista_plan) plan_n5.push_back(p);
+                cout << "[ING5 PLAN TUBERIA] size=" << plan_n5.size() << endl;
+                for (int i = 0; i < (int)plan_n5.size(); i++)
+                  cout << "  [" << i << "] (" << plan_n5[i].fil << "," << plan_n5[i].col << ") op=" << plan_n5[i].op << endl;
                 est_n6 = 1; 
                 hayPlan = false; plan.clear();
                 return IDLE; 

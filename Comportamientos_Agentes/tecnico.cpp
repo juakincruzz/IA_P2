@@ -1098,73 +1098,45 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Caminar(EstadoN3 inicio, int dest_f
 }
 
 /**
- * @brief Comportamiento del técnico para el Nivel 5.
- * @param sensores Datos actuales de los sensores.
- * @return Acción a realizar.
- */
+    * @brief Comportamiento del técnico para el Nivel 5.
+    * @param sensores Datos actuales de los sensores.
+    * @return Acción a realizar.
+*/
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
-    // Al inicio de ComportamientoTecnicoNivel_5, antes de todo:
-    cout << "[TEC5 TICK] t=" << sensores.tiempo << " estado=" << estado_n6 
-        << " pos=(" << sensores.posF << "," << sensores.posC 
-        << ") venpaca=" << sensores.venpaca << endl;
-
     if (sensores.tiempo == 0) {
-        estado_n6 = 0; destn6_f = -1; destn6_c = -1;
+        estado_n6 = 0;
         hay_plan = false; plan.clear();
-        plan_n5.clear(); tramo_n5 = 0;
+        plan_n5.clear(); tramo_n5 = 1;
     }
 
-    if ((3000 - sensores.vida) % 100 == 0)
-        cout << "[TEC5] inst=" << (3000 - sensores.vida) << " estado=" << estado_n6 
-             << " pos=(" << sensores.posF << "," << sensores.posC 
-             << ") dest=(" << destn6_f << "," << destn6_c << ")" << endl;
-
-    // Calcular el plan de tuberías si no lo tenemos
-    // Calcular el plan de tuberías si no lo tenemos
     if (plan_n5.empty()) {
         std::list<Paso> listaplan;
         EncontrarPlan_N5_Arquitecto(sensores.BelPosF, sensores.BelPosC, listaplan, sensores.max_ecologico);
         for (auto& p : listaplan) plan_n5.push_back(p);
-        if (!plan_n5.empty()) {
-            // Ir directamente al primer tramo del plan sin esperar COME
+        if (plan_n5.size() > 1) {
             destn6_f = plan_n5[0].fil;
             destn6_c = plan_n5[0].col;
-            estado_n6 = 1;  // Empezar a navegar inmediatamente
+            estado_n6 = 1;
         }
     }
 
-    // Cuando el Ingeniero llama (COME), buscamos en qué tramo está
-    if (sensores.venpaca) {
-        int ing_f = sensores.GotoF;
-        int ing_c = sensores.GotoC;
+    if (estado_n6 == 0 || tramo_n5 >= (int)plan_n5.size()) return IDLE;
 
-        for (int i = 0; i < (int)plan_n5.size(); i++) {
-            if (plan_n5[i].fil == ing_f && plan_n5[i].col == ing_c && i >= 1) {
-                // Solo actualizar si es un tramo nuevo (no retroceder)
-                if (i >= tramo_n5) {
-                    destn6_f = plan_n5[i - 1].fil;
-                    destn6_c = plan_n5[i - 1].col;
-                    tramo_n5 = i;
-                    estado_n6 = 1;
-                    hay_plan = false; plan.clear();
-                }
-                break;
-            }
-        }
-    }
+    if (estado_n6 == 1) {
+        destn6_f = plan_n5[tramo_n5 - 1].fil;
+        destn6_c = plan_n5[tramo_n5 - 1].col;
+        cout << "[TEC5 EST1] tramo=" << tramo_n5 << " pos=(" << sensores.posF << "," << sensores.posC 
+         << ") dest=(" << destn6_f << "," << destn6_c << ") hay_plan=" << hay_plan << endl;
 
-    if (estado_n6 == 0) return IDLE;
-
-    if (estado_n6 == 1) { // IR A LA CASILLA AGUAS ARRIBA
         if (sensores.posF == destn6_f && sensores.posC == destn6_c) {
-            estado_n6 = 2; return IDLE;
+            estado_n6 = 2;
+            hay_plan = false; plan.clear();
+            return IDLE;
         }
         if (!hay_plan) {
             EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, tiene_zapatillas};
             EncontrarPlan_N5_Caminar(inicio, destn6_f, destn6_c, plan, true, false);
             hay_plan = true;
-            cout << "[TEC5 PLAN] desde=(" << sensores.posF << "," << sensores.posC 
-                 << ") hasta=(" << destn6_f << "," << destn6_c << ") pasos=" << plan.size() << endl;
         }
         if (!plan.empty()) {
             Action a = plan.front();
@@ -1182,17 +1154,10 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
             int giros = GirosNecesarios_Tec(sensores.rumbo, ori);
             return (giros <= 4) ? TURN_SR : TURN_SL;
         }
-        
+
         if (sensores.enfrente) {
-            if (tramo_n5 + 1 < (int)plan_n5.size()) {
-                int sig = tramo_n5 + 1;
-                destn6_f = plan_n5[sig - 1].fil;  // = plan[tramo_n5]
-                destn6_c = plan_n5[sig - 1].col;
-                tramo_n5 = sig;
-                estado_n6 = 1;
-            } else {
-                estado_n6 = 0;
-            }
+            tramo_n5++;
+            estado_n6 = 1;
             hay_plan = false; plan.clear();
             return INSTALL;
         }
