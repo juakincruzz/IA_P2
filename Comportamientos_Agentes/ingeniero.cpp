@@ -1009,6 +1009,10 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
     }
 
     if (est_n6 == 2) { // 2. TERRAFORMAR
+        cout << "[TEC5 EST2] tramo=" << tramo_n5 << " pos=(" << sensores.posF << "," << sensores.posC
+             << ") rumbo=" << sensores.rumbo << " enfrente=" << sensores.enfrente
+             << " agente[2]=" << sensores.agentes[2] << endl;
+
         if (!terraformado_n5 && tubo.op != 0) {
             terraformado_n5 = true;
             if (tubo.op == 1) return RAISE;
@@ -1035,6 +1039,9 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
     }
 
     if (est_n6 == 5) { // 5. ESPERAR AL TÉCNICO Y COSER
+        cout << "[ING5 EST5] tramo=" << tramo_n5 << " pos=(" << sensores.posF << "," << sensores.posC 
+             << ") rumbo=" << sensores.rumbo << " enfrente=" << sensores.enfrente 
+             << " agente[2]=" << sensores.agentes[2] << endl;
         if (sensores.enfrente) {
             tramo_n5++;
             terraformado_n5 = false; hayPlan = false; plan.clear();

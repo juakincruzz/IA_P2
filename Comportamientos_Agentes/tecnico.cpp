@@ -1103,6 +1103,11 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Caminar(EstadoN3 inicio, int dest_f
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
+    // Al inicio de ComportamientoTecnicoNivel_5, antes de todo:
+    cout << "[TEC5 TICK] t=" << sensores.tiempo << " estado=" << estado_n6 
+        << " pos=(" << sensores.posF << "," << sensores.posC 
+        << ") venpaca=" << sensores.venpaca << endl;
+
     if (sensores.tiempo == 0) {
         estado_n6 = 0; destn6_f = -1; destn6_c = -1;
         hay_plan = false; plan.clear();
@@ -1135,11 +1140,14 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
 
         for (int i = 0; i < (int)plan_n5.size(); i++) {
             if (plan_n5[i].fil == ing_f && plan_n5[i].col == ing_c && i >= 1) {
-                destn6_f = plan_n5[i - 1].fil;
-                destn6_c = plan_n5[i - 1].col;
-                tramo_n5 = i;
-                estado_n6 = 1;
-                hay_plan = false; plan.clear();
+                // Solo actualizar si es un tramo nuevo (no retroceder)
+                if (i >= tramo_n5) {
+                    destn6_f = plan_n5[i - 1].fil;
+                    destn6_c = plan_n5[i - 1].col;
+                    tramo_n5 = i;
+                    estado_n6 = 1;
+                    hay_plan = false; plan.clear();
+                }
                 break;
             }
         }
@@ -1155,6 +1163,8 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
             EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, tiene_zapatillas};
             EncontrarPlan_N5_Caminar(inicio, destn6_f, destn6_c, plan, true, false);
             hay_plan = true;
+            cout << "[TEC5 PLAN] desde=(" << sensores.posF << "," << sensores.posC 
+                 << ") hasta=(" << destn6_f << "," << destn6_c << ") pasos=" << plan.size() << endl;
         }
         if (!plan.empty()) {
             Action a = plan.front();
@@ -1165,7 +1175,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
         }
     }
 
-    if (estado_n6 == 2) { // MIRAR HACIA EL INGENIERO (aguas abajo)
+    if (estado_n6 == 2) {
         Paso tramo_ing = plan_n5[tramo_n5];
         Orientacion ori = OrientacionHacia_Tec(sensores.posF, sensores.posC, tramo_ing.fil, tramo_ing.col);
         if (sensores.rumbo != ori) {
@@ -1174,11 +1184,19 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
         }
         
         if (sensores.enfrente) {
-            estado_n6 = 0;
+            if (tramo_n5 + 1 < (int)plan_n5.size()) {
+                int sig = tramo_n5 + 1;
+                destn6_f = plan_n5[sig - 1].fil;  // = plan[tramo_n5]
+                destn6_c = plan_n5[sig - 1].col;
+                tramo_n5 = sig;
+                estado_n6 = 1;
+            } else {
+                estado_n6 = 0;
+            }
             hay_plan = false; plan.clear();
             return INSTALL;
         }
-        return IDLE; // Esperar a que el Ingeniero me mire
+        return IDLE;
     }
 
     return IDLE;
