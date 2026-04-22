@@ -543,7 +543,7 @@ ComportamientoTecnico::EstadoN3 ComportamientoTecnico::AplicaAccion_N3(const Est
     return nuevo;
 }
 
-bool ComportamientoTecnico::EsValida_N3(const EstadoN3& st, Action act, bool ignorarentidades) {
+bool ComportamientoTecnico::EsValida_N3(const EstadoN3& st, Action act, bool ignorarentidades, bool agua_permitida) {
     if (act == TURN_SL || act == TURN_SR) return true;
     if (act == WALK) {
         EstadoN3 destino = AplicaAccion_N3(st, act);
@@ -554,7 +554,8 @@ bool ComportamientoTecnico::EsValida_N3(const EstadoN3& st, Action act, bool ign
         unsigned char c = mapaResultado[destino.f][destino.c];
         
         // ¡AGUA PROHIBIDA! Añadimos 'A' para que el A* no busque atajos suicidas
-        if (c == 'M' || c == 'P' || c == 'A' || c == '?') return false;  
+        if (c == 'M' || c == 'P' || c == '?') return false;
+        if (c == 'A' && !agua_permitida) return false;
         if (c == 'B' && !st.zapatillas) return false;
 
         if (!ignorarentidades) {
@@ -570,7 +571,7 @@ bool ComportamientoTecnico::EsValida_N3(const EstadoN3& st, Action act, bool ign
     return false;
 }
 
-bool ComportamientoTecnico::EncontrarPlan_N3(const EstadoN3& inicio, int dest_f, int dest_c, std::list<Action>& plan_resultante, bool ignorar_entidades, bool parar_adyacente) {
+bool ComportamientoTecnico::EncontrarPlan_N3(const EstadoN3& inicio, int dest_f, int dest_c, std::list<Action>& plan_resultante, bool ignorar_entidades, bool parar_adyacente, bool agua_permitida) {
     plan_resultante.clear();
     std::priority_queue<NodoN3, std::vector<NodoN3>, std::greater<NodoN3>> abiertos;
     std::set<EstadoN3> cerrados;
@@ -602,7 +603,7 @@ bool ComportamientoTecnico::EncontrarPlan_N3(const EstadoN3& inicio, int dest_f,
 
         Action acciones[] = {WALK, TURN_SL, TURN_SR};
         for (Action accion : acciones) {
-            if (EsValida_N3(actual.st, accion, ignorar_entidades)) {
+            if (EsValida_N3(actual.st, accion, ignorar_entidades, agua_permitida)) {
                 EstadoN3 siguiente = AplicaAccion_N3(actual.st, accion);
                 if (cerrados.find(siguiente) == cerrados.end()) {
                     int coste_accion = CostoBateria_N3(actual.st, accion);
@@ -649,6 +650,10 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_3(Sensores sensores) {
         estadoinicial.zapatillas = tiene_zapatillas; // ¡OJO! Usamos la variable segura, no miramos el mapa.
 
         hay_plan = EncontrarPlan_N3(estadoinicial, sensores.BelPosF, sensores.BelPosC, plan, true);
+        if (!hay_plan) {
+            // Intentar permitiendo agua
+            hay_plan = EncontrarPlan_N3(estadoinicial, sensores.BelPosF, sensores.BelPosC, plan, false, false, true);
+        }
         if (!hay_plan) return IDLE;
     }
 

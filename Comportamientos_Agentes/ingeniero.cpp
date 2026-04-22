@@ -477,25 +477,39 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, co
  * @return Acción a realizar.
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_2(Sensores sensores) {
+    ActualizarMapa(sensores);
     Action accion = IDLE;
+
+    if (sensores.BelPosF == 0 && sensores.BelPosC == 0) return IDLE;
 
     if (!hayPlan) {
         estado origen = {sensores.posF, sensores.posC, (int)sensores.rumbo};
         estado destino = {sensores.BelPosF, sensores.BelPosC, 0};
 
-        plan = BusquedaEnAnchura(origen, destino, false, true);
-        if (plan.empty())
-            plan = BusquedaEnAnchura(origen, destino, true, true);
+        list<Action> plan_sin_agua = BusquedaEnAnchura(origen, destino, false, false);
+        list<Action> plan_con_agua = BusquedaEnAnchura(origen, destino, true, false);
+
+        if (plan_sin_agua.empty() && plan_con_agua.empty()) {
+            plan_sin_agua = BusquedaEnAnchura(origen, destino, false, true);
+            plan_con_agua = BusquedaEnAnchura(origen, destino, true, true);
+        }
+
+        if (!plan_sin_agua.empty() && !plan_con_agua.empty())
+            plan = (plan_con_agua.size() < plan_sin_agua.size()) ? plan_con_agua : plan_sin_agua;
+        else if (!plan_sin_agua.empty()) plan = plan_sin_agua;
+        else plan = plan_con_agua;
+
         hayPlan = true;
     }
 
-    if (hayPlan && plan.empty() &&
-        (sensores.posF != sensores.BelPosF || sensores.posC != sensores.BelPosC)) {
+    if (!plan.empty()) {
+        accion = plan.front();
+        plan.pop_front();
+    } else if (sensores.posF != sensores.BelPosF || sensores.posC != sensores.BelPosC) {
+        // Plan agotado pero no llegamos - replantear una vez más
         hayPlan = false;
     }
-    if (hayPlan && !plan.empty()) {
-        accion = plan.front(); plan.pop_front();
-    }
+
     return accion;
 }
 
