@@ -1131,20 +1131,22 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
         if (sensores.posF == destn6_f && sensores.posC == destn6_c) {
             estado_n6 = 2;
             hay_plan = false; plan.clear();
-            return IDLE;
-        }
-        if (!hay_plan) {
-            EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, tiene_zapatillas};
-            EncontrarPlan_N5_Caminar(inicio, destn6_f, destn6_c, plan, true, false);
-            hay_plan = true;
-        }
-        if (!plan.empty()) {
-            Action a = plan.front();
-            if (a == WALK && sensores.agentes[2] != '_') return IDLE;
-            plan.pop_front(); return a;
+            //return IDLE;
         } else {
-            hay_plan = false; return TURN_SR;
+            if (!hay_plan) {
+                EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, tiene_zapatillas};
+                EncontrarPlan_N5_Caminar(inicio, destn6_f, destn6_c, plan, true, false);
+                hay_plan = true;
+            }
+            if (!plan.empty()) {
+                Action a = plan.front();
+                if (a == WALK && sensores.agentes[2] != '_') return IDLE;
+                plan.pop_front(); return a;
+            } else {
+                hay_plan = false; return TURN_SR;
+            }
         }
+        
     }
 
     if (estado_n6 == 2) {

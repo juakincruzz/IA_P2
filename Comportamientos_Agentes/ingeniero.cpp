@@ -1056,9 +1056,13 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
     }
  
     if (est_n6 == 5) { // 5. ESPERAR AL TÉCNICO Y COSER
+        int he = mapaCotas[sensores.posF][sensores.posC];
+        Paso prev = plan_n5[tramo_n5 - 1];
+        int ht = mapaCotas[prev.fil][prev.col];
         cout << "[ING5 EST5] tramo=" << tramo_n5 << " pos=(" << sensores.posF << "," << sensores.posC 
              << ") rumbo=" << sensores.rumbo << " enfrente=" << sensores.enfrente 
-             << " agente[2]=" << sensores.agentes[2] << endl;
+             << " agente[2]=" << sensores.agentes[2]
+             << " he=" << he << " ht=" << ht << " diff=" << (ht-he) << endl;
         if (sensores.enfrente) {
             tramo_n5++;
             terraformado_n5 = false; hayPlan = false; plan.clear();
@@ -1686,4 +1690,3 @@ void ComportamientoIngeniero::VisualizaRedTuberias(const list<Paso> &plan)
     it++;
   }
 }
-
