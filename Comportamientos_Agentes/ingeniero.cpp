@@ -931,7 +931,7 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura_N5(const estado& origen,
  * @return Acción a realizar.
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores) {
-    ActualizarMapa(sensores);
+      ActualizarMapa(sensores);
     
     if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
  
@@ -970,8 +970,22 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
             plan_tuberias_hecho = true;
             for (auto p : lista_plan) plan_n5.push_back(p);
             cout << "[ING5 PLAN TUBERIA] size=" << plan_n5.size() << endl;
-            for (int i = 0; i < (int)plan_n5.size(); i++)
-                cout << "  [" << i << "] (" << plan_n5[i].fil << "," << plan_n5[i].col << ") op=" << plan_n5[i].op << endl;
+            for (int i = 0; i < (int)plan_n5.size(); i++) {
+                int h_orig = mapaCotas[plan_n5[i].fil][plan_n5[i].col];
+                int h_final = h_orig + plan_n5[i].op;
+                cout << "  [" << i << "] (" << plan_n5[i].fil << "," << plan_n5[i].col 
+                     << ") terr=" << (char)mapaResultado[plan_n5[i].fil][plan_n5[i].col]
+                     << " op=" << plan_n5[i].op 
+                     << " h_orig=" << h_orig << " h_final=" << h_final << endl;
+            }
+            // Comprobar diferencias entre tramos consecutivos
+            for (int i = 1; i < (int)plan_n5.size(); i++) {
+                int h_prev = mapaCotas[plan_n5[i-1].fil][plan_n5[i-1].col] + plan_n5[i-1].op;
+                int h_curr = mapaCotas[plan_n5[i].fil][plan_n5[i].col] + plan_n5[i].op;
+                cout << "  DIFF tramo " << i << ": h[" << (i-1) << "]=" << h_prev 
+                     << " h[" << i << "]=" << h_curr 
+                     << " diff=" << (h_prev - h_curr) << endl;
+            }
             est_n6 = 1; 
             hayPlan = false; plan.clear();
             return IDLE; 
