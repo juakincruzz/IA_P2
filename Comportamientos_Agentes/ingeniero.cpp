@@ -1026,14 +1026,14 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
     }
  
     if (est_n6 == 2) { // 2. TERRAFORMAR
-        cout << "[TEC5 EST2] tramo=" << tramo_n5 << " pos=(" << sensores.posF << "," << sensores.posC
-             << ") rumbo=" << sensores.rumbo << " enfrente=" << sensores.enfrente
-             << " agente[2]=" << sensores.agentes[2] << endl;
+        cout << "[ING5 EST2] tramo=" << tramo_n5 << " pos=(" << sensores.posF << "," << sensores.posC
+             << ") op=" << tubo.op << " h_sensor=" << (int)sensores.cota[0]
+             << " terraformado=" << terraformado_n5 << endl;
  
         if (!terraformado_n5 && tubo.op != 0) {
             terraformado_n5 = true;
-            if (tubo.op == 1) return RAISE;
-            if (tubo.op == -1) return DIG;
+            if (tubo.op == 1) { cout << "[ING5] RAISE tramo " << tramo_n5 << endl; return RAISE; }
+            if (tubo.op == -1) { cout << "[ING5] DIG tramo " << tramo_n5 << endl; return DIG; }
         }
         // Caer directamente al COME sin perder turno
         terraformado_n5 = false;
@@ -1056,22 +1056,26 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
     }
  
     if (est_n6 == 5) { // 5. ESPERAR AL TÉCNICO Y COSER
-        int he = mapaCotas[sensores.posF][sensores.posC];
-        Paso prev = plan_n5[tramo_n5 - 1];
-        int ht = mapaCotas[prev.fil][prev.col];
         cout << "[ING5 EST5] tramo=" << tramo_n5 << " pos=(" << sensores.posF << "," << sensores.posC 
              << ") rumbo=" << sensores.rumbo << " enfrente=" << sensores.enfrente 
-             << " agente[2]=" << sensores.agentes[2]
-             << " he=" << he << " ht=" << ht << " diff=" << (ht-he) << endl;
+             << " agente[2]=" << sensores.agentes[2] << endl;
         if (sensores.enfrente) {
-            tramo_n5++;
-            terraformado_n5 = false; hayPlan = false; plan.clear();
-            est_n6 = 1;
-            return INSTALL;
-        }
-        return IDLE;
+          if (!instale_n5) {
+              // Primer intento de INSTALL
+              instale_n5 = true;
+              return INSTALL;
+          } else {
+              // Ya intentamos INSTALL el turno anterior, ahora sí avanzar
+              instale_n5 = false;
+              tramo_n5++;
+              terraformado_n5 = false; hayPlan = false; plan.clear();
+              est_n6 = 1;
+              return INSTALL;
+          }
+      }
+      instale_n5 = false; // Reset si perdimos enfrente
+      return IDLE;
     }
- 
   return IDLE;
 }
 

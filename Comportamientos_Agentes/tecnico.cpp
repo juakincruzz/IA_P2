@@ -1133,6 +1133,21 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
             hay_plan = false; plan.clear();
             //return IDLE;
         } else {
+            // ATAJO: si el destino está a 1 casilla ortogonal, ir directo sin A*
+            int df = abs(sensores.posF - destn6_f);
+            int dc = abs(sensores.posC - destn6_c);
+            if (df + dc == 1) {
+                // Orientarse hacia el destino
+                Orientacion ori = OrientacionHacia_Tec(sensores.posF, sensores.posC, destn6_f, destn6_c);
+                if (sensores.rumbo != ori) {
+                    int giros = GirosNecesarios_Tec(sensores.rumbo, ori);
+                    return (giros <= 4) ? TURN_SR : TURN_SL;
+                }
+                // Caminar si no hay agente delante
+                if (sensores.agentes[2] == '_') return WALK;
+                return IDLE;
+            }
+
             if (!hay_plan) {
                 EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, tiene_zapatillas};
                 EncontrarPlan_N5_Caminar(inicio, destn6_f, destn6_c, plan, true, false);

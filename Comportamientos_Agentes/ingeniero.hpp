@@ -380,6 +380,7 @@ private:
     bool acabo_de_instalar_n5 = false;
     bool terraformado_n5 = false;
     std::vector<Paso> plan_n5; // Vector para acceder a los tramos fácilmente
+    bool instale_n5 = false ;
 
     bool EncontrarPlan_N5(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco);
     list<Action> BusquedaEnAnchura_N5(const estado &origen, const estado &destino, bool agua_permitida = false, bool ignorar_entidades = false);
