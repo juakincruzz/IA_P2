@@ -57,7 +57,21 @@ public:
   ComportamientoTecnico(std::vector<std::vector<unsigned char>> mapaR, 
                         std::vector<std::vector<unsigned char>> mapaC): 
                         Comportamiento(mapaR, mapaC) {
+    last_action = IDLE;
+    tiene_zapatillas = false;
+    giro45Izq = 0;
+    giros_sin_avanzar_n0 = 0;
+    girar_derecha_n0 = true;
+    turnos_viendo_ingeniero_n0 = 0;
+    retroceder_n0 = 0;
     hay_plan = false;
+    plan.clear();
+    plan_n5.clear();
+    tramo_n5 = 0;
+    terraformado_n5 = false;
+    estado_n6 = 0;
+    destn6_f = -1;
+    destn6_c = -1;
   }
 
   ComportamientoTecnico(const ComportamientoTecnico &comport): Comportamiento(comport) {}
@@ -395,6 +409,7 @@ private:
   int estado_n6 = 0;
   int destn6_f = -1, destn6_c = -1;
   int intento_orbita_n6 = 0; // Qué casilla adyacente estamos probando (0-3)
+  int retirada_n6 = 0;
 };
 
 #endif

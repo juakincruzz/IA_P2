@@ -76,7 +76,23 @@ public:
                             std::vector<std::vector<unsigned char>> mapaC): 
                             Comportamiento(mapaR, mapaC) {
         // Inicializar Variables de Estado
+        last_action = IDLE;
+        tiene_zapatillas = false;
+        giro45Izq = 0;
+        giros_sin_avanzar_n0 = 0;
+        girar_derecha_n0 = false;
         hayPlan = false;
+        plan_tuberias_hecho = false;
+        plan.clear();
+        plan_tuberias.clear();
+        plan_n5.clear();
+        tramo_n5 = 0;
+        terraformado_n5 = false;
+        instale_n5 = false;
+        est_n6 = 0;
+        ultimaFilaPlan = -1;
+        ultimaColPlan = -1;
+        ultimaAccionPlan = IDLE;
     }
     
     ComportamientoIngeniero(const ComportamientoIngeniero &comport)
@@ -284,6 +300,9 @@ private:
     
     // Declaramos nuestra función del algoritmo de búsqueda
     list<Action> BusquedaEnAnchura(const estado &origen, const estado &destino, bool agua_permitida = false, bool ignorar_entidades = false, bool tiene_zap_inicio = false);
+    int ultimaFilaPlan = -1;
+    int ultimaColPlan = -1;
+    Action ultimaAccionPlan = IDLE;
 
     // NIVEL 3
     struct Estado {
@@ -391,10 +410,12 @@ private:
     enum EstadoObraIng { ING_CALCULAR_PLAN, ING_IR_CASILLA, ING_TERRAFORMAR, ING_LLAMAR, ING_ALINEARSE };
     EstadoObraIng estado_obra_ing = ING_CALCULAR_PLAN;
 
-    // =========================================================
-    // === NIVEL 6 =============================================
-    // =========================================================
-    int est_n6 ;
+  // =========================================================
+  // === NIVEL 6 =============================================
+  // =========================================================
+  int est_n6 ;
+  int espera_n6 = 0;
+  bool invertir_tramo_n6 = false;
 };
 
 

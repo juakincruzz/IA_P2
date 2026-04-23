@@ -263,7 +263,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_0(Sensores sensores) {
 /** @brief Transitabilidad nivel 1: lista negra (M, P, A, B sin zapatillas). */
 bool ComportamientoTecnico::es_transitable_N1(unsigned char c, bool zap) const {
     if (c == 'M' || c == 'P' || c == 'A' || c == '?') return false;
-    if (c == 'B' && !zap) return false;
+    if (c == 'B') return false;
     return true;
 }
 
@@ -467,10 +467,33 @@ bool ComportamientoTecnico::EncontrarPlan_N2(const Estado& inicio, int dest_f, i
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_2(Sensores sensores) {
-    // En nivel 2, el Técnico solo debe apartarse del Ingeniero
-    if (sensores.agentes[2] == 'i') return TURN_SR;
-    if (sensores.agentes[1] == 'i') return TURN_SR;
-    if (sensores.agentes[3] == 'i') return TURN_SL;
+    if (sensores.superficie[0] == 'D') {
+        tiene_zapatillas = true;
+    }
+
+    auto casilla_transitable = [&](int idx) {
+        unsigned char celda = sensores.superficie[idx];
+        int dif = sensores.cota[idx] - sensores.cota[0];
+        if (abs(dif) > 1) return false;
+        if (sensores.agentes[idx] != '_') return false;
+        if (celda == 'M' || celda == 'P' || celda == '?') return false;
+        if (celda == 'B') return false;
+        return true;
+    };
+
+    bool ing_frente = (sensores.agentes[2] == 'i' || sensores.agentes[2] == 'I');
+    bool ing_izq = (sensores.agentes[1] == 'i' || sensores.agentes[1] == 'I');
+    bool ing_der = (sensores.agentes[3] == 'i' || sensores.agentes[3] == 'I');
+
+    if (ing_izq || ing_der || ing_frente) {
+        if (!ing_frente && casilla_transitable(2)) return WALK;
+        if (ing_izq && casilla_transitable(3)) return TURN_SR;
+        if (ing_der && casilla_transitable(1)) return TURN_SL;
+        if (casilla_transitable(2)) return WALK;
+        if (casilla_transitable(3)) return TURN_SR;
+        if (casilla_transitable(1)) return TURN_SL;
+        return TURN_SR;
+    }
     return IDLE;
 }
 
@@ -483,9 +506,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_2(Sensores sensores) {
 int ComportamientoTecnico::CostoBateria_N3(const EstadoN3& st, Action act) {
     unsigned char terreno = mapaResultado[st.f][st.c];
     int coste = 0;
-
-    // Si tiene zapatillas, el bosque se transita como si fuera camino
-    if (terreno == 'B' && st.zapatillas) terreno = 'C';
 
     if (act == WALK) {
         int cota_origen = mapaCotas[st.f][st.c];
@@ -553,10 +573,10 @@ bool ComportamientoTecnico::EsValida_N3(const EstadoN3& st, Action act, bool ign
 
         unsigned char c = mapaResultado[destino.f][destino.c];
         
-        // ¡AGUA PROHIBIDA! Añadimos 'A' para que el A* no busque atajos suicidas
-        if (c == 'M' || c == 'P' || c == '?') return false;
+        if (c == 'M' || c == 'P') return false;
+        if (c == '?' && !ignorarentidades) return false;
         if (c == 'A' && !agua_permitida) return false;
-        if (c == 'B' && !st.zapatillas) return false;
+        if (c == 'B') return false;
 
         if (!ignorarentidades) {
             unsigned char entidad = mapaEntidades[destino.f][destino.c];
@@ -564,7 +584,7 @@ bool ComportamientoTecnico::EsValida_N3(const EstadoN3& st, Action act, bool ign
         }
 
         int dif = mapaCotas[destino.f][destino.c] - mapaCotas[st.f][st.c];
-        if (abs(dif) > 1) return false;
+        if (c != '?' && abs(dif) > 1) return false;
 
         return true;
     }
@@ -863,7 +883,8 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c
                     EstadoN4_Tecnico siguiente = {nf, nc, nh};
                     int op = nh - nH;
                     
-                    int impacto_tramo = imp_op(n_terr, op) + imp_install(n_terr);
+                    unsigned char actual_terr = mapaResultado[actual.st.f][actual.st.c];
+                    int impacto_tramo = imp_install(actual_terr) + imp_install(n_terr) + imp_op(n_terr, op);
                     int nuevo_impacto = actual.impacto + impacto_tramo;
 
                     if (nuevo_impacto <= limite_eco) {
@@ -962,7 +983,7 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Tecnico(int start_f, int start_c, s
 
             unsigned char n_terr = mapaResultado[nf][nc];
             if (n_terr == 'M' || n_terr == 'P' || n_terr == '?') continue; 
-            if (n_terr == 'B' && !tiene_zapatillas) continue;
+            if (n_terr == 'B') continue;
 
             int nH = mapaCotas[nf][nc];
             std::vector<int> alturas_vecino;
@@ -981,7 +1002,8 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Tecnico(int start_f, int start_c, s
                     int op = nh - nH;
                     
                     // IMPACTO SIMPLE
-                    int impacto_tramo = imp_op(n_terr, op) + imp_install(n_terr);
+                    unsigned char actual_terr = mapaResultado[actual.st.f][actual.st.c];
+                    int impacto_tramo = imp_install(actual_terr) + imp_install(n_terr) + imp_op(n_terr, op);
                     int nuevo_impacto = actual.impacto + impacto_tramo;
 
                     if (nuevo_impacto <= limite_eco) {
@@ -1018,6 +1040,20 @@ static int GirosNecesarios_Tec(Orientacion actual, Orientacion objetivo) {
     return ((int)objetivo - (int)actual + 8) % 8;
 }
 
+static bool HayTuberiaEntreTecnico(const vector<vector<unsigned char>> &mapaTuberias,
+                                   int f1, int c1, int f2, int c2) {
+    if (abs(f1 - f2) + abs(c1 - c2) != 1) return false;
+
+    unsigned char a = mapaTuberias[f1][c1];
+    unsigned char b = mapaTuberias[f2][c2];
+
+    if (f2 == f1 - 1 && c2 == c1) return (a & 1) && (b & 16);
+    if (f2 == f1 + 1 && c2 == c1) return (a & 16) && (b & 1);
+    if (f2 == f1 && c2 == c1 + 1) return (a & 4) && (b & 64);
+    if (f2 == f1 && c2 == c1 - 1) return (a & 64) && (b & 4);
+    return false;
+}
+
 
 bool ComportamientoTecnico::EsValida_N5(const EstadoN3& st, Action act, bool ignorarentidades) {
     if (act == TURN_SL || act == TURN_SR) return true;
@@ -1031,7 +1067,7 @@ bool ComportamientoTecnico::EsValida_N5(const EstadoN3& st, Action act, bool ign
         
         // ¡LA DIFERENCIA! Aquí NO bloqueamos la 'A' (Agua), permitimos cruzar ríos.
         if (c == 'M' || c == 'P' || c == '?') return false;  
-        if (c == 'B' && !st.zapatillas) return false;
+        if (c == 'B') return false;
 
         if (!ignorarentidades) {
             unsigned char entidad = mapaEntidades[destino.f][destino.c];
@@ -1150,12 +1186,21 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
 
             if (!hay_plan) {
                 EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, tiene_zapatillas};
-                EncontrarPlan_N5_Caminar(inicio, destn6_f, destn6_c, plan, true, false);
+                unsigned char respaldo_entidad = '_';
+                Paso tramo_ing = plan_n5[tramo_n5];
+                respaldo_entidad = mapaEntidades[tramo_ing.fil][tramo_ing.col];
+                mapaEntidades[tramo_ing.fil][tramo_ing.col] = 'i';
+                EncontrarPlan_N5_Caminar(inicio, destn6_f, destn6_c, plan, false, false);
+                mapaEntidades[tramo_ing.fil][tramo_ing.col] = respaldo_entidad;
                 hay_plan = true;
             }
             if (!plan.empty()) {
                 Action a = plan.front();
-                if (a == WALK && sensores.agentes[2] != '_') return IDLE;
+                if (a == WALK && sensores.agentes[2] != '_') {
+                    hay_plan = false;
+                    plan.clear();
+                    return IDLE;
+                }
                 plan.pop_front(); return a;
             } else {
                 hay_plan = false; return TURN_SR;
@@ -1166,6 +1211,15 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
 
     if (estado_n6 == 2) {
         Paso tramo_ing = plan_n5[tramo_n5];
+        if (HayTuberiaEntreTecnico(mapaTuberias, sensores.posF, sensores.posC,
+                                   tramo_ing.fil, tramo_ing.col)) {
+            tramo_n5++;
+            estado_n6 = 1;
+            hay_plan = false;
+            plan.clear();
+            return IDLE;
+        }
+
         Orientacion ori = OrientacionHacia_Tec(sensores.posF, sensores.posC, tramo_ing.fil, tramo_ing.col);
         if (sensores.rumbo != ori) {
             int giros = GirosNecesarios_Tec(sensores.rumbo, ori);
@@ -1173,9 +1227,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
         }
 
         if (sensores.enfrente) {
-            tramo_n5++;
-            estado_n6 = 1;
-            hay_plan = false; plan.clear();
             return INSTALL;
         }
         return IDLE;
@@ -1195,12 +1246,15 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
 
     if (sensores.tiempo == 0) {
         estado_n6 = 0; destn6_f = -1; destn6_c = -1;
+        retirada_n6 = 0;
         hay_plan = false; plan.clear(); 
     }
 
     if (sensores.venpaca) {
         if (destn6_f != sensores.GotoF || destn6_c != sensores.GotoC) {
             destn6_f = sensores.GotoF; destn6_c = sensores.GotoC;
+            cout << "[TEC6 CALL] dest=(" << destn6_f << "," << destn6_c << ")" << endl;
+            retirada_n6 = 0;
             estado_n6 = 1; plan.clear(); hay_plan = false;
         }
     }
@@ -1215,8 +1269,8 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
         }
         if (nf < 0 || nf >= (int)mapaResultado.size() || nc < 0 || nc >= (int)mapaResultado[0].size()) return false;
         unsigned char real_c = sens.superficie[2]; 
-        if (real_c == 'P' || real_c == 'M' || real_c == 'A') return false;
-        if (real_c == 'B' && !tiene_zapatillas) return false;
+        if (real_c == 'P' || real_c == 'M') return false;
+        if (real_c == 'B') return false;
         if (mapaResultado[nf][nc] != '?') {
             if (abs(mapaCotas[nf][nc] - mapaCotas[sens.posF][sens.posC]) > 1) return false; // El técnico SIEMPRE es 1
         }
@@ -1228,17 +1282,26 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
 
         case 1: // IR AL TUBO
             if (sensores.posF == destn6_f && sensores.posC == destn6_c) {
+                cout << "[TEC6 ARRIVE] pos=(" << sensores.posF << "," << sensores.posC << ")" << endl;
                 estado_n6 = 2; return IDLE;
             } else {
                 if (!hay_plan) {
                     EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, tiene_zapatillas};
-                    EncontrarPlan_N3(inicio, destn6_f, destn6_c, plan, true, false); 
-                    hay_plan = true;
+                    hay_plan = EncontrarPlan_N3(inicio, destn6_f, destn6_c, plan, true, false, false);
+                    if (!hay_plan) {
+                        hay_plan = EncontrarPlan_N3(inicio, destn6_f, destn6_c, plan, true, false, true);
+                    }
+                    cout << "[TEC6 PATH] from=(" << sensores.posF << "," << sensores.posC << ") to=("
+                         << destn6_f << "," << destn6_c << ") len=" << plan.size() << endl;
                 }
                 if (!plan.empty()) {
                     Action a = plan.front();
                     if (a == WALK) {
-                        if (sensores.agentes[2] != '_' || sensores.choque) return IDLE; 
+                        if (sensores.agentes[2] != '_' || sensores.choque) {
+                            hay_plan = false;
+                            plan.clear();
+                            return IDLE;
+                        }
                         if (!es_seguro(sensores)) { hay_plan = false; plan.clear(); return TURN_SR; }
                     }
                     plan.pop_front(); return a;
@@ -1248,17 +1311,45 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
             }
 
         case 2: // MIRAR AL JEFE Y ESPERAR A QUE ÉL NOS MIRE
+            cout << "[TEC6 EST2] pos=(" << sensores.posF << "," << sensores.posC << ") rumbo=" << sensores.rumbo
+                 << " ag2=" << sensores.agentes[2] << " enfrente=" << sensores.enfrente << endl;
+            if (sensores.agentes[2] == 'i' || sensores.agentes[2] == 'I') {
+                ubicacion delante = Delante({sensores.posF, sensores.posC, sensores.rumbo});
+                if (delante.f >= 0 && delante.f < (int)mapaTuberias.size() &&
+                    delante.c >= 0 && delante.c < (int)mapaTuberias[0].size() &&
+                    HayTuberiaEntreTecnico(mapaTuberias, sensores.posF, sensores.posC,
+                                           delante.f, delante.c)) {
+                    estado_n6 = 3;
+                    retirada_n6 = 2;
+                    hay_plan = false;
+                    plan.clear();
+                    return IDLE;
+                }
+            }
+
             // 'i' minúscula o 'I' mayúscula por si acaso
             if (sensores.agentes[2] == 'i' || sensores.agentes[2] == 'I') {
                 if (sensores.enfrente) {
-                    estado_n6 = 0; // Reset para el siguiente
-                    hay_plan = false; plan.clear(); 
+                    cout << "[TEC6 INSTALL] pos=(" << sensores.posF << "," << sensores.posC << ")" << endl;
                     return INSTALL;
                 } else {
                     return IDLE; // Le veo, solo le miro fijamente hasta que se gire
                 }
             }
             return TURN_SR; // Giro hasta encontrarlo
+
+        case 3: // RETROCEDER UNA CASILLA PARA DEJAR LIBRE EL SIGUIENTE TRAMO
+            if (retirada_n6 > 0) {
+                retirada_n6--;
+                return TURN_SR;
+            }
+            estado_n6 = 0;
+            hay_plan = false;
+            plan.clear();
+            if (sensores.agentes[2] == '_' && !sensores.choque && es_seguro(sensores)) {
+                return WALK;
+            }
+            return IDLE;
     }
     return IDLE;
 }
