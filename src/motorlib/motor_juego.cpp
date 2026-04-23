@@ -528,6 +528,7 @@ bool actuacionIngeniero(unsigned char celdaJ_inicial, unsigned char celdaJ_fin,
     unsigned char celda = monitor.getMapa()->getCelda(f, c);
     if (celda == 'A') {
       monitor.addMensaje("Ingeniero", "DIG: No aplicable sobre agua");
+      monitor.addFailedAction(f, c);
     } else if (alt > 1) {
       monitor.getMapa()->setAltura(f, c, alt - 1);
       monitor.get_entidad(0)->getComportamiento()->mapaCotas[f][c] = alt - 1;
@@ -546,6 +547,7 @@ bool actuacionIngeniero(unsigned char celdaJ_inicial, unsigned char celdaJ_fin,
     unsigned char celda = monitor.getMapa()->getCelda(f, c);
     if (celda == 'A') {
       monitor.addMensaje("Ingeniero", "RAISE: No aplicable sobre agua");
+      monitor.addFailedAction(f, c);
     } else if (alt < 9) {
       monitor.getMapa()->setAltura(f, c, alt + 1);
       monitor.get_entidad(0)->getComportamiento()->mapaCotas[f][c] = alt + 1;

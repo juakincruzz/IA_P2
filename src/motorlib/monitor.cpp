@@ -1124,45 +1124,61 @@ bool MonitorJuego::checkLevel4() {
   // Comprobación de inicio en la casilla de la Belkanita (objetivo)
   int objF = -1, objC = -1;
   get_n_active_objetivo(0, objF, objC);
-  auto it = plan.begin();
-  if (it->fil != objF or it->col != objC) {
-    stringstream ss;
-    ss << "Error Nivel 4: El plan debe comenzar en la casilla de la Belkanita (" 
-       << objF << "," << objC << ").";
-    addMensaje("Sistema", ss.str());
-    return false;
-  }
+  int curr_f = -1, curr_c = -1;
+  int last_h = -1;
+  bool first = true;
 
-  int last_h = (int)mapa->alturaEnCelda(it->fil, it->col) + it->op;
-  int curr_f = it->fil;
-  int curr_c = it->col;
+  for (auto it = plan.begin(); it != plan.end(); ++it) {
+    unsigned char celda = mapa->getCelda(it->fil, it->col);
+    int h = (int)mapa->alturaEnCelda(it->fil, it->col) + it->op;
 
-  // Avanzar al segundo elemento para comprobar adyacencia y alturas
-  auto it_check = it;
-  ++it_check;
-
-  for (; it_check != plan.end(); ++it_check) {
-    int h = (int)mapa->alturaEnCelda(it_check->fil, it_check->col) + it_check->op;
-
-    // Comprobación de adyacencia
-    int dist = abs(it_check->fil - curr_f) + abs(it_check->col - curr_c);
-    if (dist > 1) {
+    // Comprobación de bosque: intransitable para el ingeniero
+    if (celda == 'B') {
       stringstream ss;
-      ss << "Error Nivel 4: Salto detectado en (" << it_check->fil << "," << it_check->col << ").";
+      ss << "Error Nivel 4: El plan pasa por un bosque en (" << it->fil << "," << it->col << ").";
       addMensaje("Sistema", ss.str());
       return false;
     }
 
-    // Comprobación de consistencia de altura
-    if (!(last_h == h || h == last_h - 1)) {
+    // Comprobación de agua: no se permite DIG/RAISE
+    if (it->op != 0 && celda == 'A') {
       stringstream ss;
-      ss << "Error Nivel 4: Altura inconsistente en (" << it_check->fil << "," << it_check->col << ").";
+      ss << "Error Nivel 4: No se permite " << (it->op == -1 ? "DIG" : "RAISE") 
+         << " en agua en (" << it->fil << "," << it->col << ").";
       addMensaje("Sistema", ss.str());
       return false;
     }
 
-    curr_f = it_check->fil;
-    curr_c = it_check->col;
+    if (first) {
+      if (it->fil != objF or it->col != objC) {
+        stringstream ss;
+        ss << "Error Nivel 4: El plan debe comenzar en la casilla de la Belkanita (" 
+           << objF << "," << objC << ").";
+        addMensaje("Sistema", ss.str());
+        return false;
+      }
+      first = false;
+    } else {
+      // Comprobación de adyacencia
+      int dist = abs(it->fil - curr_f) + abs(it->col - curr_c);
+      if (dist > 1) {
+        stringstream ss;
+        ss << "Error Nivel 4: Salto detectado en (" << it->fil << "," << it->col << ").";
+        addMensaje("Sistema", ss.str());
+        return false;
+      }
+
+      // Comprobación de consistencia de altura
+      if (!(last_h == h || h == last_h - 1)) {
+        stringstream ss;
+        ss << "Error Nivel 4: Altura inconsistente en (" << it->fil << "," << it->col << ").";
+        addMensaje("Sistema", ss.str());
+        return false;
+      }
+    }
+
+    curr_f = it->fil;
+    curr_c = it->col;
     last_h = h;
   }
 
