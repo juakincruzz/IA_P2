@@ -40,6 +40,8 @@ public:
     girar_derecha_n0 = true; // El técnico gira a la derecha por defecto (opuesto al ingeniero)
     turnos_viendo_ingeniero_n0 = 0;
     retroceder_n0 = 0;
+    desalojo_pendiente_n2 = false;
+    ya_reubicado_n2 = false;
 
     // Dentro del constructor:
     for(int i = 0; i < 200; i++){
@@ -64,6 +66,8 @@ public:
     girar_derecha_n0 = true;
     turnos_viendo_ingeniero_n0 = 0;
     retroceder_n0 = 0;
+    desalojo_pendiente_n2 = false;
+    ya_reubicado_n2 = false;
     hay_plan = false;
     plan.clear();
     plan_n5.clear();
@@ -256,6 +260,8 @@ private:
   bool girar_derecha_n0;
   int turnos_viendo_ingeniero_n0;
   int retroceder_n0;  // Turnos que quedan de retroceso
+  bool desalojo_pendiente_n2 = false;
+  bool ya_reubicado_n2 = false;
 
   // Métodos auxiliares para el Nivel 0
   char ViablePorAltura(char casilla, int dif); 

@@ -471,13 +471,18 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_2(Sensores sensores) {
         tiene_zapatillas = true;
     }
 
+    if (sensores.tiempo == 0) {
+        desalojo_pendiente_n2 = false;
+        ya_reubicado_n2 = false;
+    }
+
     auto casilla_transitable = [&](int idx) {
         unsigned char celda = sensores.superficie[idx];
         int dif = sensores.cota[idx] - sensores.cota[0];
         if (abs(dif) > 1) return false;
         if (sensores.agentes[idx] != '_') return false;
         if (celda == 'M' || celda == 'P' || celda == '?') return false;
-        if (celda == 'B') return false;
+        if (celda == 'B' && !tiene_zapatillas) return false;
         return true;
     };
 
@@ -486,6 +491,8 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_2(Sensores sensores) {
     bool ing_der = (sensores.agentes[3] == 'i' || sensores.agentes[3] == 'I');
 
     if (ing_izq || ing_der || ing_frente) {
+        desalojo_pendiente_n2 = false;
+        ya_reubicado_n2 = false;
         if (!ing_frente && casilla_transitable(2)) return WALK;
         if (ing_izq && casilla_transitable(3)) return TURN_SR;
         if (ing_der && casilla_transitable(1)) return TURN_SL;
@@ -494,6 +501,27 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_2(Sensores sensores) {
         if (casilla_transitable(1)) return TURN_SL;
         return TURN_SR;
     }
+
+    // Si el ingeniero viene por detrás, el técnico nunca lo verá.
+    // Hacemos un único desalojo local para liberar posibles pasillos
+    // estrechos sin convertir el nivel 2 en un comportamiento errático.
+    if (desalojo_pendiente_n2) {
+        desalojo_pendiente_n2 = false;
+        ya_reubicado_n2 = true;
+        if (casilla_transitable(2)) return WALK;
+    }
+
+    if (!ya_reubicado_n2) {
+        if (casilla_transitable(3)) {
+            desalojo_pendiente_n2 = true;
+            return TURN_SR;
+        }
+        if (casilla_transitable(1)) {
+            desalojo_pendiente_n2 = true;
+            return TURN_SL;
+        }
+    }
+
     return IDLE;
 }
 
