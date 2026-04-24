@@ -576,7 +576,7 @@ bool ComportamientoTecnico::EsValida_N3(const EstadoN3& st, Action act, bool ign
         if (c == 'M' || c == 'P') return false;
         if (c == '?' && !ignorarentidades) return false;
         if (c == 'A' && !agua_permitida) return false;
-        if (c == 'B') return false;
+        if (c == 'B' && !st.zapatillas) return false;
 
         if (!ignorarentidades) {
             unsigned char entidad = mapaEntidades[destino.f][destino.c];
@@ -595,28 +595,51 @@ bool ComportamientoTecnico::EncontrarPlan_N3(const EstadoN3& inicio, int dest_f,
     plan_resultante.clear();
     std::priority_queue<NodoN3, std::vector<NodoN3>, std::greater<NodoN3>> abiertos;
     std::set<EstadoN3> cerrados;
+    std::map<EstadoN3, int> mejor_g;
+    struct PredecesorN3 {
+        EstadoN3 anterior;
+        Action accion = IDLE;
+    };
+    std::map<EstadoN3, PredecesorN3> padres;
+
+    auto reconstruir_plan = [&](const EstadoN3& objetivo) {
+        std::list<Action> reconstruido;
+        EstadoN3 cursor = objetivo;
+
+        while (!(cursor == inicio)) {
+            auto it = padres.find(cursor);
+            if (it == padres.end()) break;
+            reconstruido.push_front(it->second.accion);
+            cursor = it->second.anterior;
+        }
+
+        plan_resultante = std::move(reconstruido);
+    };
 
     NodoN3 n_inicial;
     n_inicial.st = inicio;
     n_inicial.coste_g = 0;
     n_inicial.coste_h = Heuristica(inicio, dest_f, dest_c);
     abiertos.push(n_inicial);
+    mejor_g[inicio] = 0;
 
     while (!abiertos.empty()) {
         NodoN3 actual = abiertos.top();
         abiertos.pop();
 
+        auto it_mejor = mejor_g.find(actual.st);
+        if (it_mejor != mejor_g.end() && actual.coste_g > it_mejor->second) continue;
         if (cerrados.find(actual.st) != cerrados.end()) continue;
         cerrados.insert(actual.st);
 
         if (parar_adyacente) {
             if (abs(actual.st.f - dest_f) + abs(actual.st.c - dest_c) == 1) {
-                plan_resultante = actual.secuencia;
+                reconstruir_plan(actual.st);
                 return true;
             }
         } else {
             if (actual.st.f == dest_f && actual.st.c == dest_c) {
-                plan_resultante = actual.secuencia;
+                reconstruir_plan(actual.st);
                 return true;
             }
         }
@@ -625,13 +648,16 @@ bool ComportamientoTecnico::EncontrarPlan_N3(const EstadoN3& inicio, int dest_f,
         for (Action accion : acciones) {
             if (EsValida_N3(actual.st, accion, ignorar_entidades, agua_permitida)) {
                 EstadoN3 siguiente = AplicaAccion_N3(actual.st, accion);
-                if (cerrados.find(siguiente) == cerrados.end()) {
-                    int coste_accion = CostoBateria_N3(actual.st, accion);
+                int coste_accion = CostoBateria_N3(actual.st, accion);
+                int nuevo_g = actual.coste_g + coste_accion;
+                auto it_hijo = mejor_g.find(siguiente);
+                if (cerrados.find(siguiente) == cerrados.end() &&
+                    (it_hijo == mejor_g.end() || nuevo_g < it_hijo->second)) {
+                    mejor_g[siguiente] = nuevo_g;
+                    padres[siguiente] = {actual.st, accion};
                     NodoN3 hijo;
                     hijo.st = siguiente;
-                    hijo.secuencia = actual.secuencia;
-                    hijo.secuencia.push_back(accion);
-                    hijo.coste_g = actual.coste_g + coste_accion;
+                    hijo.coste_g = nuevo_g;
                     hijo.coste_h = Heuristica(siguiente, dest_f, dest_c);
                     abiertos.push(hijo);
                 }
@@ -672,7 +698,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_3(Sensores sensores) {
         hay_plan = EncontrarPlan_N3(estadoinicial, sensores.BelPosF, sensores.BelPosC, plan, true);
         if (!hay_plan) {
             // Intentar permitiendo agua
-            hay_plan = EncontrarPlan_N3(estadoinicial, sensores.BelPosF, sensores.BelPosC, plan, false, false, true);
+            hay_plan = EncontrarPlan_N3(estadoinicial, sensores.BelPosF, sensores.BelPosC, plan, true, false, true);
         }
         if (!hay_plan) return IDLE;
     }
@@ -1067,7 +1093,7 @@ bool ComportamientoTecnico::EsValida_N5(const EstadoN3& st, Action act, bool ign
         
         // ¡LA DIFERENCIA! Aquí NO bloqueamos la 'A' (Agua), permitimos cruzar ríos.
         if (c == 'M' || c == 'P' || c == '?') return false;  
-        if (c == 'B') return false;
+        if (c == 'B' && !st.zapatillas) return false;
 
         if (!ignorarentidades) {
             unsigned char entidad = mapaEntidades[destino.f][destino.c];
@@ -1086,28 +1112,51 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Caminar(EstadoN3 inicio, int dest_f
     plan_resultante.clear();
     std::priority_queue<NodoN3, std::vector<NodoN3>, std::greater<NodoN3>> abiertos;
     std::set<EstadoN3> cerrados;
+    std::map<EstadoN3, int> mejor_g;
+    struct PredecesorN3 {
+        EstadoN3 anterior;
+        Action accion = IDLE;
+    };
+    std::map<EstadoN3, PredecesorN3> padres;
+
+    auto reconstruir_plan = [&](const EstadoN3& objetivo) {
+        std::list<Action> reconstruido;
+        EstadoN3 cursor = objetivo;
+
+        while (!(cursor == inicio)) {
+            auto it = padres.find(cursor);
+            if (it == padres.end()) break;
+            reconstruido.push_front(it->second.accion);
+            cursor = it->second.anterior;
+        }
+
+        plan_resultante = std::move(reconstruido);
+    };
 
     NodoN3 n_inicial;
     n_inicial.st = inicio;
     n_inicial.coste_g = 0;
     n_inicial.coste_h = Heuristica(inicio, dest_f, dest_c);
     abiertos.push(n_inicial);
+    mejor_g[inicio] = 0;
 
     while (!abiertos.empty()) {
         NodoN3 actual = abiertos.top();
         abiertos.pop();
 
+        auto it_mejor = mejor_g.find(actual.st);
+        if (it_mejor != mejor_g.end() && actual.coste_g > it_mejor->second) continue;
         if (cerrados.find(actual.st) != cerrados.end()) continue;
         cerrados.insert(actual.st);
 
         if (parar_adyacente) {
             if (abs(actual.st.f - dest_f) + abs(actual.st.c - dest_c) == 1) {
-                plan_resultante = actual.secuencia;
+                reconstruir_plan(actual.st);
                 return true;
             }
         } else {
             if (actual.st.f == dest_f && actual.st.c == dest_c) {
-                plan_resultante = actual.secuencia;
+                reconstruir_plan(actual.st);
                 return true;
             }
         }
@@ -1117,13 +1166,16 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Caminar(EstadoN3 inicio, int dest_f
             // ¡LA CLAVE! Usamos el nuevo radar anfibio EsValida_N5
             if (EsValida_N5(actual.st, accion, ignorar_entidades)) {
                 EstadoN3 siguiente = AplicaAccion_N3(actual.st, accion);
-                if (cerrados.find(siguiente) == cerrados.end()) {
-                    int coste_accion = CostoBateria_N3(actual.st, accion);
+                int coste_accion = CostoBateria_N3(actual.st, accion);
+                int nuevo_g = actual.coste_g + coste_accion;
+                auto it_hijo = mejor_g.find(siguiente);
+                if (cerrados.find(siguiente) == cerrados.end() &&
+                    (it_hijo == mejor_g.end() || nuevo_g < it_hijo->second)) {
+                    mejor_g[siguiente] = nuevo_g;
+                    padres[siguiente] = {actual.st, accion};
                     NodoN3 hijo;
                     hijo.st = siguiente;
-                    hijo.secuencia = actual.secuencia;
-                    hijo.secuencia.push_back(accion);
-                    hijo.coste_g = actual.coste_g + coste_accion;
+                    hijo.coste_g = nuevo_g;
                     hijo.coste_h = Heuristica(siguiente, dest_f, dest_c);
                     abiertos.push(hijo);
                 }
@@ -1161,9 +1213,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
     if (estado_n6 == 1) {
         destn6_f = plan_n5[tramo_n5 - 1].fil;
         destn6_c = plan_n5[tramo_n5 - 1].col;
-        cout << "[TEC5 EST1] tramo=" << tramo_n5 << " pos=(" << sensores.posF << "," << sensores.posC 
-         << ") dest=(" << destn6_f << "," << destn6_c << ") hay_plan=" << hay_plan << endl;
-
         if (sensores.posF == destn6_f && sensores.posC == destn6_c) {
             estado_n6 = 2;
             hay_plan = false; plan.clear();
@@ -1247,15 +1296,36 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
     if (sensores.tiempo == 0) {
         estado_n6 = 0; destn6_f = -1; destn6_c = -1;
         retirada_n6 = 0;
+        intento_orbita_n6 = 0;
+        install_pendiente_n6 = false;
+        eco_ref_install_n6 = -1;
         hay_plan = false; plan.clear(); 
     }
 
     if (sensores.venpaca) {
-        if (destn6_f != sensores.GotoF || destn6_c != sensores.GotoC) {
+        bool destino_cambiado = (destn6_f != sensores.GotoF || destn6_c != sensores.GotoC);
+        bool reactivar_misma_orden = (!destino_cambiado &&
+                                      (estado_n6 == 0 || install_pendiente_n6));
+        if (destino_cambiado || reactivar_misma_orden) {
             destn6_f = sensores.GotoF; destn6_c = sensores.GotoC;
-            cout << "[TEC6 CALL] dest=(" << destn6_f << "," << destn6_c << ")" << endl;
             retirada_n6 = 0;
+            intento_orbita_n6 = 0;
+            install_pendiente_n6 = false;
+            eco_ref_install_n6 = -1;
             estado_n6 = 1; plan.clear(); hay_plan = false;
+        }
+    }
+
+    if (install_pendiente_n6) {
+        if (sensores.ecologico > eco_ref_install_n6) {
+            install_pendiente_n6 = false;
+            estado_n6 = 3;
+            retirada_n6 = 0;
+            intento_orbita_n6 = 0;
+            hay_plan = false;
+            plan.clear();
+        } else if (!(sensores.agentes[2] == 'i' || sensores.agentes[2] == 'I')) {
+            install_pendiente_n6 = false;
         }
     }
 
@@ -1278,11 +1348,23 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
     };
 
     switch(estado_n6) {
-        case 0: return IDLE; 
+        case 0:
+            if (abs(sensores.posF - sensores.BelPosF) + abs(sensores.posC - sensores.BelPosC) == 1 &&
+                !HayTuberiaEntreTecnico(mapaTuberias, sensores.posF, sensores.posC,
+                                        sensores.BelPosF, sensores.BelPosC)) {
+                Orientacion ori = OrientacionHacia_Tec(sensores.posF, sensores.posC,
+                                                       sensores.BelPosF, sensores.BelPosC);
+                if (sensores.rumbo != ori) {
+                    return (GirosNecesarios_Tec(sensores.rumbo, ori) <= 4) ? TURN_SR : TURN_SL;
+                }
+                if (sensores.enfrente) {
+                    return INSTALL;
+                }
+            }
+            return IDLE; 
 
         case 1: // IR AL TUBO
             if (sensores.posF == destn6_f && sensores.posC == destn6_c) {
-                cout << "[TEC6 ARRIVE] pos=(" << sensores.posF << "," << sensores.posC << ")" << endl;
                 estado_n6 = 2; return IDLE;
             } else {
                 if (!hay_plan) {
@@ -1291,8 +1373,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
                     if (!hay_plan) {
                         hay_plan = EncontrarPlan_N3(inicio, destn6_f, destn6_c, plan, true, false, true);
                     }
-                    cout << "[TEC6 PATH] from=(" << sensores.posF << "," << sensores.posC << ") to=("
-                         << destn6_f << "," << destn6_c << ") len=" << plan.size() << endl;
                 }
                 if (!plan.empty()) {
                     Action a = plan.front();
@@ -1311,8 +1391,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
             }
 
         case 2: // MIRAR AL JEFE Y ESPERAR A QUE ÉL NOS MIRE
-            cout << "[TEC6 EST2] pos=(" << sensores.posF << "," << sensores.posC << ") rumbo=" << sensores.rumbo
-                 << " ag2=" << sensores.agentes[2] << " enfrente=" << sensores.enfrente << endl;
             if (sensores.agentes[2] == 'i' || sensores.agentes[2] == 'I') {
                 ubicacion delante = Delante({sensores.posF, sensores.posC, sensores.rumbo});
                 if (delante.f >= 0 && delante.f < (int)mapaTuberias.size() &&
@@ -1320,7 +1398,8 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
                     HayTuberiaEntreTecnico(mapaTuberias, sensores.posF, sensores.posC,
                                            delante.f, delante.c)) {
                     estado_n6 = 3;
-                    retirada_n6 = 2;
+                    retirada_n6 = 0;
+                    intento_orbita_n6 = 0;
                     hay_plan = false;
                     plan.clear();
                     return IDLE;
@@ -1330,7 +1409,8 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
             // 'i' minúscula o 'I' mayúscula por si acaso
             if (sensores.agentes[2] == 'i' || sensores.agentes[2] == 'I') {
                 if (sensores.enfrente) {
-                    cout << "[TEC6 INSTALL] pos=(" << sensores.posF << "," << sensores.posC << ")" << endl;
+                    install_pendiente_n6 = true;
+                    eco_ref_install_n6 = sensores.ecologico;
                     return INSTALL;
                 } else {
                     return IDLE; // Le veo, solo le miro fijamente hasta que se gire
@@ -1339,17 +1419,37 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
             return TURN_SR; // Giro hasta encontrarlo
 
         case 3: // RETROCEDER UNA CASILLA PARA DEJAR LIBRE EL SIGUIENTE TRAMO
-            if (retirada_n6 > 0) {
-                retirada_n6--;
-                return TURN_SR;
+            {
+            Orientacion candidatos[3] = {
+                (Orientacion)(((int)sensores.rumbo + 6) % 8), // lateral izquierdo
+                (Orientacion)(((int)sensores.rumbo + 2) % 8), // lateral derecho
+                (Orientacion)(((int)sensores.rumbo + 4) % 8)  // hacia atras, ultimo recurso
+            };
+
+            if (intento_orbita_n6 >= 3) {
+                estado_n6 = 0;
+                intento_orbita_n6 = 0;
+                hay_plan = false;
+                plan.clear();
+                return IDLE;
             }
-            estado_n6 = 0;
-            hay_plan = false;
-            plan.clear();
+
+            Orientacion objetivo = candidatos[intento_orbita_n6];
+            if (sensores.rumbo != objetivo) {
+                return (GirosNecesarios_Tec(sensores.rumbo, objetivo) <= 4) ? TURN_SR : TURN_SL;
+            }
+
             if (sensores.agentes[2] == '_' && !sensores.choque && es_seguro(sensores)) {
+                estado_n6 = 0;
+                intento_orbita_n6 = 0;
+                hay_plan = false;
+                plan.clear();
                 return WALK;
             }
+
+            intento_orbita_n6++;
             return IDLE;
+            }
     }
     return IDLE;
 }

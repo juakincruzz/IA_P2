@@ -492,8 +492,6 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_2(Sensores sensores
 
     if ((ultimaAccionPlan == WALK || ultimaAccionPlan == JUMP) &&
         sensores.posF == ultimaFilaPlan && sensores.posC == ultimaColPlan) {
-        cout << "[ING5 REPLAN] accion fallida=" << ultimaAccionPlan
-             << " pos=(" << sensores.posF << "," << sensores.posC << ")" << endl;
         hayPlan = false;
         plan.clear();
     }
@@ -547,13 +545,12 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_3(Sensores sensores
     ActualizarMapa(sensores);
     if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
-    // Si detectamos al Técnico en nuestra visión o chocamos con él
-    bool veo_tecnico = false;
-    for (int i = 1; i <= 15; i++) {
-        if (sensores.agentes[i] == 't' || sensores.agentes[i] == 'T') veo_tecnico = true;
-    }
-    
-    if (veo_tecnico || sensores.choque) {
+    bool tecnico_delante = (sensores.agentes[2] == 't' || sensores.agentes[2] == 'T');
+
+    // En nivel 3 solo interesa apartarse si bloqueamos de forma inmediata.
+    // Reaccionar al técnico en cualquier punto de la visión hace que el
+    // ingeniero se aleje del objetivo y empeore coste y tiempo.
+    if (tecnico_delante || sensores.choque) {
         unsigned char c = sensores.superficie[2];
         int dif = sensores.cota[2] - sensores.cota[0];
         int max_dif = tiene_zapatillas ? 2 : 1;
@@ -992,6 +989,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
         tramo_n5 = 0; terraformado_n5 = false;
         espera_n6 = 0;
         invertir_tramo_n6 = false;
+        post_swap_n6 = false;
         hayPlan = false; plan.clear();
         ultimaFilaPlan = sensores.posF;
         ultimaColPlan = sensores.posC;
@@ -1058,23 +1056,6 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
             plan_tuberias_hecho = true;
             for (auto p : lista_plan) plan_n5.push_back(p);
             tramo_n5 = (plan_n5.size() > 1 && plan_n5[0].op == 0) ? 1 : 0;
-            cout << "[ING5 PLAN TUBERIA] size=" << plan_n5.size() << endl;
-            for (int i = 0; i < (int)plan_n5.size(); i++) {
-                int h_orig = mapaCotas[plan_n5[i].fil][plan_n5[i].col];
-                int h_final = h_orig + plan_n5[i].op;
-                cout << "  [" << i << "] (" << plan_n5[i].fil << "," << plan_n5[i].col 
-                     << ") terr=" << (char)mapaResultado[plan_n5[i].fil][plan_n5[i].col]
-                     << " op=" << plan_n5[i].op 
-                     << " h_orig=" << h_orig << " h_final=" << h_final << endl;
-            }
-            // Comprobar diferencias entre tramos consecutivos
-            for (int i = 1; i < (int)plan_n5.size(); i++) {
-                int h_prev = mapaCotas[plan_n5[i-1].fil][plan_n5[i-1].col] + plan_n5[i-1].op;
-                int h_curr = mapaCotas[plan_n5[i].fil][plan_n5[i].col] + plan_n5[i].op;
-                cout << "  DIFF tramo " << i << ": h[" << (i-1) << "]=" << h_prev 
-                     << " h[" << i << "]=" << h_curr 
-                     << " diff=" << (h_prev - h_curr) << endl;
-            }
             est_n6 = 1; 
             hayPlan = false; plan.clear();
             return recordar(IDLE); 
@@ -1087,7 +1068,6 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
  
     if (est_n6 == 1) { // 1. IR A LA CASILLA DEL TRAMO ACTUAL
         if (sensores.posF == tubo.fil && sensores.posC == tubo.col) {
-            cout << "[ING5] Llegó al tramo " << tramo_n5 << " vida=" << sensores.vida << endl;
             est_n6 = 2;
         } else {
             // ATAJO: si el tramo está justo delante, WALK directo sin BFS
@@ -1115,9 +1095,6 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
                 if (bloquear_anterior) {
                     mapaEntidades[anterior.fil][anterior.col] = respaldo_entidad;
                 }
-                cout << "[ING5 PATH] tramo=" << tramo_n5 << " from=(" << sensores.posF << ","
-                     << sensores.posC << ") to=(" << tubo.fil << "," << tubo.col
-                     << ") len=" << plan.size() << endl;
                 hayPlan = true;
             }
             if (!plan.empty()) {
@@ -1131,14 +1108,10 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
     }
  
     if (est_n6 == 2) { // 2. TERRAFORMAR
-        cout << "[ING5 EST2] tramo=" << tramo_n5 << " pos=(" << sensores.posF << "," << sensores.posC
-             << ") op=" << tubo.op << " h_sensor=" << (int)sensores.cota[0]
-             << " terraformado=" << terraformado_n5 << endl;
- 
         if (!terraformado_n5 && tubo.op != 0) {
             terraformado_n5 = true;
-            if (tubo.op == 1) { cout << "[ING5] RAISE tramo " << tramo_n5 << endl; return recordar(RAISE); }
-            if (tubo.op == -1) { cout << "[ING5] DIG tramo " << tramo_n5 << endl; return recordar(DIG); }
+            if (tubo.op == 1) { return recordar(RAISE); }
+            if (tubo.op == -1) { return recordar(DIG); }
         }
         // Caer directamente al COME sin perder turno
         terraformado_n5 = false;
@@ -1166,9 +1139,6 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
     }
  
     if (est_n6 == 5) { // 5. ESPERAR AL TÉCNICO Y COSER
-        cout << "[ING5 EST5] tramo=" << tramo_n5 << " pos=(" << sensores.posF << "," << sensores.posC 
-             << ") rumbo=" << sensores.rumbo << " enfrente=" << sensores.enfrente 
-             << " agente[2]=" << sensores.agentes[2] << endl;
         Paso anterior = plan_n5[tramo_n5 - 1];
         if (HayTuberiaEntreIngeniero(mapaTuberias, sensores.posF, sensores.posC,
                                      anterior.fil, anterior.col)) {
@@ -1281,9 +1251,6 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
           if (EncontrarPlan_N5(sensores.BelPosF, sensores.BelPosC, lista_plan, sensores.max_ecologico)) {
                 plan_tuberias_hecho = true;
                 for (auto p : lista_plan) plan_n5.push_back(p);
-                cout << "[ING5 PLAN TUBERIA] size=" << plan_n5.size() << endl;
-                for (int i = 0; i < (int)plan_n5.size(); i++)
-                  cout << "  [" << i << "] (" << plan_n5[i].fil << "," << plan_n5[i].col << ") op=" << plan_n5[i].op << endl;
                 est_n6 = 1; 
                 hayPlan = false; plan.clear();
                 return recordar(IDLE); 
@@ -1349,8 +1316,6 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
         if (sensores.posF == tubo.fil && sensores.posC == tubo.col) {
             espera_n6 = 0;
             invertir_tramo_n6 = false;
-            if (tramo_n5 < 2)
-                cout << "[ING6 EST1->2] tramo=" << tramo_n5 << " pos=(" << sensores.posF << "," << sensores.posC << ")" << endl;
             est_n6 = 2; return recordar(IDLE);
         } else {
             if (!hayPlan) {
@@ -1390,8 +1355,6 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
     }
 
     if (est_n6 == 3) { 
-        if (tramo_n5 < 2)
-            cout << "[ING6 COME] tramo=" << tramo_n5 << " pos=(" << sensores.posF << "," << sensores.posC << ")" << endl;
         espera_n6 = 0;
         est_n6 = 4;
         terraformado_n5 = false; 
@@ -1410,9 +1373,6 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
             if (sensores.rumbo != ori_deseada) {
                 return recordar((GirosNecesarios(sensores.rumbo, ori_deseada) <= 4) ? TURN_SR : TURN_SL);
             }
-            if (tramo_n5 < 2)
-                cout << "[ING6 STEP] tramo=" << tramo_n5 << " from=(" << sensores.posF << "," << sensores.posC
-                     << ") to=(" << next_tubo.fil << "," << next_tubo.col << ") ag2=" << sensores.agentes[2] << endl;
             if (sensores.agentes[2] != '_' || sensores.choque) return recordar(IDLE);
             if (es_seguro(sensores)) return recordar(WALK);
         }
@@ -1432,8 +1392,6 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
         if (sensores.rumbo != ori_deseada) {
             return recordar((GirosNecesarios(sensores.rumbo, ori_deseada) <= 4) ? TURN_SR : TURN_SL);
         }
-        if (tramo_n5 < 2)
-            cout << "[ING6 EST5->6] tramo=" << tramo_n5 << " pos=(" << sensores.posF << "," << sensores.posC << ")" << endl;
         est_n6 = 6; return recordar(IDLE);
     }
 
@@ -1444,13 +1402,12 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
             hayPlan = false; plan.clear();
             espera_n6 = 0;
             invertir_tramo_n6 = false;
+            post_swap_n6 = false;
             est_n6 = 1; 
             return recordar(IDLE);
         }
         if (sensores.enfrente) { 
             espera_n6 = 0;
-            if (tramo_n5 < 2)
-                cout << "[ING6 INSTALL] tramo=" << tramo_n5 << " pos=(" << sensores.posF << "," << sensores.posC << ")" << endl;
             return recordar(INSTALL);
         }
         espera_n6++;
@@ -1459,15 +1416,9 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
             espera_n6 = 0;
             hayPlan = false;
             plan.clear();
-            if (tramo_n5 < 2)
-                cout << "[ING6 SWAP] tramo=" << tramo_n5 << " pos=(" << sensores.posF << "," << sensores.posC << ")" << endl;
             est_n6 = 7;
             return recordar(COME);
         }
-        if (tramo_n5 < 2)
-            cout << "[ING6 WAIT] tramo=" << tramo_n5 << " pos=(" << sensores.posF << "," << sensores.posC
-                 << ") rumbo=" << sensores.rumbo << " ag2=" << sensores.agentes[2]
-                 << " enfrente=" << sensores.enfrente << endl;
         return recordar(IDLE);
     }
 
@@ -1495,7 +1446,8 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
                 plan.clear();
                 espera_n6 = 0;
                 invertir_tramo_n6 = false;
-                est_n6 = 1;
+                post_swap_n6 = true;
+                est_n6 = (tramo_n5 + 1 < (int)plan_n5.size()) ? 9 : 1;
                 return recordar(IDLE);
             }
             Orientacion ori_deseada = OrientacionHacia(sensores.posF, sensores.posC, next_tubo.fil, next_tubo.col);
@@ -1504,11 +1456,109 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
             }
             if (sensores.enfrente) {
                 espera_n6 = 0;
-                if (tramo_n5 < 2)
-                    cout << "[ING6 INSTALL SWAP] tramo=" << tramo_n5 << " pos=(" << sensores.posF << "," << sensores.posC << ")" << endl;
                 return recordar(INSTALL);
             }
         }
+        return recordar(IDLE);
+    }
+
+    if (est_n6 == 9) {
+        if (tramo_n5 + 1 >= (int)plan_n5.size()) {
+            post_swap_n6 = false;
+            est_n6 = 1;
+            return recordar(IDLE);
+        }
+
+        Paso next_tubo = plan_n5[tramo_n5 + 1];
+        if (sensores.posF == next_tubo.fil && sensores.posC == next_tubo.col) {
+            hayPlan = false;
+            plan.clear();
+            est_n6 = 10;
+            return recordar(IDLE);
+        }
+
+        if (!hayPlan) {
+            estado inicio = {sensores.posF, sensores.posC, (int)sensores.rumbo};
+            estado destino = {next_tubo.fil, next_tubo.col, 0};
+            unsigned char respaldo = mapaEntidades[tubo.fil][tubo.col];
+            mapaEntidades[tubo.fil][tubo.col] = 't';
+            plan = BusquedaEnAnchura(inicio, destino, true, false);
+            mapaEntidades[tubo.fil][tubo.col] = respaldo;
+            hayPlan = true;
+        }
+
+        if (!plan.empty()) {
+            Action a = plan.front();
+            if (a == WALK) {
+                if (sensores.agentes[2] != '_' || sensores.choque) {
+                    hayPlan = false;
+                    plan.clear();
+                    return recordar(IDLE);
+                }
+                if (!es_seguro(sensores)) { hayPlan = false; plan.clear(); return recordar(TURN_SR); }
+            } else if (a == JUMP) {
+                if (!salto_seguro(sensores, true)) {
+                    hayPlan = false;
+                    plan.clear();
+                    return recordar(TURN_SR);
+                }
+            }
+            plan.pop_front();
+            return recordar(a);
+        }
+
+        hayPlan = false;
+        return recordar(IDLE);
+    }
+
+    if (est_n6 == 10) {
+        if (tramo_n5 + 1 >= (int)plan_n5.size()) {
+            post_swap_n6 = false;
+            est_n6 = 1;
+            return recordar(IDLE);
+        }
+
+        Paso next_tubo = plan_n5[tramo_n5 + 1];
+        if (!terraformado_n5 && next_tubo.op != 0) {
+            terraformado_n5 = true;
+            if (next_tubo.op == 1) return recordar(RAISE);
+            if (next_tubo.op == -1) return recordar(DIG);
+        }
+
+        terraformado_n5 = false;
+        est_n6 = 11;
+        return recordar(IDLE);
+    }
+
+    if (est_n6 == 11) {
+        if (tramo_n5 + 1 >= (int)plan_n5.size()) {
+            post_swap_n6 = false;
+            est_n6 = 1;
+            return recordar(IDLE);
+        }
+
+        Paso next_tubo = plan_n5[tramo_n5 + 1];
+        if (HayTuberiaEntreIngeniero(mapaTuberias, sensores.posF, sensores.posC,
+                                     tubo.fil, tubo.col)) {
+            tramo_n5++;
+            hayPlan = false;
+            plan.clear();
+            espera_n6 = 0;
+            invertir_tramo_n6 = false;
+            post_swap_n6 = false;
+            est_n6 = 1;
+            return recordar(IDLE);
+        }
+
+        Orientacion ori_deseada = OrientacionHacia(sensores.posF, sensores.posC, tubo.fil, tubo.col);
+        if (sensores.rumbo != ori_deseada) {
+            return recordar((GirosNecesarios(sensores.rumbo, ori_deseada) <= 4) ? TURN_SR : TURN_SL);
+        }
+
+        if (sensores.enfrente) {
+            return recordar(INSTALL);
+        }
+
         return recordar(IDLE);
     }
     return recordar(IDLE);

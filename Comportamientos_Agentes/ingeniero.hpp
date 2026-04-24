@@ -416,6 +416,7 @@ private:
   int est_n6 ;
   int espera_n6 = 0;
   bool invertir_tramo_n6 = false;
+  bool post_swap_n6 = false;
 };
 
 
