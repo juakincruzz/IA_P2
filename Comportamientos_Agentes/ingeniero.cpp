@@ -1446,8 +1446,8 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
                 plan.clear();
                 espera_n6 = 0;
                 invertir_tramo_n6 = false;
-                post_swap_n6 = true;
-                est_n6 = (tramo_n5 + 1 < (int)plan_n5.size()) ? 9 : 1;
+                post_swap_n6 = false;
+                est_n6 = 1;
                 return recordar(IDLE);
             }
             Orientacion ori_deseada = OrientacionHacia(sensores.posF, sensores.posC, next_tubo.fil, next_tubo.col);

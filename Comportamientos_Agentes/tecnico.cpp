@@ -1332,8 +1332,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
 
     if (sensores.venpaca) {
         bool destino_cambiado = (destn6_f != sensores.GotoF || destn6_c != sensores.GotoC);
-        bool reactivar_misma_orden = (!destino_cambiado &&
-                                      (estado_n6 == 0 || install_pendiente_n6));
+        bool reactivar_misma_orden = (!destino_cambiado && estado_n6 == 0);
         if (destino_cambiado || reactivar_misma_orden) {
             destn6_f = sensores.GotoF; destn6_c = sensores.GotoC;
             retirada_n6 = 0;
@@ -1368,7 +1367,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
         if (nf < 0 || nf >= (int)mapaResultado.size() || nc < 0 || nc >= (int)mapaResultado[0].size()) return false;
         unsigned char real_c = sens.superficie[2]; 
         if (real_c == 'P' || real_c == 'M') return false;
-        if (real_c == 'B') return false;
+        if (real_c == 'B' && !tiene_zapatillas) return false;
         if (mapaResultado[nf][nc] != '?') {
             if (abs(mapaCotas[nf][nc] - mapaCotas[sens.posF][sens.posC]) > 1) return false; // El técnico SIEMPRE es 1
         }
