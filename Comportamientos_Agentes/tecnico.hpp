@@ -415,7 +415,7 @@ private:
   int estado_n6 = 0;
   int destn6_f = -1, destn6_c = -1;
   int intento_orbita_n6 = 0; // Qué casilla adyacente estamos probando (0-3)
-  int retirada_n6 = 0;
+  int retirada_n6 = -1;
   bool install_pendiente_n6 = false;
   int eco_ref_install_n6 = -1;
 };
