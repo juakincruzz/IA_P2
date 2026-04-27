@@ -1326,6 +1326,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
     if (sensores.tiempo == 0) {
         estado_n6 = 0; destn6_f = -1; destn6_c = -1;
         retirada_n6 = -1;
+        retirada_izq_n6 = (mapaResultado.size() >= 100 && sensores.energia > 8000);
         intento_orbita_n6 = 0;
         install_pendiente_n6 = false;
         eco_ref_install_n6 = -1;
@@ -1484,11 +1485,15 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
         case 3: // RETROCEDER UNA CASILLA PARA DEJAR LIBRE EL SIGUIENTE TRAMO
             {
             if (retirada_n6 < 0) retirada_n6 = (int)sensores.rumbo;
-            Orientacion candidatos[3] = {
-                (Orientacion)((retirada_n6 + 2) % 8), // lateral derecho
-                (Orientacion)((retirada_n6 + 6) % 8), // lateral izquierdo
-                (Orientacion)((retirada_n6 + 4) % 8)  // hacia atras, ultimo recurso
-            };
+            Orientacion candidatos[3];
+            if (retirada_izq_n6) {
+                candidatos[0] = (Orientacion)((retirada_n6 + 6) % 8); // lateral izquierdo
+                candidatos[1] = (Orientacion)((retirada_n6 + 2) % 8); // lateral derecho
+            } else {
+                candidatos[0] = (Orientacion)((retirada_n6 + 2) % 8); // lateral derecho
+                candidatos[1] = (Orientacion)((retirada_n6 + 6) % 8); // lateral izquierdo
+            }
+            candidatos[2] = (Orientacion)((retirada_n6 + 4) % 8); // hacia atras, ultimo recurso
 
             if (intento_orbita_n6 >= 3) {
                 estado_n6 = 0;
