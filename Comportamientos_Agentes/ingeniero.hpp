@@ -402,6 +402,7 @@ private:
     bool instale_n5 = false ;
 
     bool EncontrarPlan_N5(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco);
+    bool EncontrarPlan_N5_Tentativo(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco);
     list<Action> BusquedaEnAnchura_N5(const estado &origen, const estado &destino, bool agua_permitida = false, bool ignorar_entidades = false);
 
     // =========================================================

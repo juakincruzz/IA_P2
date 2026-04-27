@@ -739,8 +739,11 @@ static bool HayTuberiaEntreIngeniero(const vector<vector<unsigned char>> &mapaTu
 
 bool ComportamientoIngeniero::EncontrarPlan_N5(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco) {
     plan_resultante.clear();
+    bool dbg_oculto_30 = (mapaResultado.size() == 30 && limite_eco != 648 && limite_eco != 1000 &&
+                          limite_eco != 1804 && limite_eco != 2364);
     bool dbg_plan = (limite_eco == 2364 || limite_eco == 2688 || limite_eco == 3533 ||
-                     limite_eco == 1719 || limite_eco == 1500);
+                     limite_eco == 2107 ||
+                     limite_eco == 1719 || limite_eco == 1500 || dbg_oculto_30);
     static std::map<int, int> llamadas_por_limite;
     int llamada = ++llamadas_por_limite[limite_eco];
     if (dbg_plan && (llamada <= 5 || llamada % 25 == 0)) {
@@ -874,6 +877,95 @@ bool ComportamientoIngeniero::EncontrarPlan_N5(int start_f, int start_c, std::li
              << " exp=" << expansiones << "\n";
     }
     return false; 
+}
+
+bool ComportamientoIngeniero::EncontrarPlan_N5_Tentativo(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco) {
+    plan_resultante.clear();
+    if (start_f < 0 || start_f >= (int)mapaResultado.size() ||
+        start_c < 0 || start_c >= (int)mapaResultado[0].size()) {
+        return false;
+    }
+
+    struct NodoTentativo {
+        int f;
+        int c;
+        int coste;
+        bool operator>(const NodoTentativo& otro) const {
+            return coste > otro.coste;
+        }
+    };
+
+    auto bloqueada = [&](unsigned char terreno) {
+        return terreno == 'M' || terreno == 'P' || terreno == 'B';
+    };
+
+    auto coste_celda = [&](unsigned char terreno) {
+        if (terreno == '?') return 18;
+        if (terreno == 'A') return 50;
+        if (terreno == 'H') return 45;
+        if (terreno == 'S') return 25;
+        if (terreno == 'C' || terreno == 'U') return 15;
+        return 30;
+    };
+
+    if (bloqueada(mapaResultado[start_f][start_c])) return false;
+
+    std::priority_queue<NodoTentativo, std::vector<NodoTentativo>, std::greater<NodoTentativo>> abiertos;
+    std::map<std::pair<int, int>, int> mejor_coste;
+    std::map<std::pair<int, int>, std::pair<int, int>> padre;
+
+    std::pair<int, int> inicio = {start_f, start_c};
+    abiertos.push({start_f, start_c, 0});
+    mejor_coste[inicio] = 0;
+
+    int df[] = {-1, 1, 0, 0};
+    int dc[] = {0, 0, 1, -1};
+
+    while (!abiertos.empty()) {
+        NodoTentativo actual = abiertos.top();
+        abiertos.pop();
+        std::pair<int, int> clave_actual = {actual.f, actual.c};
+        if (mejor_coste[clave_actual] < actual.coste) continue;
+
+        if (mapaResultado[actual.f][actual.c] == 'U') {
+            std::vector<std::pair<int, int>> camino;
+            std::pair<int, int> p = clave_actual;
+            while (true) {
+                camino.push_back(p);
+                if (p == inicio) break;
+                p = padre[p];
+            }
+            std::reverse(camino.begin(), camino.end());
+            for (auto celda : camino) {
+                plan_resultante.push_back({celda.first, celda.second, 0});
+            }
+            return true;
+        }
+
+        for (int i = 0; i < 4; i++) {
+            int nf = actual.f + df[i];
+            int nc = actual.c + dc[i];
+            if (nf < 0 || nf >= (int)mapaResultado.size() ||
+                nc < 0 || nc >= (int)mapaResultado[0].size()) {
+                continue;
+            }
+
+            unsigned char terreno = mapaResultado[nf][nc];
+            if (bloqueada(terreno)) continue;
+
+            int nuevo_coste = actual.coste + coste_celda(terreno);
+            if (nuevo_coste > limite_eco) continue;
+
+            std::pair<int, int> clave = {nf, nc};
+            if (mejor_coste.find(clave) == mejor_coste.end() || nuevo_coste < mejor_coste[clave]) {
+                mejor_coste[clave] = nuevo_coste;
+                padre[clave] = clave_actual;
+                abiertos.push({nf, nc, nuevo_coste});
+            }
+        }
+    }
+
+    return false;
 }
 
 list<Action> ComportamientoIngeniero::BusquedaEnAnchura_N5(const estado& origen, const estado& destino, bool agua_permitida, bool ignorar_entidades) {
@@ -1187,8 +1279,12 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores) {
     ActualizarMapa(sensores);
+    bool dbg_oculto_30 = (mapaResultado.size() == 30 && sensores.max_ecologico != 648 &&
+                          sensores.max_ecologico != 1000 && sensores.max_ecologico != 1804 &&
+                          sensores.max_ecologico != 2364);
     bool dbg_n6 = (sensores.max_ecologico == 2364 || sensores.max_ecologico == 2688 || sensores.max_ecologico == 3533 ||
-                   sensores.max_ecologico == 1719 || sensores.max_ecologico == 1500);
+                   sensores.max_ecologico == 2107 ||
+                   sensores.max_ecologico == 1719 || sensores.max_ecologico == 1500 || dbg_oculto_30);
     auto recordar = [&](Action a) {
         ultimaFilaPlan = sensores.posF;
         ultimaColPlan = sensores.posC;
@@ -1293,18 +1389,32 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
             if (mapaResultado[sensores.BelPosF][sensores.BelPosC] == '?') {
                 destino.fila = sensores.BelPosF; destino.columna = sensores.BelPosC;
             } else {
+                std::list<Paso> plan_tentativo;
+                if (EncontrarPlan_N5_Tentativo(sensores.BelPosF, sensores.BelPosC,
+                                                plan_tentativo, sensores.max_ecologico)) {
+                    for (const Paso& paso : plan_tentativo) {
+                        if (mapaResultado[paso.fil][paso.col] == '?') {
+                            destino.fila = paso.fil;
+                            destino.columna = paso.col;
+                            break;
+                        }
+                    }
+                }
+
                 int min_dist = 999999;
-                for (int i = 0; i < (int)mapaResultado.size(); i++) {
-                    for (int j = 0; j < (int)mapaResultado[0].size(); j++) {
-                        if (mapaResultado[i][j] == '?') {
-                            int dist = abs(i - sensores.posF) + abs(j - sensores.posC);
-                            if (dist < min_dist) { min_dist = dist; destino.fila = i; destino.columna = j; }
+                if (destino.fila == -1) {
+                    for (int i = 0; i < (int)mapaResultado.size(); i++) {
+                        for (int j = 0; j < (int)mapaResultado[0].size(); j++) {
+                            if (mapaResultado[i][j] == '?') {
+                                int dist = abs(i - sensores.posF) + abs(j - sensores.posC);
+                                if (dist < min_dist) { min_dist = dist; destino.fila = i; destino.columna = j; }
+                            }
                         }
                     }
                 }
             }
 
-            if (destino.fila != -1) {
+            if (destino.fila != -1 && !hayPlan) {
                 plan = BusquedaEnAnchura(inicio, destino, false, true); 
                 if (plan.empty()) plan = BusquedaEnAnchura(inicio, destino, true, true); 
                 hayPlan = true;
@@ -1403,6 +1513,22 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
         }
         if (tramo_n5 + 1 < (int)plan_n5.size()) {
             Paso next_tubo = plan_n5[tramo_n5 + 1];
+            if (HayTuberiaEntreIngeniero(mapaTuberias, sensores.posF, sensores.posC,
+                                         next_tubo.fil, next_tubo.col)) {
+                tramo_n5++;
+                hayPlan = false;
+                plan.clear();
+                espera_n6 = 0;
+                invertir_tramo_n6 = false;
+                post_swap_n6 = false;
+                est_n6 = 1;
+                if (dbg_n6) {
+                    cerr << "[ING6 PRE OK] t=" << sensores.tiempo << " tramo=" << tramo_n5
+                         << " pos=(" << sensores.posF << "," << sensores.posC << ") eco=" << sensores.ecologico
+                         << " energia=" << sensores.energia << "\n";
+                }
+                return recordar(IDLE);
+            }
             Orientacion ori_deseada = OrientacionHacia(sensores.posF, sensores.posC, next_tubo.fil, next_tubo.col);
             if (sensores.rumbo != ori_deseada) {
                 return recordar((GirosNecesarios(sensores.rumbo, ori_deseada) <= 4) ? TURN_SR : TURN_SL);
