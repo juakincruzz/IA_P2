@@ -1325,6 +1325,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
     bool dbg_n6 = (sensores.max_ecologico == 2364 || sensores.max_ecologico == 2688 || sensores.max_ecologico == 3533 ||
                    sensores.max_ecologico == 2107 ||
                    sensores.max_ecologico == 1719 || sensores.max_ecologico == 1500 || dbg_oculto_30);
+    dbg_n6 = false;
     if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
     if (sensores.tiempo == 0) {
@@ -1353,12 +1354,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
             eco_ref_install_n6 = -1;
             plan.clear();
             hay_plan = false;
-            if (abs(sensores.posF - destn6_f) + abs(sensores.posC - destn6_c) == 1 &&
-                !HayTuberiaEntreTecnico(mapaTuberias, sensores.posF, sensores.posC, destn6_f, destn6_c)) {
-                estado_n6 = 2;
-            } else {
-                estado_n6 = 1;
-            }
+            estado_n6 = 1;
         }
     }
 
@@ -1469,7 +1465,9 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
 
             // 'i' minúscula o 'I' mayúscula por si acaso
             if (sensores.agentes[2] == 'i' || sensores.agentes[2] == 'I') {
-                if (sensores.enfrente) {
+                bool rumbo_ortogonal = (sensores.rumbo == norte || sensores.rumbo == este ||
+                                        sensores.rumbo == sur || sensores.rumbo == oeste);
+                if (sensores.enfrente && rumbo_ortogonal) {
                     install_pendiente_n6 = true;
                     eco_ref_install_n6 = sensores.ecologico;
                     if (dbg_n6) {
@@ -1477,6 +1475,8 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
                              << sensores.posC << ") energia=" << sensores.energia << "\n";
                     }
                     return INSTALL;
+                } else if (sensores.enfrente) {
+                    return TURN_SR;
                 } else {
                     return IDLE; // Le veo, solo le miro fijamente hasta que se gire
                 }

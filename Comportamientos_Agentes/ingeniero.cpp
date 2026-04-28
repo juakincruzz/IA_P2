@@ -744,6 +744,7 @@ bool ComportamientoIngeniero::EncontrarPlan_N5(int start_f, int start_c, std::li
     bool dbg_plan = (limite_eco == 2364 || limite_eco == 2688 || limite_eco == 3533 ||
                      limite_eco == 2107 ||
                      limite_eco == 1719 || limite_eco == 1500 || dbg_oculto_30);
+    dbg_plan = false;
     static std::map<int, int> llamadas_por_limite;
     int llamada = ++llamadas_por_limite[limite_eco];
     if (dbg_plan && (llamada <= 5 || llamada % 25 == 0)) {
@@ -1285,6 +1286,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
     bool dbg_n6 = (sensores.max_ecologico == 2364 || sensores.max_ecologico == 2688 || sensores.max_ecologico == 3533 ||
                    sensores.max_ecologico == 2107 ||
                    sensores.max_ecologico == 1719 || sensores.max_ecologico == 1500 || dbg_oculto_30);
+    dbg_n6 = false;
     auto recordar = [&](Action a) {
         ultimaFilaPlan = sensores.posF;
         ultimaColPlan = sensores.posC;
@@ -1390,7 +1392,8 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
                 destino.fila = sensores.BelPosF; destino.columna = sensores.BelPosC;
             } else {
                 std::list<Paso> plan_tentativo;
-                if (EncontrarPlan_N5_Tentativo(sensores.BelPosF, sensores.BelPosC,
+                if ((int)mapaResultado.size() <= 75 &&
+                    EncontrarPlan_N5_Tentativo(sensores.BelPosF, sensores.BelPosC,
                                                 plan_tentativo, sensores.max_ecologico)) {
                     for (const Paso& paso : plan_tentativo) {
                         if (mapaResultado[paso.fil][paso.col] == '?') {
