@@ -1365,9 +1365,70 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
 
     if (!plan_tuberias_hecho) {
         std::list<Paso> lista_plan;
+        estado destino_preferente = {-1, -1, 0};
+        auto impacto_plan_conocido = [&](const std::list<Paso>& plan_eval) {
+            int total = 0;
+            if (plan_eval.empty()) return total;
+            auto imp_install_local = [](unsigned char terreno) {
+                if (terreno == 'A') return 50;
+                if (terreno == 'H') return 45;
+                if (terreno == 'S') return 25;
+                if (terreno == 'C' || terreno == 'U') return 15;
+                return 30;
+            };
+            auto imp_op_local = [](unsigned char terreno, int op) {
+                if (op == 1) {
+                    if (terreno == 'H') return 55;
+                    if (terreno == 'S') return 30;
+                    if (terreno == 'C' || terreno == 'U') return 10;
+                    return 40;
+                }
+                if (op == -1) {
+                    if (terreno == 'H') return 65;
+                    if (terreno == 'S') return 40;
+                    if (terreno == 'C' || terreno == 'U') return 25;
+                    return 50;
+                }
+                return 0;
+            };
+
+            auto it = plan_eval.begin();
+            unsigned char celda = mapaResultado[it->fil][it->col];
+            total += imp_op_local(celda, it->op);
+            auto prev = it;
+            ++it;
+            for (; it != plan_eval.end(); ++it) {
+                celda = mapaResultado[it->fil][it->col];
+                total += imp_op_local(celda, it->op);
+                unsigned char celda_prev = mapaResultado[prev->fil][prev->col];
+                total += imp_install_local(celda_prev) + imp_install_local(celda);
+                prev = it;
+            }
+            return total;
+        };
+
         if (mapaResultado[sensores.BelPosF][sensores.BelPosC] != '?') {
           // Usamos el nuevo cerebro modular exclusivo para Nivel 5 y 6
           if (EncontrarPlan_N5(sensores.BelPosF, sensores.BelPosC, lista_plan, sensores.max_ecologico)) {
+                int impacto_estimado = impacto_plan_conocido(lista_plan);
+                bool plan_caro_en_mapa_grande = mapaResultado.size() >= 100 &&
+                                                sensores.energia < 5000 &&
+                                                sensores.max_ecologico >= 2000 &&
+                                                impacto_estimado > (sensores.max_ecologico * 80) / 100;
+                if (plan_caro_en_mapa_grande) {
+                    std::list<Paso> plan_tentativo;
+                    if (EncontrarPlan_N5_Tentativo(sensores.BelPosF, sensores.BelPosC,
+                                                    plan_tentativo, sensores.max_ecologico)) {
+                        for (const Paso& paso : plan_tentativo) {
+                            if (mapaResultado[paso.fil][paso.col] == '?') {
+                                destino_preferente.fila = paso.fil;
+                                destino_preferente.columna = paso.col;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (destino_preferente.fila == -1) {
                 plan_tuberias_hecho = true;
                 for (auto p : lista_plan) plan_n5.push_back(p);
                 if (dbg_n6) {
@@ -1382,15 +1443,16 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
                 est_n6 = 1; 
                 hayPlan = false; plan.clear();
                 return recordar(IDLE); 
+                }
             }
         }
         
         if (!hayPlan) {
             estado inicio = {sensores.posF, sensores.posC, (int)sensores.rumbo};
-            estado destino = {-1, -1, 0};
+            estado destino = destino_preferente;
             if (mapaResultado[sensores.BelPosF][sensores.BelPosC] == '?') {
                 destino.fila = sensores.BelPosF; destino.columna = sensores.BelPosC;
-            } else {
+            } else if (destino.fila == -1) {
                 std::list<Paso> plan_tentativo;
                 if ((int)mapaResultado.size() <= 75 &&
                     EncontrarPlan_N5_Tentativo(sensores.BelPosF, sensores.BelPosC,
