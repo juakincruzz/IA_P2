@@ -1438,7 +1438,9 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
                             plan.clear();
                             return IDLE;
                         }
-                        if (!es_seguro(sensores)) { hay_plan = false; plan.clear(); return TURN_SR; }
+                        if (!es_seguro(sensores)) {
+                            hay_plan = false; plan.clear(); return TURN_SR;
+                        }
                     }
                     plan.pop_front(); return a;
                 } else {
