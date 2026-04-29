@@ -751,6 +751,7 @@ bool ComportamientoIngeniero::EncontrarPlan_N5(int start_f, int start_c, std::li
         cerr << "[PLAN_N5 CALL] limite=" << limite_eco << " call=" << llamada
              << " start=(" << start_f << "," << start_c << ")\n";
     }
+
     std::priority_queue<NodoN4, std::vector<NodoN4>, std::greater<NodoN4>> abiertos;
     std::map<EstadoN4, int> cerrados;
 
@@ -1585,8 +1586,15 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
                 plan.clear();
                 espera_n6 = 0;
                 invertir_tramo_n6 = false;
-                post_swap_n6 = false;
-                est_n6 = 1;
+                bool puede_continuar_directo = false;
+                if (tramo_n5 + 1 < (int)plan_n5.size()) {
+                    Paso siguiente = plan_n5[tramo_n5 + 1];
+                    puede_continuar_directo =
+                        abs(sensores.posF - siguiente.fil) +
+                        abs(sensores.posC - siguiente.col) == 1;
+                }
+                post_swap_n6 = puede_continuar_directo;
+                est_n6 = puede_continuar_directo ? 12 : 1;
                 if (dbg_n6) {
                     cerr << "[ING6 PRE OK] t=" << sensores.tiempo << " tramo=" << tramo_n5
                          << " pos=(" << sensores.posF << "," << sensores.posC << ") eco=" << sensores.ecologico
@@ -1794,15 +1802,6 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
         bool tecnico_delante = (sensores.agentes[2] == 't' || sensores.agentes[2] == 'T');
         if (siguiente.op != 0) tecnico_delante = false;
         if (tecnico_delante) {
-            if (espera_n6 == 0) {
-                espera_n6 = 1;
-                if (dbg_n6) {
-                    cerr << "[ING6 POST WAKE] t=" << sensores.tiempo << " tramo=" << tramo_n5
-                         << " pos=(" << sensores.posF << "," << sensores.posC << ") sig=("
-                         << siguiente.fil << "," << siguiente.col << ")\n";
-                }
-                return recordar(COME);
-            }
             if (dbg_n6) {
                 cerr << "[ING6 POST INSTALL] t=" << sensores.tiempo << " tramo=" << tramo_n5
                      << " pos=(" << sensores.posF << "," << sensores.posC << ") sig=("
