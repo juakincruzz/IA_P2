@@ -43,7 +43,6 @@ public:
     desalojo_pendiente_n2 = false;
     ya_reubicado_n2 = false;
 
-    // Dentro del constructor:
     for(int i = 0; i < 200; i++){
       for(int j = 0; j < 200; j++){
         matriz_visitas[i][j] = 0;
@@ -309,7 +308,6 @@ private:
     std::list<Action> secuencia;
   };
 
-  // Funciones del cerebro
   bool EncontrarPlan_N2(const Estado& inicio, int dest_f, int dest_c, std::list<Action>& plan_resultante, bool aguaPermitida);
   Estado AplicaAccion_N2(const Estado& st, Action act);
   bool EsValida_N2(const Estado& st, Action act, bool aguaPermitida);
@@ -318,9 +316,8 @@ private:
   // =========================================================
   // === VARIABLES Y ESTRUCTURAS NIVEL 3 (A-ESTRELLA) ========
   // =========================================================
-  // Variables auxiliares Nivel 3
     int ultimaPosFN3 = -1;
-    int ultimaPosN3 = -1;  // (renombra a ultimaPosCC3 si prefieres)
+    int ultimaPosN3 = -1; 
     int ultimaPosCN3 = -1;
     Action ultimaAccionN3 = IDLE;
 
@@ -328,7 +325,7 @@ private:
     int f;
     int c;
     Orientacion brujula;
-    bool zapatillas; // Vital para Nivel 3
+    bool zapatillas; 
 
     bool operator<(const EstadoN3& otro) const {
       if (f != otro.f) return f < otro.f;
@@ -355,7 +352,6 @@ private:
     }
   };
 
-  // Funciones del cerebro A* (Usan EstadoN3)
   bool EncontrarPlan_N3(const EstadoN3& inicio, int dest_f, int dest_c, std::list<Action>& plan_resultante, bool ignorar_entidades = false, bool parar_adyacente = false, bool agua_permitida = false);
   EstadoN3 AplicaAccion_N3(const EstadoN3& st, Action act);
   bool EsValida_N3(const EstadoN3& st, Action act, bool ignorar_entidades = false, bool agua_permitida = false);
@@ -371,7 +367,6 @@ private:
   bool terraformado_n5 = false;
   std::vector<Paso> plan_n5;
 
-  // El clon del cerebro del Ingeniero para leerle la mente
   struct EstadoN4_Tecnico {
     int f, c, h;
     bool operator<(const EstadoN4_Tecnico& otro) const {
@@ -385,7 +380,7 @@ private:
   struct NodoN4_Tecnico {
     EstadoN4_Tecnico st;
     std::list<Paso> secuencia;
-    int impacto = 0 ; // Impacto ecológico acumulado
+    int impacto = 0 ; 
 
     bool operator>(const NodoN4_Tecnico& otro) const {
       int coste_a = (int)secuencia.size() * 10000 + impacto;
@@ -398,7 +393,6 @@ private:
 
   bool EncontrarPlan_N5_Tecnico(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco);
 
-  // Herramientas exclusivas para Nivel 5 y 6
   bool EsValida_N5(const EstadoN3& st, Action act, bool ignorarentidades = false);
   bool EncontrarPlan_N5_Caminar(EstadoN3 inicio, int dest_f, int dest_c, std::list<Action>& plan, bool ignorarentidades = false, bool parar_adyacente = false);
 
@@ -414,7 +408,7 @@ private:
   // =========================================================
   int estado_n6 = 0;
   int destn6_f = -1, destn6_c = -1;
-  int intento_orbita_n6 = 0; // Qué casilla adyacente estamos probando (0-3)
+  int intento_orbita_n6 = 0; 
   int retirada_n6 = -1;
   bool retirada_izq_n6 = false;
   bool install_pendiente_n6 = false;

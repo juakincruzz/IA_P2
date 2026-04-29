@@ -398,8 +398,7 @@ bool ComportamientoTecnico::EsValida_N2(const Estado& st, Action act, bool aguaP
         }
 
         unsigned char c = mapaResultado[destino.f][destino.c];
-        // En principio el técnico tampoco pasa por el bosque en este nivel a menos que tenga zapatillas, 
-        // pero la meta debería ser accesible por caminos limpios en su mitad del mapa.
+
         if (c == 'M' || c == 'P' || c == 'B') return false; 
         if (c == 'A' && !aguaPermitida) return false;
 
@@ -502,9 +501,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_2(Sensores sensores) {
         return TURN_SR;
     }
 
-    // Si el ingeniero viene por detrás, el técnico nunca lo verá.
-    // Hacemos un único desalojo local para liberar posibles pasillos
-    // estrechos sin convertir el nivel 2 en un comportamiento errático.
     if (desalojo_pendiente_n2) {
         desalojo_pendiente_n2 = false;
         ya_reubicado_n2 = true;
@@ -560,7 +556,6 @@ int ComportamientoTecnico::CostoBateria_N3(const EstadoN3& st, Action act) {
 }
 
 int ComportamientoTecnico::Heuristica(const EstadoN3& actual, int dest_f, int dest_c) {
-    // Distancia Chebyshev multiplicada por el coste mínimo de movimiento (1)
     return max(abs(actual.f - dest_f), abs(actual.c - dest_c));
 }
 
@@ -581,7 +576,6 @@ ComportamientoTecnico::EstadoN3 ComportamientoTecnico::AplicaAccion_N3(const Est
             case oeste: nuevo.c--; break;
             case noroeste: nuevo.f--; nuevo.c--; break;
         }
-        // ¡PARCHE ANTICRASH! Comprobamos límites antes de leer el mapa
         if (nuevo.f >= 0 && nuevo.f < mapaResultado.size() && nuevo.c >= 0 && nuevo.c < mapaResultado[0].size()) {
             if (mapaResultado[nuevo.f][nuevo.c] == 'D') {
                 nuevo.zapatillas = true;
@@ -710,8 +704,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_3(Sensores sensores) {
     ultimaPosFN3 = sensores.posF;
     ultimaPosCN3 = sensores.posC;
 
-    // ¡LA CLAVE ANTI-ROBOS! Solo cogemos las zapatillas si no estamos en el instante 0 
-    // (para evitar creer que las tenemos si el Ingeniero nos las quitó al aparecer).
     if (sensores.superficie[0] == 'D' && sensores.tiempo > 0) {
         tiene_zapatillas = true;
     }
@@ -721,11 +713,10 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_3(Sensores sensores) {
         estadoinicial.f         = sensores.posF;
         estadoinicial.c         = sensores.posC;
         estadoinicial.brujula   = sensores.rumbo;
-        estadoinicial.zapatillas = tiene_zapatillas; // ¡OJO! Usamos la variable segura, no miramos el mapa.
+        estadoinicial.zapatillas = tiene_zapatillas;
 
         hay_plan = EncontrarPlan_N3(estadoinicial, sensores.BelPosF, sensores.BelPosC, plan, true);
         if (!hay_plan) {
-            // Intentar permitiendo agua
             hay_plan = EncontrarPlan_N3(estadoinicial, sensores.BelPosF, sensores.BelPosC, plan, true, false, true);
         }
         if (!hay_plan) return IDLE;
@@ -734,7 +725,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_3(Sensores sensores) {
     if (!plan.empty()) {
         Action a = plan.front();
         
-        // ¡ANTICHOQUE UNIVERSAL! Si hay un agente delante, esperamos pacientemente.
         if (a == WALK && (sensores.agentes[2] == 'i' || sensores.agentes[2] == 'I')) {
             return IDLE;
         }
@@ -755,7 +745,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_3(Sensores sensores) {
  * @return Acción a realizar.
  */
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_4(Sensores sensores) {
-    // Inicialización al primer instante
     if (sensores.tiempo == 0) {
         plan_n5.clear();
         tramo_n5 = 0;
@@ -763,10 +752,8 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_4(Sensores sensores) {
         plan.clear();
     }
 
-    // Calcular el plan de tubería si no lo tenemos aún
     if (plan_n5.empty()) {
         std::list<Paso> listaplan;
-        // Faltaba añadir el 4º argumento aquí:
         EncontrarPlan_N5_Arquitecto(sensores.BelPosF, sensores.BelPosC, listaplan, sensores.max_ecologico);
         
         for (auto& p : listaplan)
@@ -774,12 +761,10 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_4(Sensores sensores) {
         if (plan_n5.empty()) return IDLE;
     }
 
-    // Fin de obra
     if (tramo_n5 >= (int)plan_n5.size()) return IDLE;
 
     Paso objetivo = plan_n5[tramo_n5];
 
-    // --- FASE 1: Desplazarse a la casilla del tramo ---
     if (sensores.posF != objetivo.fil || sensores.posC != objetivo.col) {
         if (!hay_plan) {
             EstadoN3 inicio;
@@ -795,7 +780,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_4(Sensores sensores) {
             Action a = plan.front();
             if (a == WALK &&
                 sensores.agentes[2] != '_' && sensores.agentes[2] != '?')
-                return IDLE; // ceder paso
+                return IDLE;
             plan.pop_front();
             return a;
         } else {
@@ -804,10 +789,8 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_4(Sensores sensores) {
         }
     }
 
-    // --- FASE 2: Alinearse mirando al siguiente tramo ---
     if (tramo_n5 + 1 < (int)plan_n5.size()) {
         Paso siguiente = plan_n5[tramo_n5 + 1];
-        // Calcular orientación deseada manualmente (sin static helper)
         Orientacion oriDeseada = norte;
         int df = siguiente.fil - sensores.posF;
         int dc = siguiente.col - sensores.posC;
@@ -826,7 +809,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_4(Sensores sensores) {
         }
     }
 
-    // --- FASE 3: Instalar y avanzar ---
     hay_plan = false;
     plan.clear();
     tramo_n5++;
@@ -839,7 +821,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_4(Sensores sensores) {
 // === MÁQUINA DE ESTADOS COOPERATIVA (NIVEL 5) ===
 // =========================================================
 
-// Clon exacto del algoritmo del Ingeniero para que ambos deduzcan el mismo plan
 bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco) {
     plan_resultante.clear();
     std::priority_queue<NodoN4_Tecnico, std::vector<NodoN4_Tecnico>, std::greater<NodoN4_Tecnico>> abiertos;
@@ -1050,12 +1031,10 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Tecnico(int start_f, int start_c, s
             }
 
             for (int nh : alturas_vecino) {
-                // GRAVEDAD ESTRICTA
                 if (actual.st.h >= nh && (actual.st.h - nh) <= 1) {
                     EstadoN4_Tecnico siguiente = {nf, nc, nh};
                     int op = nh - nH;
                     
-                    // IMPACTO SIMPLE
                     unsigned char actual_terr = mapaResultado[actual.st.f][actual.st.c];
                     int impacto_tramo = imp_install(actual_terr) + imp_install(n_terr) + imp_op(n_terr, op);
                     int nuevo_impacto = actual.impacto + impacto_tramo;
@@ -1119,7 +1098,6 @@ bool ComportamientoTecnico::EsValida_N5(const EstadoN3& st, Action act, bool ign
 
         unsigned char c = mapaResultado[destino.f][destino.c];
         
-        // ¡LA DIFERENCIA! Aquí NO bloqueamos la 'A' (Agua), permitimos cruzar ríos.
         if (c == 'M' || c == 'P' || c == '?') return false;  
         if (c == 'B' && !st.zapatillas) return false;
 
@@ -1191,7 +1169,6 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Caminar(EstadoN3 inicio, int dest_f
 
         Action acciones[] = {WALK, TURN_SL, TURN_SR};
         for (Action accion : acciones) {
-            // ¡LA CLAVE! Usamos el nuevo radar anfibio EsValida_N5
             if (EsValida_N5(actual.st, accion, ignorar_entidades)) {
                 EstadoN3 siguiente = AplicaAccion_N3(actual.st, accion);
                 int coste_accion = CostoBateria_N3(actual.st, accion);
@@ -1246,17 +1223,14 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
             hay_plan = false; plan.clear();
             //return IDLE;
         } else {
-            // ATAJO: si el destino está a 1 casilla ortogonal, ir directo sin A*
             int df = abs(sensores.posF - destn6_f);
             int dc = abs(sensores.posC - destn6_c);
             if (df + dc == 1) {
-                // Orientarse hacia el destino
                 Orientacion ori = OrientacionHacia_Tec(sensores.posF, sensores.posC, destn6_f, destn6_c);
                 if (sensores.rumbo != ori) {
                     int giros = GirosNecesarios_Tec(sensores.rumbo, ori);
                     return (giros <= 4) ? TURN_SR : TURN_SL;
                 }
-                // Caminar si no hay agente delante
                 if (sensores.agentes[2] == '_') return WALK;
                 return IDLE;
             }
@@ -1415,7 +1389,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
             }
             return IDLE; 
 
-        case 1: // IR AL TUBO
+        case 1:
             if (sensores.posF == destn6_f && sensores.posC == destn6_c) {
                 if (dbg_n6) {
                     cerr << "[TEC6 ARRIVE] t=" << sensores.tiempo << " dest=(" << destn6_f << "," << destn6_c
@@ -1448,7 +1422,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
                 }
             }
 
-        case 2: // MIRAR AL JEFE Y ESPERAR A QUE ÉL NOS MIRE
+        case 2: 
             if (sensores.agentes[2] == 'i' || sensores.agentes[2] == 'I') {
                 intento_orbita_n6 = 0;
                 ubicacion delante = Delante({sensores.posF, sensores.posC, sensores.rumbo});
@@ -1465,7 +1439,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
                 }
             }
 
-            // 'i' minúscula o 'I' mayúscula por si acaso
             if (sensores.agentes[2] == 'i' || sensores.agentes[2] == 'I') {
                 bool rumbo_ortogonal = (sensores.rumbo == norte || sensores.rumbo == este ||
                                         sensores.rumbo == sur || sensores.rumbo == oeste);
@@ -1480,7 +1453,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
                 } else if (sensores.enfrente) {
                     return TURN_SR;
                 } else {
-                    return IDLE; // Le veo, solo le miro fijamente hasta que se gire
+                    return IDLE; 
                 }
             }
             intento_orbita_n6++;
@@ -1491,9 +1464,9 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
                 plan.clear();
                 return IDLE;
             }
-            return TURN_SR; // Giro hasta encontrarlo
+            return TURN_SR; 
 
-        case 3: // RETROCEDER UNA CASILLA PARA DEJAR LIBRE EL SIGUIENTE TRAMO
+        case 3: 
             {
             if (retirada_n6 < 0) retirada_n6 = (int)sensores.rumbo;
             Orientacion candidatos[3];

@@ -470,7 +470,7 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, co
 }
 
 
-// Niveles avanzados (Uso de búsqueda)
+
 /**
  * @brief Comportamiento del ingeniero para el Nivel 2 (búsqueda).
  * @param sensores Datos actuales de los sensores.
@@ -529,7 +529,6 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_2(Sensores sensores
         accion = plan.front();
         plan.pop_front();
     } else if (sensores.posF != sensores.BelPosF || sensores.posC != sensores.BelPosC) {
-        // Plan agotado pero no llegamos - replantear una vez más
         hayPlan = false;
     }
 
@@ -547,15 +546,11 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_3(Sensores sensores
 
     bool tecnico_delante = (sensores.agentes[2] == 't' || sensores.agentes[2] == 'T');
 
-    // En nivel 3 solo interesa apartarse si bloqueamos de forma inmediata.
-    // Reaccionar al técnico en cualquier punto de la visión hace que el
-    // ingeniero se aleje del objetivo y empeore coste y tiempo.
     if (tecnico_delante || sensores.choque) {
         unsigned char c = sensores.superficie[2];
         int dif = sensores.cota[2] - sensores.cota[0];
         int max_dif = tiene_zapatillas ? 2 : 1;
         
-        // Si el hueco de enfrente es seguro, avanzamos para dejar paso
         if (c != 'M' && c != 'P' && c != 'B' && c != 'A' && abs(dif) <= max_dif && sensores.agentes[2] == '_') {
             return WALK;
         } else {
@@ -694,7 +689,6 @@ bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::li
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_4(Sensores sensores) {
   if (!plan_tuberias_hecho) {
-    // Aquí es donde estaba el error de sintaxis. Añadido el 4º argumento correctamente:
     bool exito = EncontrarPlan_N4(sensores.BelPosF, sensores.BelPosC, plan_tuberias, sensores.max_ecologico);
 
     if (exito && !plan_tuberias.empty()) {
@@ -849,12 +843,10 @@ bool ComportamientoIngeniero::EncontrarPlan_N5(int start_f, int start_c, std::li
             }
 
             for (int nh : alturas_vecino) {
-                // GRAVEDAD ESTRICTA: El tubo actual debe ser igual o 1 unidad más alto que el siguiente
                 if (actual.st.h >= nh && (actual.st.h - nh) <= 1) {
                     EstadoN4 siguiente = {nf, nc, nh};
                     int op = nh - nH;
                     
-                    // IMPACTO SIMPLE
                     unsigned char actual_terr = mapaResultado[actual.st.f][actual.st.c];
                     int impacto_tramo = imp_install(actual_terr) + imp_install(n_terr) + imp_op(n_terr, op);
                     int nuevo_impacto = actual.impacto + impacto_tramo;
@@ -1176,14 +1168,13 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
         return recordar(IDLE);
     }
  
-    if (tramo_n5 >= (int)plan_n5.size()) return recordar(IDLE); // ¡CLAVE NARANJA! Sin el -1 para hacer el último tubo
+    if (tramo_n5 >= (int)plan_n5.size()) return recordar(IDLE); 
     Paso tubo = plan_n5[tramo_n5]; 
  
-    if (est_n6 == 1) { // 1. IR A LA CASILLA DEL TRAMO ACTUAL
+    if (est_n6 == 1) { 
         if (sensores.posF == tubo.fil && sensores.posC == tubo.col) {
             est_n6 = 2;
         } else {
-            // ATAJO: si el tramo está justo delante, WALK directo sin BFS
             ubicacion delante = Delante({sensores.posF, sensores.posC, sensores.rumbo});
             if (delante.f == tubo.fil && delante.c == tubo.col && es_seguro(sensores)) {
                 hayPlan = false; plan.clear();
@@ -1220,13 +1211,12 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
         }
     }
  
-    if (est_n6 == 2) { // 2. TERRAFORMAR
+    if (est_n6 == 2) { 
         if (!terraformado_n5 && tubo.op != 0) {
             terraformado_n5 = true;
             if (tubo.op == 1) { return recordar(RAISE); }
             if (tubo.op == -1) { return recordar(DIG); }
         }
-        // Caer directamente al COME sin perder turno
         terraformado_n5 = false;
         hayPlan = false; plan.clear();
         if (tramo_n5 == 0) {
@@ -1238,9 +1228,8 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
         return recordar(COME);
     }
  
-    // Estado 3 eliminado — fusionado con estado 2
  
-    if (est_n6 == 4) { // 4. MIRAR HACIA AGUAS ARRIBA
+    if (est_n6 == 4) {
         if (tramo_n5 > 0) {
             Paso anterior = plan_n5[tramo_n5 - 1];
             Orientacion ori = OrientacionHacia(sensores.posF, sensores.posC, anterior.fil, anterior.col);
@@ -1248,10 +1237,10 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
                 return recordar((GirosNecesarios(sensores.rumbo, ori) <= 4) ? TURN_SR : TURN_SL);
             }
         }
-        est_n6 = 5; // Cae directamente al estado 5
+        est_n6 = 5; 
     }
  
-    if (est_n6 == 5) { // 5. ESPERAR AL TÉCNICO Y COSER
+    if (est_n6 == 5) { 
         Paso anterior = plan_n5[tramo_n5 - 1];
         if (HayTuberiaEntreIngeniero(mapaTuberias, sensores.posF, sensores.posC,
                                      anterior.fil, anterior.col)) {

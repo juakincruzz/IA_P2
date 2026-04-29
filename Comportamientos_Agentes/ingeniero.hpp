@@ -295,8 +295,8 @@ private:
     // =========================================================
     // === VARIABLES Y ESTRUCTURAS NIVEL 2 (DELIBERATIVO) ===
     // =========================================================
-    bool hayPlan;                 // Para saber si ya hemos calculado la ruta
-    std::list<Action> plan;       // Aquí guardaremos las instrucciones a seguir
+    bool hayPlan;                 // Para saber si ya he calculado la ruta
+    std::list<Action> plan;       // Aquí guardo las instrucciones a seguir
     
     // Declaramos nuestra función del algoritmo de búsqueda
     list<Action> BusquedaEnAnchura(const estado &origen, const estado &destino, bool agua_permitida = false, bool ignorar_entidades = false, bool tiene_zap_inicio = false);
@@ -309,7 +309,7 @@ private:
         int f;
         int c;
         Orientacion brujula;
-        bool zapatillas; // ¡NUEVO! Vital para cruzar bosques
+        bool zapatillas; // Para cruzar bosques lo uso
         
         bool operator<(const Estado& otro) const {
             if (f != otro.f) return f < otro.f;
@@ -329,7 +329,7 @@ private:
         int coste_h; // Heurística (Distancia estimada)
         int f() const { return coste_g + coste_h; } // Coste total estimado
 
-        // ¡NUEVO! Para que la Cola de Prioridad ordene de menor a mayor coste
+        // Para que la Cola de Prioridad ordene de menor a mayor coste
         bool operator>(const Nodo& otro) const {
             return f() > otro.f();
         }
