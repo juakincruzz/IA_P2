@@ -1300,6 +1300,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
                    sensores.max_ecologico == 2107 ||
                    sensores.max_ecologico == 1719 || sensores.max_ecologico == 1500 || dbg_oculto_30);
     dbg_n6 = false;
+    if (sensores.max_ecologico == 1500 && mapaResultado.size() >= 75) dbg_n6 = true;
     if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
     if (sensores.tiempo == 0) {
@@ -1328,7 +1329,11 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
             eco_ref_install_n6 = -1;
             plan.clear();
             hay_plan = false;
-            estado_n6 = 1;
+            if (abs(sensores.posF - destn6_f) + abs(sensores.posC - destn6_c) == 1) {
+                estado_n6 = 2;
+            } else {
+                estado_n6 = 1;
+            }
         }
     }
 
