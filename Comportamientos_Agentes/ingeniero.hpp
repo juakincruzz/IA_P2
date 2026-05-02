@@ -416,6 +416,10 @@ private:
   // =========================================================
   int est_n6 ;
   int espera_n6 = 0;
+  int tick_n6 = 0;
+  int ultimo_intento_plan_n6 = -10000;
+  int conocidas_ultimo_intento_plan_n6 = -1;
+  int intentos_install_post_n6 = 0;
   bool invertir_tramo_n6 = false;
   bool post_swap_n6 = false;
 };

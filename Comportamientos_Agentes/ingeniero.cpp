@@ -1270,6 +1270,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
  */
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores) {
     ActualizarMapa(sensores);
+    tick_n6++;
     bool dbg_oculto_30 = (mapaResultado.size() == 30 && sensores.max_ecologico != 648 &&
                           sensores.max_ecologico != 1000 && sensores.max_ecologico != 1804 &&
                           sensores.max_ecologico != 2364);
@@ -1295,6 +1296,10 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
         plan_tuberias_hecho = false;
         est_n6 = 0; plan_n5.clear();
         tramo_n5 = 0; terraformado_n5 = false;
+        tick_n6 = 0;
+        ultimo_intento_plan_n6 = -10000;
+        conocidas_ultimo_intento_plan_n6 = -1;
+        intentos_install_post_n6 = 0;
         hayPlan = false; plan.clear();
         ultimaFilaPlan = sensores.posF;
         ultimaColPlan = sensores.posC;
@@ -1397,7 +1402,28 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
             return total;
         };
 
-        if (mapaResultado[sensores.BelPosF][sensores.BelPosC] != '?') {
+        auto casillas_conocidas = [&]() {
+            int total = 0;
+            for (int i = 0; i < (int)mapaResultado.size(); i++) {
+                for (int j = 0; j < (int)mapaResultado[0].size(); j++) {
+                    if (mapaResultado[i][j] != '?') total++;
+                }
+            }
+            return total;
+        };
+
+        int conocidas_actuales = casillas_conocidas();
+        int nuevas_desde_intento =
+            conocidas_ultimo_intento_plan_n6 < 0 ? 999999 :
+            conocidas_actuales - conocidas_ultimo_intento_plan_n6;
+        int cooldown_plan_n6 = (mapaResultado.size() >= 90) ? 8 : 4;
+        bool puede_reintentar_plan =
+            conocidas_ultimo_intento_plan_n6 < 0 ||
+            nuevas_desde_intento >= 6 ||
+            tick_n6 - ultimo_intento_plan_n6 >= cooldown_plan_n6;
+        if (mapaResultado[sensores.BelPosF][sensores.BelPosC] != '?' && puede_reintentar_plan) {
+          ultimo_intento_plan_n6 = tick_n6;
+          conocidas_ultimo_intento_plan_n6 = conocidas_actuales;
           // Usamos el nuevo cerebro modular exclusivo para Nivel 5 y 6
           if (EncontrarPlan_N5(sensores.BelPosF, sensores.BelPosC, lista_plan, sensores.max_ecologico)) {
                 int impacto_estimado = impacto_plan_conocido(lista_plan);
@@ -1452,6 +1478,52 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
                             destino.fila = paso.fil;
                             destino.columna = paso.col;
                             break;
+                        }
+                    }
+                }
+
+                if (destino.fila == -1 && (int)mapaResultado.size() >= 90 &&
+                    sensores.max_ecologico <= 1500) {
+                    int mejor_u_f = -1, mejor_u_c = -1, mejor_u_dist = 999999;
+                    for (int i = 0; i < (int)mapaResultado.size(); i++) {
+                        for (int j = 0; j < (int)mapaResultado[0].size(); j++) {
+                            if (mapaResultado[i][j] == 'U') {
+                                int dist = abs(i - sensores.BelPosF) + abs(j - sensores.BelPosC);
+                                if (dist < mejor_u_dist) {
+                                    mejor_u_dist = dist;
+                                    mejor_u_f = i;
+                                    mejor_u_c = j;
+                                }
+                            }
+                        }
+                    }
+
+                    if (mejor_u_f != -1) {
+                        int df = mejor_u_f - sensores.BelPosF;
+                        int dc = mejor_u_c - sensores.BelPosC;
+                        int min_f = min(mejor_u_f, sensores.BelPosF) - 3;
+                        int max_f = max(mejor_u_f, sensores.BelPosF) + 3;
+                        int min_c = min(mejor_u_c, sensores.BelPosC) - 3;
+                        int max_c = max(mejor_u_c, sensores.BelPosC) + 3;
+                        int mejor_score = 999999999;
+                        for (int i = 0; i < (int)mapaResultado.size(); i++) {
+                            for (int j = 0; j < (int)mapaResultado[0].size(); j++) {
+                                if (mapaResultado[i][j] != '?') continue;
+                                int fuera = 0;
+                                if (i < min_f) fuera += min_f - i;
+                                else if (i > max_f) fuera += i - max_f;
+                                if (j < min_c) fuera += min_c - j;
+                                else if (j > max_c) fuera += j - max_c;
+                                int dist_linea = abs((i - sensores.BelPosF) * dc -
+                                                     (j - sensores.BelPosC) * df);
+                                int dist_actual = abs(i - sensores.posF) + abs(j - sensores.posC);
+                                int score = fuera * 10000 + dist_linea * 4 + dist_actual;
+                                if (score < mejor_score) {
+                                    mejor_score = score;
+                                    destino.fila = i;
+                                    destino.columna = j;
+                                }
+                            }
                         }
                     }
                 }
@@ -1775,6 +1847,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
                                      siguiente.fil, siguiente.col)) {
             tramo_n5++;
             espera_n6 = 0;
+            intentos_install_post_n6 = 0;
             terraformado_n5 = false;
             invertir_tramo_n6 = false;
             post_swap_n6 = false;
@@ -1796,12 +1869,23 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
 
         bool tecnico_delante = (sensores.agentes[2] == 't' || sensores.agentes[2] == 'T');
         if (siguiente.op != 0) tecnico_delante = false;
-        if (tecnico_delante) {
+        bool rumbo_ortogonal = (sensores.rumbo == norte || sensores.rumbo == este ||
+                                sensores.rumbo == sur || sensores.rumbo == oeste);
+        if (tecnico_delante && sensores.enfrente && rumbo_ortogonal) {
             if (dbg_n6) {
                 cerr << "[ING6 POST INSTALL] t=" << sensores.tiempo << " tramo=" << tramo_n5
                      << " pos=(" << sensores.posF << "," << sensores.posC << ") sig=("
                      << siguiente.fil << "," << siguiente.col << ") ag2=" << sensores.agentes[2]
                      << " enfrente=" << sensores.enfrente << "\n";
+            }
+            intentos_install_post_n6++;
+            if (intentos_install_post_n6 > 2) {
+                intentos_install_post_n6 = 0;
+                espera_n6 = 0;
+                terraformado_n5 = false;
+                post_swap_n6 = false;
+                est_n6 = 1;
+                return recordar(IDLE);
             }
             return recordar(INSTALL);
         }
@@ -1812,6 +1896,10 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
                  << " espera=" << espera_n6 << " pos=(" << sensores.posF << "," << sensores.posC
                  << ") rumbo=" << sensores.rumbo << " sig=(" << siguiente.fil << "," << siguiente.col
                  << ") ag2=" << sensores.agentes[2] << " enfrente=" << sensores.enfrente << "\n";
+        }
+        if (espera_n6 > 4 && tecnico_delante && rumbo_ortogonal) {
+            espera_n6 = 0;
+            return recordar(COME);
         }
         if (espera_n6 > 8) {
             espera_n6 = 0;
