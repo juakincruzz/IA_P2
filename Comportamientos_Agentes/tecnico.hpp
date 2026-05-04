@@ -412,6 +412,8 @@ private:
   int retirada_n6 = -1;
   bool retirada_izq_n6 = false;
   bool install_pendiente_n6 = false;
+  bool come_postswap_n6 = false;
+  bool install_postswap_emitido_n6 = false;
   int eco_ref_install_n6 = -1;
 };
 

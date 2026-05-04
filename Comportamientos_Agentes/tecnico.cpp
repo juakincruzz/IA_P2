@@ -1308,6 +1308,8 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
         retirada_izq_n6 = (mapaResultado.size() >= 100 && sensores.energia > 8000);
         intento_orbita_n6 = 0;
         install_pendiente_n6 = false;
+        come_postswap_n6 = false;
+        install_postswap_emitido_n6 = false;
         eco_ref_install_n6 = -1;
         hay_plan = false; plan.clear(); 
     }
@@ -1325,9 +1327,13 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
             retirada_n6 = -1;
             intento_orbita_n6 = 0;
             install_pendiente_n6 = false;
+            install_postswap_emitido_n6 = false;
             eco_ref_install_n6 = -1;
             plan.clear();
             hay_plan = false;
+            come_postswap_n6 =
+                mapaResultado.size() >= 90 && sensores.max_ecologico <= 1500 &&
+                abs(sensores.posF - sensores.GotoF) + abs(sensores.posC - sensores.GotoC) == 1;
             estado_n6 = 1;
         }
     }
@@ -1340,6 +1346,8 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
                                                        delante.f, delante.c));
         if (sensores.ecologico > eco_ref_install_n6 || tuberia_delante) {
             install_pendiente_n6 = false;
+            install_postswap_emitido_n6 = false;
+            come_postswap_n6 = false;
             estado_n6 = 3;
             if (dbg_n6) {
                 cerr << "[TEC6 INSTALL OK -> RET] t=" << sensores.tiempo << " pos=("
@@ -1352,6 +1360,10 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
             plan.clear();
         } else if (!(sensores.agentes[2] == 'i' || sensores.agentes[2] == 'I')) {
             install_pendiente_n6 = false;
+            install_postswap_emitido_n6 = false;
+            come_postswap_n6 = false;
+        } else if (install_postswap_emitido_n6) {
+            return IDLE;
         }
     }
 
@@ -1397,6 +1409,29 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
                 }
                 estado_n6 = 2; return IDLE;
             } else {
+                if (come_postswap_n6) {
+                    int dist_dest = abs(sensores.posF - destn6_f) + abs(sensores.posC - destn6_c);
+                    if (dist_dest == 1) {
+                        Orientacion ori = OrientacionHacia_Tec(sensores.posF, sensores.posC,
+                                                               destn6_f, destn6_c);
+                        if (sensores.rumbo != ori) {
+                            return (GirosNecesarios_Tec(sensores.rumbo, ori) <= 4) ? TURN_SR : TURN_SL;
+                        }
+                        if (sensores.agentes[2] == 'i' || sensores.agentes[2] == 'I') {
+                            bool rumbo_ortogonal = (sensores.rumbo == norte || sensores.rumbo == este ||
+                                                    sensores.rumbo == sur || sensores.rumbo == oeste);
+                            if (sensores.enfrente && rumbo_ortogonal) {
+                                come_postswap_n6 = false;
+                                install_postswap_emitido_n6 = true;
+                                install_pendiente_n6 = true;
+                                eco_ref_install_n6 = sensores.ecologico;
+                                return INSTALL;
+                            }
+                            return IDLE;
+                        }
+                    }
+                    come_postswap_n6 = false;
+                }
                 if (!hay_plan) {
                     EstadoN3 inicio = {sensores.posF, sensores.posC, sensores.rumbo, tiene_zapatillas};
                     hay_plan = EncontrarPlan_N3(inicio, destn6_f, destn6_c, plan, true, false, false);
