@@ -365,6 +365,21 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_1(Sensores sensores) {
 
 
 
+// =========================================================================
+// FUNCIONES AUXILIARES - NIVEL 2 (Técnico)
+// =========================================================================
+
+/**
+    * @brief Aplica una acción a un estado y devuelve el estado resultante.
+    *
+    * TURN_SL y TURN_SR modifican la brújula (+7 mod 8 y +1 mod 8 respectivamente).
+    * JUMP desplaza la posición 2 casillas en la dirección actual.
+    * WALK no se gestiona aquí (el estado queda igual), su validez se comprueba en EsValida_N2.
+    *
+    * @param st  Estado de partida (posición + orientación).
+    * @param act Acción a aplicar.
+    * @return    Nuevo estado tras la acción.
+*/
 ComportamientoTecnico::Estado ComportamientoTecnico::AplicaAccion_N2(const Estado& st, Action act) {
     Estado nuevo = st;
     if (act == TURN_SL) {
@@ -386,6 +401,20 @@ ComportamientoTecnico::Estado ComportamientoTecnico::AplicaAccion_N2(const Estad
     return nuevo;
 }
 
+/**
+    * @brief Comprueba si una acción es válida desde un estado dado.
+    *
+    *  TURN_SL / TURN_SR: siempre válidos.
+    *  WALK / JUMP: comprueban que la casilla destino esté dentro del mapa,
+    *   no sea M/P/B (ni A sin permiso de agua), no esté ocupada por otra entidad
+    *   y que el desnivel sea admisible (WALK: |dif| <= 1; JUMP: dif == +2).
+    *   El técnico no tiene zapatillas, así que su desnivel máximo es siempre 1.
+    *
+    * @param st            Estado actual del técnico.
+    * @param act           Acción a validar.
+    * @param aguaPermitida Si true, las casillas de agua ('A') son transitables.
+    * @return              true si la acción es legal.
+*/
 bool ComportamientoTecnico::EsValida_N2(const Estado& st, Action act, bool aguaPermitida) {
     if (act == TURN_SL || act == TURN_SR) return true;
 
@@ -415,6 +444,21 @@ bool ComportamientoTecnico::EsValida_N2(const Estado& st, Action act, bool aguaP
     return false;
 }
 
+/**
+    * @brief BFS para encontrar un plan de movimiento hacia una casilla destino.
+    *
+    * Si dest_f y dest_c son ambos -1, el objetivo es alcanzar cualquier casilla 'U'.
+    * El estado del BFS incluye posición (f, c) y orientación (brujula); el conjunto
+    * de cerrados impide re-expandir estados ya visitados.
+    * Solo se consideran WALK, TURN_SL y TURN_SR (sin JUMP).
+    *
+    * @param inicio           Estado inicial del técnico.
+    * @param dest_f           Fila del destino (-1 para buscar 'U').
+    * @param dest_c           Columna del destino (-1 para buscar 'U').
+    * @param plan_resultante  Lista de acciones resultante (vacía si no hay solución).
+    * @param aguaPermitida    Si true, el agua ('A') es terreno transitable.
+    * @return                 true si se encontró un camino, false en caso contrario.
+*/
 bool ComportamientoTecnico::EncontrarPlan_N2(const Estado& inicio, int dest_f, int dest_c, std::list<Action>& plan_resultante, bool aguaPermitida) {
     plan_resultante.clear();
     std::queue<Nodo> abiertos;
@@ -460,11 +504,30 @@ bool ComportamientoTecnico::EncontrarPlan_N2(const Estado& inicio, int dest_f, i
     return false;
 }
 
+// =========================================================================
+// NIVEL 2 - TÉCNICO REACTIVO (guiado por el Ingeniero)
+// =========================================================================
+// En nivel 2 el técnico no planifica su propia ruta: reacciona a la posición
+// del Ingeniero en los tres sensores frontales (izq, frente, der).
+//   - Si el Ingeniero está adyacente: girar hacia él y avanzar para seguirle.
+//   - Si el Ingeniero no está a la vista: hacer un pequeño desalojo lateral
+//     (desalojo_pendiente_n2) para no obstruir el camino, y luego quedarse IDLE.
+//   - ya_reubicado_n2 evita repetir el desalojo en el mismo episodio.
+//   - La lambda casilla_transitable verifica desnivel, entidades y tipo de terreno
+//     antes de proponer cualquier WALK o giro.
+// =========================================================================
+
 /**
- * @brief Comportamiento del técnico para el Nivel 2.
- * @param sensores Datos actuales de los sensores.
- * @return Acción a realizar.
- */
+    * @brief Comportamiento del técnico en el Nivel 2.
+    *
+    * Reacciona a la posición del Ingeniero en los sensores inmediatos:
+    *    Ingeniero adyacente: girar hacia él y avanzar (seguimiento).
+    *    Sin Ingeniero visible: desalojo lateral puntual para no bloquear,
+    *    luego IDLE.
+    *
+    * @param sensores Datos actuales de los sensores.
+    * @return Acción a realizar.
+*/
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_2(Sensores sensores) {
     if (sensores.superficie[0] == 'D') {
         tiene_zapatillas = true;
@@ -526,7 +589,24 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_2(Sensores sensores) {
 // =========================================================
 // === MOTOR DE BÚSQUEDA A* NIVEL 3 (TÉCNICO) ===
 // =========================================================
+// A* con coste real de batería. Estado = (f, c, brujula, zapatillas).                                                                                                                                                                            
+// Heurística: distancia de Chebyshev al destino.                                                                                                                                                                                                      
+// Costes de WALK (terreno origen): A=60, H=6, S=3, resto=1; subir +5, bajar -2.                                                                                                                                                           
+// Costes de TURN: A=5, H/S/resto=1.                                                                                                                                                                                                              
+// =========================================================  
 
+/**                                                                                                                                                                                                                                               
+    * @brief Calcula el coste de batería de ejecutar una acción desde un estado.                                                                                                                                                                     
+    *                                                                                                                                                                                                                                                
+    * El coste depende del terreno de la casilla ORIGEN y del desnivel para WALK:                                                                                                                                                             
+    *   Agua (A): 60 base; Hierba (H): 6; Suelo suelto (S): 3; resto: 1.                                                                                                                                                                             
+    *   Subir (+dif): +5; bajar (-dif): -2; mínimo garantizado: 1.                                                                                                                                                                                   
+    * Para giros: A=5, resto=1. IDLE: 0.                                                                                                                                                                                                             
+    *                                                                                                                                                                                                                                                
+    * @param st  Estado actual (usado para leer terreno y cota origen).                                                                                                                                                                              
+    * @param act Acción a evaluar (WALK, TURN_SL, TURN_SR, IDLE).                                                                                                                                                                                    
+    * @return    Coste en unidades de batería.                                                                                                                                                                                                       
+*/            
 int ComportamientoTecnico::CostoBateria_N3(const EstadoN3& st, Action act) {
     unsigned char terreno = mapaResultado[st.f][st.c];
     int coste = 0;
@@ -555,10 +635,28 @@ int ComportamientoTecnico::CostoBateria_N3(const EstadoN3& st, Action act) {
     return coste;
 }
 
+/**                                                                                                                                                                                                                                               
+    * @brief Heurística admisible para A*: distancia de Chebyshev al destino.                                                                                                                                                                                                                                                                                                                                                              
+    *                                                                                                                                                                                                                                                
+    * @param actual  Estado actual del técnico.                                                                                                                                                                                                      
+    * @param dest_f  Fila del destino.                                                                                                                                                                                                               
+    * @param dest_c  Columna del destino.                                                                                                                                                                                                            
+    * @return        Estimación del coste restante.                                                                                                                                                                                                  
+*/ 
 int ComportamientoTecnico::Heuristica(const EstadoN3& actual, int dest_f, int dest_c) {
     return max(abs(actual.f - dest_f), abs(actual.c - dest_c));
 }
 
+/**                                                                                                                                                                                                                                               
+    * @brief Aplica una acción a un EstadoN3 y devuelve el estado resultante.                                                                                                                                                                      
+    *                                                                                                                                                                                                                                                
+    * TURN_SL/TURN_SR modifican la brújula. WALK avanza una casilla en la dirección                                                                                                                                                           
+    * actual y, si la nueva casilla tiene terreno 'D' (zapatillas), activa el flag.                                                                                                                                                                  
+    *                                                                                                                                                                                                                                                
+    * @param st  Estado de partida.                                                                                                                                                                                                                  
+    * @param act Acción a aplicar.                                                                                                                                                                                                                   
+    * @return    Estado resultante.                                                                                                                                                                                                                  
+*/   
 ComportamientoTecnico::EstadoN3 ComportamientoTecnico::AplicaAccion_N3(const EstadoN3& st, Action act) {
     EstadoN3 nuevo = st;
     if (act == TURN_SL) {
@@ -585,6 +683,22 @@ ComportamientoTecnico::EstadoN3 ComportamientoTecnico::AplicaAccion_N3(const Est
     return nuevo;
 }
 
+/**                                                                                                                                                                                                                                               
+    * @brief Comprueba si una acción es válida para el A* del nivel 3.                                                                                                                                                                             
+    *                                                                                                                                                                                                                                                
+    * Giros: siempre válidos.                                                                                                                                                                                                               
+    * WALK: la casilla destino debe estar dentro del mapa, no ser M/P; el bosque                                                                                                                                                                   
+    *   ('B') requiere zapatillas; el agua ('A') requiere agua_permitida; casillas                                                                                                                                                                   
+    *   desconocidas ('?') solo se permiten si ignorarentidades == true; desnivel                                                                                                                                                                    
+    *   máximo 1 (el técnico no tiene mejora de salto).                                                                                                                                                                                              
+    *   Si ignorarentidades == false, también verifica que no haya otra entidad.                                                                                                                                                                     
+    *                                                                                                                                                                                                                                                
+    * @param st                Estado actual.                                                                                                                                                                                                        
+    * @param act               Acción a validar.                                                                                                                                                                                                     
+    * @param ignorarentidades  Si true, ignora entidades y casillas '?' en destino.                                                                                                                                                                  
+    * @param agua_permitida    Si true, permite entrar en casillas 'A'.                                                                                                                                                                              
+    * @return                  true si la acción es legal.                                                                                                                                                                                           
+*/ 
 bool ComportamientoTecnico::EsValida_N3(const EstadoN3& st, Action act, bool ignorarentidades, bool agua_permitida) {
     if (act == TURN_SL || act == TURN_SR) return true;
     if (act == WALK) {
@@ -613,6 +727,26 @@ bool ComportamientoTecnico::EsValida_N3(const EstadoN3& st, Action act, bool ign
     return false;
 }
 
+/**                                                                                                                                                                                                                                               
+    * @brief A* con coste de batería para encontrar el camino óptimo al destino.                                                                                                                                                                   
+    *                                                                                                                                                                                                                                                
+    * Usa CostoBateria_N3 como g(n) y Heuristica como h(n).                                                                                                                                                                                   
+    * El mapa de padres permite reconstruir el plan hacia atrás.                                                                                                                                                                                     
+    * La lazy-deletion sobre mejor_g descarta nodos obsoletos de la cola sin                                                                                                                                                                         
+    * necesitar un decrease-key.                                                                                                                                                                                                                     
+    *                                                                                                                                                                                                                                                
+    * Si parar_adyacente == true, el objetivo es estar a distancia Manhattan 1                                                                                                                                                                       
+    * del destino (útil para orientarse y luego instalar desde fuera).                                                                                                                                                                               
+    *                                                                                                                                                                                                                                                
+    * @param inicio             Estado inicial del técnico.                                                                                                                                                                                          
+    * @param dest_f             Fila del destino.                                                                                                                                                                                                    
+    * @param dest_c             Columna del destino.                                                                                                                                                                                                 
+    * @param plan_resultante    Lista de acciones resultante.                                                                                                                                                                                        
+    * @param ignorar_entidades  Si true, ignora entidades y casillas '?' en el mapa.                                                                                                                                                                 
+    * @param parar_adyacente    Si true, para en casilla adyacente al destino.                                                                                                                                                                       
+    * @param agua_permitida     Si true, permite cruzar agua.                                                                                                                                                                                        
+    * @return                   true si se encontró solución.                                                                                                                                                                                        
+*/
 bool ComportamientoTecnico::EncontrarPlan_N3(const EstadoN3& inicio, int dest_f, int dest_c, std::list<Action>& plan_resultante, bool ignorar_entidades, bool parar_adyacente, bool agua_permitida) {
     plan_resultante.clear();
     std::priority_queue<NodoN3, std::vector<NodoN3>, std::greater<NodoN3>> abiertos;
@@ -689,11 +823,29 @@ bool ComportamientoTecnico::EncontrarPlan_N3(const EstadoN3& inicio, int dest_f,
     return false;
 }
 
+// =========================================================================                                                                                                                                                                      
+// NIVEL 3 - TÉCNICO DELIBERATIVO CON A*                                                                                                                                                                                                        
+// =========================================================================                                                                                                                                                                      
+// El técnico calcula un plan A* hasta BelPos (posición del Ingeniero) cada vez                                                                                                                                                            
+// que se queda sin plan o detecta que el movimiento anterior no tuvo efecto                                                                                                                                                                      
+// (posición igual a la del tick anterior con última acción WALK => choque).                                                                                                                                                                       
+// Si el primer intento falla (hay entidades bloqueando), reintenta con agua                                                                                                                                                                      
+// permitida para casos en que el camino pase por zonas inundadas.                                                                                                                                                                                
+// Durante la ejecución: si la siguiente acción es WALK y el Ingeniero está                                                                                                                                                                       
+// justo enfrente, espera un tick (IDLE) para evitar colisión.                                                                                                                                                                                    
+// =========================================================================   
+
 /**
- * @brief Comportamiento del técnico para el Nivel 3.
- * @param sensores Datos actuales de los sensores.
- * @return Acción a realizar.
- */
+    * @brief Comportamiento del técnico en el Nivel 3.                                                                                                                                                                                               
+    *                                                                                                                                                                                                                                                
+    * Planifica con A* hacia la posición del Ingeniero (BelPosF/C).                                                                                                                                                                           
+    * Replanifica si detecta que un WALK no avanzó (choque). Cede el paso                                                                                                                                                                            
+    * al Ingeniero cuando está justo enfrente durante la ejecución del plan.                                                                                                                                                                         
+    *                                                                                                                                                                                                                                                
+    * @param sensores Datos actuales de los sensores.                                                                                                                                                                                                
+    * @return Acción a realizar.                                                                                                                                                                                                                     
+*/                      
+
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_3(Sensores sensores) {
     // Replanificar si el plan anterior causó error
     if (hay_plan && !plan.empty()) {
@@ -739,11 +891,30 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_3(Sensores sensores) {
     return IDLE;
 }
 
+// =========================================================================
+// NIVEL 4 - TÉCNICO INSTALADOR (mapa completo conocido)
+// =========================================================================
+// El técnico recibe el mapa completo y calcula el trazado de tuberías con
+// EncontrarPlan_N5_Arquitecto. Luego instala cada tramo de la tubería:
+//   1. Navega (A*) hasta la casilla del tramo actual.
+//   2. Una vez en posición, se orienta hacia la casilla siguiente del plan.
+//   3. Instala el segmento de tubería con INSTALL y avanza al siguiente tramo.
+// El cálculo del plan solo se hace una vez, se reutiliza en ticks sucesivos.
+// =========================================================================
+
 /**
- * @brief Comportamiento del técnico para el Nivel 4.
- * @param sensores Datos actuales de los sensores.
- * @return Acción a realizar.
- */
+    * @brief Comportamiento del técnico en el Nivel 4.
+    *
+    * Calcula el trazado de tuberías al inicio (una sola vez) con
+    * EncontrarPlan_N5_Arquitecto. Después itera tramo a tramo:
+    *   Navega hasta la casilla del tramo con A* (EncontrarPlan_N3).
+    *   Se orienta hacia el siguiente tramo.
+    *   Ejecuta INSTALL y avanza tramo_n5.
+    * Cede el paso (IDLE) si hay otra entidad justo enfrente al querer avanzar.
+    *
+    * @param sensores Datos actuales de los sensores.
+    * @return Acción a realizar.
+*/
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_4(Sensores sensores) {
     if (sensores.tiempo == 0) {
         plan_n5.clear();
@@ -818,9 +989,30 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_4(Sensores sensores) {
 
 
 // =========================================================
-// === MÁQUINA DE ESTADOS COOPERATIVA (NIVEL 5) ===
+// === MÁQUINA DE ESTADOS COOPERATIVA (NIVEL 5) ============
+// =========================================================
+// Planificación de tuberías con Dijkstra de impacto ecológico.
+// Estado = (f, c, altura_tubería h). Restricción de gravedad: h_actual >= h_siguiente
+// y la diferencia no puede superar 1 (la tubería no puede "subir" por sí sola).
+// En cada casilla se prueban 3 alturas posibles: nH, nH-1, nH+1 (salvo en agua, solo nH).
+// Coste de un tramo: imp_install(origen) + imp_install(destino) + imp_op(destino, op).
 // =========================================================
 
+/**
+    * @brief Dijkstra de impacto ecológico para el trazado de tuberías (mapa completo).
+    *
+    * Versión usada en nivel 4 y 5, donde el mapa es conocido de antemano.
+    * El estado incluye la altura virtual de la tubería en cada casilla.
+    * Restricción de flujo: h_actual >= h_siguiente y diferencia <= 1 (gravedad).
+    * Se descartan casillas M, P, '?' y B. Las casillas de agua solo admiten su
+    * altura real (no se aplica RAISE/DIG sobre agua).
+    *
+    * @param start_f          Fila de la casilla de inicio.
+    * @param start_c          Columna de la casilla de inicio.
+    * @param plan_resultante  Lista de Paso {fil, col, op} resultante.
+    * @param limite_eco       Impacto ecológico máximo permitido.
+    * @return                 true si se encontró un trazado viable.
+*/
 bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco) {
     plan_resultante.clear();
     std::priority_queue<NodoN4_Tecnico, std::vector<NodoN4_Tecnico>, std::greater<NodoN4_Tecnico>> abiertos;
@@ -940,6 +1132,19 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Arquitecto(int start_f, int start_c
     return false; 
 }
 
+/**
+    * @brief Dijkstra de impacto ecológico para el trazado de tuberías (mapa parcialmente conocido).
+    *
+    * Mismo algoritmo que EncontrarPlan_N5_Arquitecto pero utilizado en el nivel 6,
+    * donde el mapa se va descubriendo en tiempo real. La función se llama con el mapa
+    * que el técnico conoce en ese instante; las casillas '?' se ignoran como obstáculos.
+    *
+    * @param start_f          Fila de la casilla de inicio.
+    * @param start_c          Columna de la casilla de inicio.
+    * @param plan_resultante  Lista de Paso {fil, col, op} resultante.
+    * @param limite_eco       Impacto ecológico máximo permitido.
+    * @return                 true si se encontró un trazado viable.
+*/
 bool ComportamientoTecnico::EncontrarPlan_N5_Tecnico(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco) {
     plan_resultante.clear();
     std::priority_queue<NodoN4_Tecnico, std::vector<NodoN4_Tecnico>, std::greater<NodoN4_Tecnico>> abiertos;
@@ -1061,6 +1266,10 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Tecnico(int start_f, int start_c, s
 // FUNCIONES AUXILIARES DE ALINEACIÓN (NIVEL 5)
 // =========================================================
 
+/**
+    * @brief Devuelve la orientación cardinal de (fromF,fromC) hacia (toF,toC).
+    * Solo cubre las 4 direcciones ortogonales; el resultado para diagonales no está definido.
+*/
 static Orientacion OrientacionHacia_Tec(int fromF, int fromC, int toF, int toC) {
     if (toF < fromF) return norte;
     if (toF > fromF) return sur;
@@ -1069,12 +1278,24 @@ static Orientacion OrientacionHacia_Tec(int fromF, int fromC, int toF, int toC) 
     return norte;
 }
 
+/**
+    * @brief Devuelve el número de giros a la derecha (TURN_SR) para pasar de actual a objetivo.
+    * Si el resultado es > 4, conviene girar a la izquierda (8 - resultado pasos).
+*/
 static int GirosNecesarios_Tec(Orientacion actual, Orientacion objetivo) {
     return ((int)objetivo - (int)actual + 8) % 8;
 }
 
-static bool HayTuberiaEntreTecnico(const vector<vector<unsigned char>> &mapaTuberias,
-                                   int f1, int c1, int f2, int c2) {
+/**
+    * @brief Comprueba si hay un segmento de tubería instalado entre dos casillas adyacentes.
+    *
+    * Usa la codificación de bits de mapaTuberias (misma que HayTuberiaEntreIngeniero):
+    *   bit0 = norte (1), bit2 = este (4), bit4 = sur (16), bit6 = oeste (64).
+    * Ambos extremos deben tener el bit correspondiente activo.
+    *
+    * @return true si el segmento está instalado en ambos sentidos.
+*/
+static bool HayTuberiaEntreTecnico(const vector<vector<unsigned char>> &mapaTuberias, int f1, int c1, int f2, int c2) {
     if (abs(f1 - f2) + abs(c1 - c2) != 1) return false;
 
     unsigned char a = mapaTuberias[f1][c1];
@@ -1088,6 +1309,18 @@ static bool HayTuberiaEntreTecnico(const vector<vector<unsigned char>> &mapaTube
 }
 
 
+/**
+    * @brief Comprueba si una acción es válida para el A* de navegación del nivel 5.
+    *
+    * Igual que EsValida_N3 pero sin permitir agua (nivel 5 no tiene ruta acuática).
+    * M, P y '?' siempre bloqueados. B solo si el técnico tiene zapatillas. Desnivel máx 1.
+    * Si ignorarentidades == false, bloquea casillas ocupadas por otras entidades.
+    *
+    * @param st               Estado actual.
+    * @param act              Acción a validar.
+    * @param ignorarentidades Si true, ignora entidades en la casilla destino.
+    * @return                 true si la acción es legal.
+*/
 bool ComportamientoTecnico::EsValida_N5(const EstadoN3& st, Action act, bool ignorarentidades) {
     if (act == TURN_SL || act == TURN_SR) return true;
     if (act == WALK) {
@@ -1114,6 +1347,21 @@ bool ComportamientoTecnico::EsValida_N5(const EstadoN3& st, Action act, bool ign
     return false;
 }
 
+/**
+    * @brief A* de batería para navegación del técnico en el nivel 5.
+    *
+    * Variante de EncontrarPlan_N3 que usa EsValida_N5 en lugar de EsValida_N3
+    * (sin permiso de agua). Si parar_adyacente == true, se detiene al llegar
+    * a distancia Manhattan 1 del destino (para orientarse antes de instalar).
+    *
+    * @param inicio             Estado inicial del técnico.
+    * @param dest_f             Fila del destino.
+    * @param dest_c             Columna del destino.
+    * @param plan_resultante    Lista de acciones resultante.
+    * @param ignorar_entidades  Si true, ignora entidades en el mapa.
+    * @param parar_adyacente    Si true, para en casilla adyacente al destino.
+    * @return                   true si se encontró solución.
+*/
 bool ComportamientoTecnico::EncontrarPlan_N5_Caminar(EstadoN3 inicio, int dest_f, int dest_c, std::list<Action>& plan_resultante, bool ignorar_entidades, bool parar_adyacente) {
     plan_resultante.clear();
     std::priority_queue<NodoN3, std::vector<NodoN3>, std::greater<NodoN3>> abiertos;
@@ -1190,8 +1438,30 @@ bool ComportamientoTecnico::EncontrarPlan_N5_Caminar(EstadoN3 inicio, int dest_f
     return false;
 }
 
+// =========================================================================
+// NIVEL 5 - TÉCNICO COOPERATIVO (máquina de estados, mapa completo)
+// =========================================================================
+// El técnico calcula el trazado de tuberías una sola vez con EncontrarPlan_N5_Arquitecto.
+// Luego itera tramo a tramo: tramo_n5 empieza en 1, por lo que el técnico se coloca
+// en plan_n5[tramo_n5 - 1] (extremo "suyo") y orienta hacia plan_n5[tramo_n5].
+//
+// Máquina de estados (estado_n6):
+//   Estado 1: Navegar hasta plan_n5[tramo_n5 - 1] usando A* (EncontrarPlan_N5_Caminar).
+//             Si la casilla destino es adyacente, navega directamente sin BFS.
+//             Marca la casilla del ingeniero como entidad temporal para evitar rutas
+//             que pasen por ella.
+//   Estado 2: Ya en posición, orientarse hacia plan_n5[tramo_n5] y esperar enfrente
+//             para ejecutar INSTALL. Si HayTuberia... detecta que ya está instalado,
+//             avanza al siguiente tramo.
+// =========================================================================
+
 /**
-    * @brief Comportamiento del técnico para el Nivel 5.
+    * @brief Comportamiento del técnico en el Nivel 5.
+    *
+    * Calcula el trazado con EncontrarPlan_N5_Arquitecto (solo la primera vez).
+    * Máquina de 2 estados: navegar hasta el extremo "suyo" del segmento (est 1),
+    * luego orientarse e instalar cuando el ingeniero da la señal (est 2).
+    *
     * @param sensores Datos actuales de los sensores.
     * @return Acción a realizar.
 */
@@ -1262,8 +1532,7 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
 
     if (estado_n6 == 2) {
         Paso tramo_ing = plan_n5[tramo_n5];
-        if (HayTuberiaEntreTecnico(mapaTuberias, sensores.posF, sensores.posC,
-                                   tramo_ing.fil, tramo_ing.col)) {
+        if (HayTuberiaEntreTecnico(mapaTuberias, sensores.posF, sensores.posC, tramo_ing.fil, tramo_ing.col)) {
             tramo_n5++;
             estado_n6 = 1;
             hay_plan = false;
@@ -1286,20 +1555,44 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_5(Sensores sensores) {
     return IDLE;
 }
 
+// =========================================================================
+// NIVEL 6 - TÉCNICO COOPERATIVO (mapa desconocido + tuberías)
+// =========================================================================
+// El técnico opera sin mapa completo. Su máquina de estados reacciona a
+// órdenes del Ingeniero (sensores.venpaca / GotoF / GotoC) y gestiona la
+// instalación cooperativa de cada segmento de tubería.
+//
+// Máquina de estados (estado_n6):
+//   Estado 0 (idle): Sin orden activa. Si el Ingeniero está adyacente y el
+//             segmento no está instalado, se orienta e intenta INSTALL.
+//   Estado 1 (navegar): Viaja hacia (destn6_f, destn6_c) con A* (EncontrarPlan_N3).
+//             Si come_postswap_n6, intenta INSTALL directamente al llegar a distancia 1.
+//   Estado 2 (en posición): Espera señal enfrente del Ingeniero para INSTALL.
+//             Si el segmento ya está instalado (HayTuberia...), pasa a estado 3.
+//             Si el Ingeniero desaparece más de 8 ticks, vuelve al estado 1 para reposicionarse.
+//   Estado 3 (retirada): Tras instalar, se aparta lateralmente para dejar paso al Ingeniero.
+//             Prueba hasta 3 candidatos de retirada (lateral der/izq según retirada_izq_n6,
+//             luego atrás). Si no puede moverse en 3 intentos, vuelve al estado 0.
+//
+// install_pendiente_n6: flag que indica que se emitió INSTALL y espera confirmación
+//   (subida de ecológico o tubería detectada en mapaTuberias).
+// come_postswap_n6: el Ingeniero está justo al lado; instalar inmediatamente sin
+//   navegar hasta la casilla destino.
+// =========================================================================
+
 /**
- * @brief Comportamiento del técnico para el Nivel 6.
- * @param sensores Datos actuales de los sensores.
- * @return Acción a realizar.
- */
+    * @brief Comportamiento del técnico en el Nivel 6.
+    *
+    * Recibe órdenes del Ingeniero vía sensores.venpaca/GotoF/GotoC y ejecuta
+    * la máquina de estados (0=idle, 1=navegar, 2=instalar, 3=retirada).
+    * Detecta el éxito de la instalación comprobando si subió sensores.ecologico
+    * o si HayTuberia... detecta el segmento en mapaTuberias.
+    *
+    * @param sensores Datos actuales de los sensores.
+    * @return Acción a realizar.
+*/
 Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
     ActualizarMapa(sensores);
-    bool dbg_oculto_30 = (mapaResultado.size() == 30 && sensores.max_ecologico != 648 &&
-                          sensores.max_ecologico != 1000 && sensores.max_ecologico != 1804 &&
-                          sensores.max_ecologico != 2364);
-    bool dbg_n6 = (sensores.max_ecologico == 2364 || sensores.max_ecologico == 2688 || sensores.max_ecologico == 3533 ||
-                   sensores.max_ecologico == 2107 ||
-                   sensores.max_ecologico == 1719 || sensores.max_ecologico == 1500 || dbg_oculto_30);
-    dbg_n6 = false;
     if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
     if (sensores.tiempo == 0) {
@@ -1318,11 +1611,6 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
         bool destino_cambiado = (destn6_f != sensores.GotoF || destn6_c != sensores.GotoC);
         bool reactivar_misma_orden = (!destino_cambiado && estado_n6 == 0);
         if (destino_cambiado || reactivar_misma_orden) {
-            if (dbg_n6) {
-                cerr << "[TEC6 CALL] t=" << sensores.tiempo << " estado=" << estado_n6
-                     << " dest=(" << sensores.GotoF << "," << sensores.GotoC << ") pos=("
-                     << sensores.posF << "," << sensores.posC << ") energia=" << sensores.energia << "\n";
-            }
             destn6_f = sensores.GotoF; destn6_c = sensores.GotoC;
             retirada_n6 = -1;
             intento_orbita_n6 = 0;
@@ -1342,18 +1630,12 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
         ubicacion delante = Delante({sensores.posF, sensores.posC, sensores.rumbo});
         bool tuberia_delante = (delante.f >= 0 && delante.f < (int)mapaTuberias.size() &&
                                 delante.c >= 0 && delante.c < (int)mapaTuberias[0].size() &&
-                                HayTuberiaEntreTecnico(mapaTuberias, sensores.posF, sensores.posC,
-                                                       delante.f, delante.c));
+                                HayTuberiaEntreTecnico(mapaTuberias, sensores.posF, sensores.posC, delante.f, delante.c));
         if (sensores.ecologico > eco_ref_install_n6 || tuberia_delante) {
             install_pendiente_n6 = false;
             install_postswap_emitido_n6 = false;
             come_postswap_n6 = false;
             estado_n6 = 3;
-            if (dbg_n6) {
-                cerr << "[TEC6 INSTALL OK -> RET] t=" << sensores.tiempo << " pos=("
-                     << sensores.posF << "," << sensores.posC << ") eco=" << sensores.ecologico
-                     << " energia=" << sensores.energia << "\n";
-            }
             retirada_n6 = -1;
             intento_orbita_n6 = 0;
             hay_plan = false;
@@ -1386,12 +1668,11 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
     };
 
     switch(estado_n6) {
+        // Estado 0 (idle): Sin orden activa; si el Ingeniero está adyacente sin tubería, instalar
         case 0:
             if (abs(sensores.posF - sensores.BelPosF) + abs(sensores.posC - sensores.BelPosC) == 1 &&
-                !HayTuberiaEntreTecnico(mapaTuberias, sensores.posF, sensores.posC,
-                                        sensores.BelPosF, sensores.BelPosC)) {
-                Orientacion ori = OrientacionHacia_Tec(sensores.posF, sensores.posC,
-                                                       sensores.BelPosF, sensores.BelPosC);
+                !HayTuberiaEntreTecnico(mapaTuberias, sensores.posF, sensores.posC, sensores.BelPosF, sensores.BelPosC)) {
+                Orientacion ori = OrientacionHacia_Tec(sensores.posF, sensores.posC, sensores.BelPosF, sensores.BelPosC);
                 if (sensores.rumbo != ori) {
                     return (GirosNecesarios_Tec(sensores.rumbo, ori) <= 4) ? TURN_SR : TURN_SL;
                 }
@@ -1401,25 +1682,20 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
             }
             return IDLE; 
 
+        // Estado 1 (navegar): Ir hacia (destn6_f, destn6_c) con A*; si come_postswap, instalar al llegar a distancia 1
         case 1:
             if (sensores.posF == destn6_f && sensores.posC == destn6_c) {
-                if (dbg_n6) {
-                    cerr << "[TEC6 ARRIVE] t=" << sensores.tiempo << " dest=(" << destn6_f << "," << destn6_c
-                         << ") rumbo=" << sensores.rumbo << " energia=" << sensores.energia << "\n";
-                }
                 estado_n6 = 2; return IDLE;
             } else {
                 if (come_postswap_n6) {
                     int dist_dest = abs(sensores.posF - destn6_f) + abs(sensores.posC - destn6_c);
                     if (dist_dest == 1) {
-                        Orientacion ori = OrientacionHacia_Tec(sensores.posF, sensores.posC,
-                                                               destn6_f, destn6_c);
+                        Orientacion ori = OrientacionHacia_Tec(sensores.posF, sensores.posC, destn6_f, destn6_c);
                         if (sensores.rumbo != ori) {
                             return (GirosNecesarios_Tec(sensores.rumbo, ori) <= 4) ? TURN_SR : TURN_SL;
                         }
                         if (sensores.agentes[2] == 'i' || sensores.agentes[2] == 'I') {
-                            bool rumbo_ortogonal = (sensores.rumbo == norte || sensores.rumbo == este ||
-                                                    sensores.rumbo == sur || sensores.rumbo == oeste);
+                            bool rumbo_ortogonal = (sensores.rumbo == norte || sensores.rumbo == este || sensores.rumbo == sur || sensores.rumbo == oeste);
                             if (sensores.enfrente && rumbo_ortogonal) {
                                 come_postswap_n6 = false;
                                 install_postswap_emitido_n6 = true;
@@ -1457,14 +1733,14 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
                 }
             }
 
-        case 2: 
+        // Estado 2 (en posición): Esperar al Ingeniero enfrente y ejecutar INSTALL; si tubería ya instalada => retirada
+        case 2:
             if (sensores.agentes[2] == 'i' || sensores.agentes[2] == 'I') {
                 intento_orbita_n6 = 0;
                 ubicacion delante = Delante({sensores.posF, sensores.posC, sensores.rumbo});
                 if (delante.f >= 0 && delante.f < (int)mapaTuberias.size() &&
                     delante.c >= 0 && delante.c < (int)mapaTuberias[0].size() &&
-                    HayTuberiaEntreTecnico(mapaTuberias, sensores.posF, sensores.posC,
-                                           delante.f, delante.c)) {
+                    HayTuberiaEntreTecnico(mapaTuberias, sensores.posF, sensores.posC, delante.f, delante.c)) {
                     estado_n6 = 3;
                     retirada_n6 = -1;
                     intento_orbita_n6 = 0;
@@ -1475,15 +1751,10 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
             }
 
             if (sensores.agentes[2] == 'i' || sensores.agentes[2] == 'I') {
-                bool rumbo_ortogonal = (sensores.rumbo == norte || sensores.rumbo == este ||
-                                        sensores.rumbo == sur || sensores.rumbo == oeste);
+                bool rumbo_ortogonal = (sensores.rumbo == norte || sensores.rumbo == este || sensores.rumbo == sur || sensores.rumbo == oeste);
                 if (sensores.enfrente && rumbo_ortogonal) {
                     install_pendiente_n6 = true;
                     eco_ref_install_n6 = sensores.ecologico;
-                    if (dbg_n6) {
-                        cerr << "[TEC6 INSTALL] t=" << sensores.tiempo << " pos=(" << sensores.posF << ","
-                             << sensores.posC << ") energia=" << sensores.energia << "\n";
-                    }
                     return INSTALL;
                 } else if (sensores.enfrente) {
                     return TURN_SR;
@@ -1501,7 +1772,8 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
             }
             return TURN_SR; 
 
-        case 3: 
+        // Estado 3 (retirada): Apartarse lateralmente tras instalar para dejar paso al Ingeniero
+        case 3:
             {
             if (retirada_n6 < 0) retirada_n6 = (int)sensores.rumbo;
             Orientacion candidatos[3];
@@ -1534,20 +1806,10 @@ Action ComportamientoTecnico::ComportamientoTecnicoNivel_6(Sensores sensores) {
                 retirada_n6 = -1;
                 hay_plan = false;
                 plan.clear();
-                if (dbg_n6) {
-                    cerr << "[TEC6 RET WALK] t=" << sensores.tiempo << " pos=(" << sensores.posF << ","
-                         << sensores.posC << ") rumbo=" << sensores.rumbo << " energia=" << sensores.energia << "\n";
-                }
                 return WALK;
             }
 
             intento_orbita_n6++;
-            if (dbg_n6) {
-                cerr << "[TEC6 RET FAIL] t=" << sensores.tiempo << " intento=" << intento_orbita_n6
-                     << " pos=(" << sensores.posF << "," << sensores.posC << ") rumbo=" << sensores.rumbo
-                     << " ag2=" << sensores.agentes[2] << " choque=" << sensores.choque
-                     << " energia=" << sensores.energia << "\n";
-            }
             return IDLE;
             }
     }
