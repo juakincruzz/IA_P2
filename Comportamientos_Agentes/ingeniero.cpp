@@ -12,56 +12,56 @@ using namespace std;
 // ÁREA DE IMPLEMENTACIÓN DEL ESTUDIANTE
 // =========================================================================
 
-Action ComportamientoIngeniero::think(Sensores sensores)
-{
-  Action accion = IDLE;
+Action ComportamientoIngeniero::think(Sensores sensores) {
+    Action accion = IDLE;
 
-  // Decisión del agente según el nivel
-  switch (sensores.nivel) {
-    case 0: accion = ComportamientoIngenieroNivel_0(sensores); break;
-    case 1: accion = ComportamientoIngenieroNivel_1(sensores); break;
-    case 2: accion = ComportamientoIngenieroNivel_2(sensores); break;
-    case 3: accion = ComportamientoIngenieroNivel_3(sensores); break;
-    case 4: accion = ComportamientoIngenieroNivel_4(sensores); break;
-    case 5: accion = ComportamientoIngenieroNivel_5(sensores); break;
-    case 6: accion = ComportamientoIngenieroNivel_6(sensores); break;
-  }
+    // Decisión del agente según el nivel
+    switch (sensores.nivel) {
+        case 0: accion = ComportamientoIngenieroNivel_0(sensores); break;
+        case 1: accion = ComportamientoIngenieroNivel_1(sensores); break;
+        case 2: accion = ComportamientoIngenieroNivel_2(sensores); break;
+        case 3: accion = ComportamientoIngenieroNivel_3(sensores); break;
+        case 4: accion = ComportamientoIngenieroNivel_4(sensores); break;
+        case 5: accion = ComportamientoIngenieroNivel_5(sensores); break;
+        case 6: accion = ComportamientoIngenieroNivel_6(sensores); break;
+    }
 
-  return accion;
+    return accion;
 }
 
 /**
-  * @brief Compruebo si una casilla adyacente es accesible según la diferencia de altura.
-  *        Desnivel máximo: 1 sin zapatillas, 2 con zapatillas.
-  * @param casilla Tipo de terreno de la casilla destino.
-  * @param dif     Diferencia de cota (destino - origen).
-  * @param zap     true si el agente tiene zapatillas.
-  * @return El tipo de casilla original si es accesible, 'P' si no lo es.
+    * @brief Compruebo si una casilla adyacente es accesible según la diferencia de altura.
+    *        Desnivel máximo: 1 sin zapatillas, 2 con zapatillas.
+    * @param casilla Tipo de terreno de la casilla destino.
+    * @param dif     Diferencia de cota (destino - origen).
+    * @param zap     true si el agente tiene zapatillas.
+    * @return El tipo de casilla original si es accesible, 'P' si no lo es.
 */
 char ComportamientoIngeniero::ViablePorAltura(char casilla, int dif, bool zap) {
-  if (abs(dif) <= 1 || (zap && abs(dif) <= 2)) return casilla;
+    if (abs(dif) <= 1 || (zap && abs(dif) <= 2)) return casilla;
 
-  else return 'P';
+    else return 'P';
 }
 
 /**
-  * @brief Evalúo las 3 casillas frontales y devuelve la dirección más interesante.
-  *        Prioridad: U (meta) > D (zapatillas, si no las tiene) > C (camino).
-  * @return 1=izquierda, 2=centro, 3=derecha, 0=ninguna interesante.
+    * @brief Evalúo las 3 casillas frontales y devuelve la dirección más interesante.
+    *        Prioridad: U (meta) > D (zapatillas, si no las tiene) > C (camino).
+    * @return 1=izquierda, 2=centro, 3=derecha, 0=ninguna interesante.
 */
 int ComportamientoIngeniero::VeoCasillaInteresante(char i, char c, char d, bool zap) {
-  if (c == 'U') return 2;
-  else if (i == 'U') return 1;
-  else if (d == 'U') return 3;
-  else if (!zap) {
-    if (c == 'D') return 2;
-    else if (i == 'D') return 1;
-    else if (d == 'D') return 3;
-  }
-  if (c == 'C') return 2;
-  else if (i == 'C') return 1;
-  else if (d == 'C') return 3;
-  else return 0;
+    if (c == 'U') return 2;
+    else if (i == 'U') return 1;
+    else if (d == 'U') return 3;
+    else if (!zap) {
+        if (c == 'D') return 2;
+        else if (i == 'D') return 1;
+        else if (d == 'D') return 3;
+    }
+
+    if (c == 'C') return 2;
+    else if (i == 'C') return 1;
+    else if (d == 'C') return 3;
+    else return 0;
 }
 
 // =========================================================================
@@ -86,163 +86,163 @@ int ComportamientoIngeniero::VeoCasillaInteresante(char i, char c, char d, bool 
 // =========================================================================
 
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores) {
-  Action accion = IDLE;
-  ActualizarMapa(sensores);
+    Action accion = IDLE;
+    ActualizarMapa(sensores);
 
-  // Recojo zapatillas si pisamos 'D'; paro si ya estamos en la meta
-  if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
-  if (sensores.superficie[0] == 'U') return IDLE;
+    // Recojo zapatillas si pisamos 'D'; paro si ya estamos en la meta
+    if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
+    if (sensores.superficie[0] == 'U') return IDLE;
 
-  // Actualizo feromonas y reseto contador de bloqueo tras avanzar
-  matriz_visitas[sensores.posF][sensores.posC]++;
-  if (last_action == WALK || last_action == JUMP) giros_sin_avanzar_n0 = 0;
-
-  // Penalizo terreno no-camino para incentivar el retorno a 'C'
-  unsigned char terreno_actual = sensores.superficie[0];
-  if (terreno_actual == 'H' || terreno_actual == 'S') matriz_visitas[sensores.posF][sensores.posC] += 50;
-
-  // Evalúo accesibilidad por altura de las 3 casillas frontales
-  char ci = ViablePorAltura(sensores.superficie[1], sensores.cota[1] - sensores.cota[0], tiene_zapatillas);
-  char cc = ViablePorAltura(sensores.superficie[2], sensores.cota[2] - sensores.cota[0], tiene_zapatillas);
-  char cd = ViablePorAltura(sensores.superficie[3], sensores.cota[3] - sensores.cota[0], tiene_zapatillas);
-
-  // Anticolisión: marco al Técnico como obstáculo
-  if (sensores.agentes[1] == 't') ci = 'P';
-  if (sensores.agentes[2] == 't') cc = 'P';
-  if (sensores.agentes[3] == 't') cd = 'P';
-
-  // Si la meta está en una casilla adyacente, voy directamente
-  if (cc == 'U') { last_action = WALK;    return WALK;    }
-  if (ci == 'U') { last_action = TURN_SL; return TURN_SL; }
-  if (cd == 'U') { last_action = TURN_SR; return TURN_SR; }
-
-  // Temporizador de espera (se activa ante deadlocks con el Técnico)
-  if (giro45Izq > 0) {
-    giro45Izq--;
+    // Actualizo feromonas y reseto contador de bloqueo tras avanzar
     matriz_visitas[sensores.posF][sensores.posC]++;
-    last_action = IDLE;
-    return IDLE;
-  }
+    if (last_action == WALK || last_action == JUMP) giros_sin_avanzar_n0 = 0;
 
-  // Calculo coordenadas de las 3 casillas adyacentes
-  ubicacion actual = {sensores.posF, sensores.posC, sensores.rumbo};
-  ubicacion u_izq = actual;
-  u_izq.brujula = (Orientacion)((actual.brujula + 7) % 8);
-  u_izq = Delante(u_izq);
-  ubicacion u_frente = Delante(actual);
-  ubicacion u_der = actual;
-  u_der.brujula = (Orientacion)((actual.brujula + 1) % 8);
-  u_der = Delante(u_der);
+    // Penalizo terreno no-camino para incentivar el retorno a 'C'
+    unsigned char terreno_actual = sensores.superficie[0];
+    if (terreno_actual == 'H' || terreno_actual == 'S') matriz_visitas[sensores.posF][sensores.posC] += 50;
 
-  // Determino casillas transitables: C/D siempre; S/H solo si estoy
-  // bloqueado (desesperado) o ya estoy fuera de camino
-  bool desesperado = (giros_sin_avanzar_n0 > 5);
-  bool fuera_de_camino = (sensores.superficie[0] == 'H' || sensores.superficie[0] == 'S');
-  bool ok_i = (ci == 'C' || ci == 'D' || ((desesperado || fuera_de_camino) && (ci == 'S' || ci == 'H')));
-  bool ok_c = (cc == 'C' || cc == 'D' || ((desesperado || fuera_de_camino) && (cc == 'S' || cc == 'H')));
-  bool ok_d = (cd == 'C' || cd == 'D' || ((desesperado || fuera_de_camino) && (cd == 'S' || cd == 'H')));
+    // Evalúo accesibilidad por altura de las 3 casillas frontales
+    char ci = ViablePorAltura(sensores.superficie[1], sensores.cota[1] - sensores.cota[0], tiene_zapatillas);
+    char cc = ViablePorAltura(sensores.superficie[2], sensores.cota[2] - sensores.cota[0], tiene_zapatillas);
+    char cd = ViablePorAltura(sensores.superficie[3], sensores.cota[3] - sensores.cota[0], tiene_zapatillas);
 
-  // Consulto feromonas de cada casilla transitable
-  int vis_i = ok_i ? matriz_visitas[u_izq.f][u_izq.c]    : 999999;
-  int vis_c = ok_c ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
-  int vis_d = ok_d ? matriz_visitas[u_der.f][u_der.c]    : 999999;
+    // Anticolisión: marco al Técnico como obstáculo
+    if (sensores.agentes[1] == 't') ci = 'P';
+    if (sensores.agentes[2] == 't') cc = 'P';
+    if (sensores.agentes[3] == 't') cd = 'P';
 
-  int min_vis = min({vis_i, vis_c, vis_d});
+    // Si la meta está en una casilla adyacente, voy directamente
+    if (cc == 'U') { last_action = WALK;    return WALK;    }
+    if (ci == 'U') { last_action = TURN_SL; return TURN_SL; }
+    if (cd == 'U') { last_action = TURN_SR; return TURN_SR; }
 
-  // Elijo dirección con menos visitas (desempate: recto > izquierda > derecha)
-  int pos = 0;
-  if (min_vis < 999999) {
-    // Empate: preferir recto -> izq -> der
-    if      (vis_c == min_vis) pos = 2;
-    else if (vis_i == min_vis) pos = 1;
-    else                       pos = 3;
-  } else  {
-    // Fallback: busco caminos en filas 2-3 del cono de visión
-    bool hay_izq = false, hay_der = false;
+    // Temporizador de espera (se activa ante deadlocks con el Técnico)
+    if (giro45Izq > 0) {
+        giro45Izq--;
+        matriz_visitas[sensores.posF][sensores.posC]++;
+        last_action = IDLE;
+        return IDLE;
+    }
 
-    for (int k = 4; k <= 5; k++)
-      if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D') { hay_izq = true; break; }
+    // Calculo coordenadas de las 3 casillas adyacentes
+    ubicacion actual = {sensores.posF, sensores.posC, sensores.rumbo};
+    ubicacion u_izq = actual;
+    u_izq.brujula = (Orientacion)((actual.brujula + 7) % 8);
+    u_izq = Delante(u_izq);
+    ubicacion u_frente = Delante(actual);
+    ubicacion u_der = actual;
+    u_der.brujula = (Orientacion)((actual.brujula + 1) % 8);
+    u_der = Delante(u_der);
 
-    for (int k = 9; k <= 11; k++)
-      if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D') { hay_izq = true; break; }
+    // Determino casillas transitables: C/D siempre; S/H solo si estoy
+    // bloqueado (desesperado) o ya estoy fuera de camino
+    bool desesperado = (giros_sin_avanzar_n0 > 5);
+    bool fuera_de_camino = (sensores.superficie[0] == 'H' || sensores.superficie[0] == 'S');
+    bool ok_i = (ci == 'C' || ci == 'D' || ((desesperado || fuera_de_camino) && (ci == 'S' || ci == 'H')));
+    bool ok_c = (cc == 'C' || cc == 'D' || ((desesperado || fuera_de_camino) && (cc == 'S' || cc == 'H')));
+    bool ok_d = (cd == 'C' || cd == 'D' || ((desesperado || fuera_de_camino) && (cd == 'S' || cd == 'H')));
 
-    for (int k = 7; k <= 8; k++)
-      if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D') { hay_der = true; break; }
+    // Consulto feromonas de cada casilla transitable
+    int vis_i = ok_i ? matriz_visitas[u_izq.f][u_izq.c]    : 999999;
+    int vis_c = ok_c ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
+    int vis_d = ok_d ? matriz_visitas[u_der.f][u_der.c]    : 999999;
 
-    for (int k = 13; k <= 15; k++)
-      if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D') { hay_der = true; break; }
+    int min_vis = min({vis_i, vis_c, vis_d});
 
-    if      (hay_izq && !hay_der)           pos = 1;
-    else if (hay_der && !hay_izq)           pos = 3;
-    else if (hay_izq && hay_der)            pos = girar_derecha_n0 ? 3 : 1;
-  }
+    // Elijo dirección con menos visitas (desempate: recto > izquierda > derecha)
+    int pos = 0;
+    if (min_vis < 999999) {
+        // Empate: preferir recto -> izq -> der
+        if      (vis_c == min_vis) pos = 2;
+        else if (vis_i == min_vis) pos = 1;
+        else                       pos = 3;
+    } else  {
+        // Fallback: busco caminos en filas 2-3 del cono de visión
+        bool hay_izq = false, hay_der = false;
 
-  // Contador de turnos sin avanzar
-  if (last_action != WALK && last_action != JUMP) {
-    giros_sin_avanzar_n0++;
-  }
+        for (int k = 4; k <= 5; k++)
+            if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D') { hay_izq = true; break; }
 
-  // Anti-oscilación: búsqueda en 8 direcciones priorizando C/D/U > S > H
-  if (giros_sin_avanzar_n0 > 10) {
-    for (int dir = 0; dir < 8; dir++) {
-      ubicacion test = actual;
-      test.brujula = (Orientacion)dir;
-      ubicacion destino = Delante(test);
+        for (int k = 9; k <= 11; k++)
+            if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D') { hay_izq = true; break; }
 
-      if (destino.f >= 0 && destino.f < (int)mapaResultado.size() && destino.c >= 0 && destino.c < (int)mapaResultado[0].size()) {
-        unsigned char celda = mapaResultado[destino.f][destino.c];
+        for (int k = 7; k <= 8; k++)
+            if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D') { hay_der = true; break; }
 
-        if (celda == 'C' || celda == 'D' || celda == 'U' || celda == 'S' || celda == 'H') {
-          int dif = abs(mapaCotas[destino.f][destino.c] - mapaCotas[sensores.posF][sensores.posC]);
-          int max_dif = tiene_zapatillas ? 2 : 1;
+        for (int k = 13; k <= 15; k++)
+            if (sensores.superficie[k]=='C'||sensores.superficie[k]=='U'||sensores.superficie[k]=='D') { hay_der = true; break; }
 
-          if (dif <= max_dif) {
-            if (sensores.rumbo == (Orientacion)dir) {
-              giros_sin_avanzar_n0 = 0;
-              last_action = WALK;
-              return WALK;
-            } else {
-              int giros = ((dir - (int)sensores.rumbo) + 8) % 8;
-              last_action = (giros <= 4) ? TURN_SR : TURN_SL;
-              return last_action;
+        if      (hay_izq && !hay_der)           pos = 1;
+        else if (hay_der && !hay_izq)           pos = 3;
+        else if (hay_izq && hay_der)            pos = girar_derecha_n0 ? 3 : 1;
+    }
+
+    // Contador de turnos sin avanzar
+    if (last_action != WALK && last_action != JUMP) {
+        giros_sin_avanzar_n0++;
+    }
+
+    // Anti-oscilación: búsqueda en 8 direcciones priorizando C/D/U > S > H
+    if (giros_sin_avanzar_n0 > 10) {
+        for (int dir = 0; dir < 8; dir++) {
+            ubicacion test = actual;
+            test.brujula = (Orientacion)dir;
+            ubicacion destino = Delante(test);
+
+            if (destino.f >= 0 && destino.f < (int)mapaResultado.size() && destino.c >= 0 && destino.c < (int)mapaResultado[0].size()) {
+                unsigned char celda = mapaResultado[destino.f][destino.c];
+
+                if (celda == 'C' || celda == 'D' || celda == 'U' || celda == 'S' || celda == 'H') {
+                    int dif = abs(mapaCotas[destino.f][destino.c] - mapaCotas[sensores.posF][sensores.posC]);
+                    int max_dif = tiene_zapatillas ? 2 : 1;
+
+                    if (dif <= max_dif) {
+                        if (sensores.rumbo == (Orientacion)dir) {
+                        giros_sin_avanzar_n0 = 0;
+                        last_action = WALK;
+                        return WALK;
+                        } else {
+                        int giros = ((dir - (int)sensores.rumbo) + 8) % 8;
+                        last_action = (giros <= 4) ? TURN_SR : TURN_SL;
+                        return last_action;
+                        }
+                    }
+                }
             }
-          }
         }
-      }
     }
-  }
 
-  // JUMP de emergencia: salto 2 casillas si hay camino al otro lado
-  if (giros_sin_avanzar_n0 > 14) {
-    ubicacion u_jump = Delante(Delante(actual));
+    // JUMP de emergencia: salto 2 casillas si hay camino al otro lado
+    if (giros_sin_avanzar_n0 > 14) {
+        ubicacion u_jump = Delante(Delante(actual));
 
-    if (u_jump.f >= 0 && u_jump.f < (int)mapaResultado.size() && u_jump.c >= 0 && u_jump.c < (int)mapaResultado[0].size()) {
-      unsigned char dest = mapaResultado[u_jump.f][u_jump.c];
+        if (u_jump.f >= 0 && u_jump.f < (int)mapaResultado.size() && u_jump.c >= 0 && u_jump.c < (int)mapaResultado[0].size()) {
+            unsigned char dest = mapaResultado[u_jump.f][u_jump.c];
 
-      if (dest=='C'||dest=='D'||dest=='U'||dest=='?') {
+            if (dest=='C'||dest=='D'||dest=='U'||dest=='?') {
+                giros_sin_avanzar_n0 = 0;
+                last_action = JUMP;
+                return JUMP;
+            }
+        }
+    }
+
+    // Alternancia de dirección de giro por defecto cada 16 turnos
+    if (giros_sin_avanzar_n0 >= 16) {
+        girar_derecha_n0 = !girar_derecha_n0;
         giros_sin_avanzar_n0 = 0;
-        last_action = JUMP;
-        return JUMP;
-      }
     }
-  }
 
-  // Alternancia de dirección de giro por defecto cada 16 turnos
-  if (giros_sin_avanzar_n0 >= 16) {
-    girar_derecha_n0 = !girar_derecha_n0;
-    giros_sin_avanzar_n0 = 0;
-  }
+    // Ejecutar la acción elegida
+    switch (pos) {
+        case 2: accion = WALK; break;
+        case 1: accion = TURN_SL; break;
+        case 3: accion = TURN_SR; break;
+        default: accion = girar_derecha_n0 ? TURN_SR : TURN_SL; break;
+    }
 
-  // Ejecutar la acción elegida
-  switch (pos) {
-    case 2: accion = WALK; break;
-    case 1: accion = TURN_SL; break;
-    case 3: accion = TURN_SR; break;
-    default: accion = girar_derecha_n0 ? TURN_SR : TURN_SL; break;
-  }
-
-  last_action = accion;
-  return accion;
+    last_action = accion;
+    return accion;
 }
 
 
@@ -253,26 +253,26 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_0(Sensores sensores
 
 /** @brief Compruebo si una casilla es transitable en nivel 1. */
 bool ComportamientoIngeniero::es_transitable_N1(unsigned char c) const {
-  return (c != 'M' && c != 'P' && c != 'A' && c != 'B' && c != '?');
+    return (c != 'M' && c != 'P' && c != 'A' && c != 'B' && c != '?');
 }
 
 /** @brief Filtro de altura para nivel 1. Máx desnivel 1, o 2 con zapatillas. */
 char ComportamientoIngeniero::ViablePorAltura_N1(char casilla, int dif, bool zap) {
-  if (abs(dif) <= 1 || (zap && abs(dif) <= 2)) return casilla;
-  else return 'P'; 
+    if (abs(dif) <= 1 || (zap && abs(dif) <= 2)) return casilla;
+    else return 'P'; 
 }
 
 /** @brief Elijo dirección preferente entre 3 casillas. */
 int ComportamientoIngeniero::VeoCasillaInteresante_N1(char i, char c, char d, bool zap) {
-  if (es_transitable_N1(c)) return 2; // 1º Frente
-  if (es_transitable_N1(i)) return 1; // 2º Izquierda
-  if (es_transitable_N1(d)) return 3; // 3º Derecha
-  return 0;
+    if (es_transitable_N1(c)) return 2; // 1º Frente
+    if (es_transitable_N1(i)) return 1; // 2º Izquierda
+    if (es_transitable_N1(d)) return 3; // 3º Derecha
+    return 0;
 }
 
 /** @brief Compruebo si una casilla es un camino (no un obstáculo). */
 bool ComportamientoIngeniero::es_camino(unsigned char c) const {
-  return (c == 'C' || c == 'D' || c == 'U');
+    return (c == 'C' || c == 'D' || c == 'U');
 }
 
 
@@ -287,84 +287,114 @@ bool ComportamientoIngeniero::es_camino(unsigned char c) const {
 // =========================================================================
 
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_1(Sensores sensores) {
-  Action accion = IDLE;
-  ActualizarMapa(sensores);
+    Action accion = IDLE;
+    ActualizarMapa(sensores);
 
-  if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
+    if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
-  // Completo giro de 90 grados pendiente
-  if (giro45Izq > 0) {
-      giro45Izq--;
-      last_action = TURN_SL;
-      return TURN_SL;
-  }
+    // Completo giro de 90 grados pendiente
+    if (giro45Izq > 0) {
+        giro45Izq--;
+        last_action = TURN_SL;
+        return TURN_SL;
+    }
 
-  // Actualizo feromonas
-  matriz_visitas[sensores.posF][sensores.posC]++;
+    // Actualizo feromonas
+    matriz_visitas[sensores.posF][sensores.posC]++;
 
-  // Evalúo las 3 casillas frontales (altura + tipo de terreno)
-  char i = ViablePorAltura_N1(sensores.superficie[1], sensores.cota[1] - sensores.cota[0], tiene_zapatillas);
-  char c = ViablePorAltura_N1(sensores.superficie[2], sensores.cota[2] - sensores.cota[0], tiene_zapatillas);
-  char d = ViablePorAltura_N1(sensores.superficie[3], sensores.cota[3] - sensores.cota[0], tiene_zapatillas);
+    // Evalúo las 3 casillas frontales (altura + tipo de terreno)
+    char i = ViablePorAltura_N1(sensores.superficie[1], sensores.cota[1] - sensores.cota[0], tiene_zapatillas);
+    char c = ViablePorAltura_N1(sensores.superficie[2], sensores.cota[2] - sensores.cota[0], tiene_zapatillas);
+    char d = ViablePorAltura_N1(sensores.superficie[3], sensores.cota[3] - sensores.cota[0], tiene_zapatillas);
 
-  // Anticolisión: cualquier agente en las casillas frontales es obstáculo
-  if (sensores.agentes[1] != '_') i = 'P';
-  if (sensores.agentes[2] != '_') c = 'P';
-  if (sensores.agentes[3] != '_') d = 'P';
+    // Anticolisión: cualquier agente en las casillas frontales es obstáculo
+    if (sensores.agentes[1] != '_') i = 'P';
+    if (sensores.agentes[2] != '_') c = 'P';
+    if (sensores.agentes[3] != '_') d = 'P';
 
-  // Calculo coordenadas adyacentes
-  ubicacion actual = {sensores.posF, sensores.posC, sensores.rumbo};
-  ubicacion u_frente = Delante(actual);
-  ubicacion u_izq = actual;
-  u_izq.brujula = (Orientacion)((actual.brujula + 7) % 8);
-  u_izq = Delante(u_izq);
-  ubicacion u_der = actual;
-  u_der.brujula = (Orientacion)((actual.brujula + 1) % 8);
-  u_der = Delante(u_der);
+    // Calculo coordenadas adyacentes
+    ubicacion actual = {sensores.posF, sensores.posC, sensores.rumbo};
+    ubicacion u_frente = Delante(actual);
+    ubicacion u_izq = actual;
+    u_izq.brujula = (Orientacion)((actual.brujula + 7) % 8);
+    u_izq = Delante(u_izq);
+    ubicacion u_der = actual;
+    u_der.brujula = (Orientacion)((actual.brujula + 1) % 8);
+    u_der = Delante(u_der);
 
-  // Transitabilidad según nivel (nivel 6 reutiliza este código con otra lista de obstáculos)
-  bool trans_c = (sensores.nivel == 6) ? (c != 'M' && c != 'P' && c != 'A' && c != 'B' && c != '?') : es_transitable_N1(c);
-  bool trans_i = (sensores.nivel == 6) ? (i != 'M' && i != 'P' && i != 'A' && i != 'B' && i != '?') : es_transitable_N1(i);
-  bool trans_d = (sensores.nivel == 6) ? (d != 'M' && d != 'P' && d != 'A' && d != 'B' && d != '?') : es_transitable_N1(d);
+    // Transitabilidad según nivel (nivel 6 reutiliza este código con otra lista de obstáculos)
+    bool trans_c = (sensores.nivel == 6) ? (c != 'M' && c != 'P' && c != 'A' && c != 'B' && c != '?') : es_transitable_N1(c);
+    bool trans_i = (sensores.nivel == 6) ? (i != 'M' && i != 'P' && i != 'A' && i != 'B' && i != '?') : es_transitable_N1(i);
+    bool trans_d = (sensores.nivel == 6) ? (d != 'M' && d != 'P' && d != 'A' && d != 'B' && d != '?') : es_transitable_N1(d);
 
-  // Consulto feromonas
-  int vis_frente = trans_c ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
-  int vis_izq = trans_i ? matriz_visitas[u_izq.f][u_izq.c] : 999999;
-  int vis_der = trans_d ? matriz_visitas[u_der.f][u_der.c] : 999999;
+    // Consulto feromonas
+    int vis_frente = trans_c ? matriz_visitas[u_frente.f][u_frente.c] : 999999;
+    int vis_izq = trans_i ? matriz_visitas[u_izq.f][u_izq.c] : 999999;
+    int vis_der = trans_d ? matriz_visitas[u_der.f][u_der.c] : 999999;
 
-  // Elijo la ruta menos visitada (desempate: recto > izquierda > derecha)
-  int min_visitas = min({vis_frente, vis_izq, vis_der});
-  int pos = 0;
-  if (min_visitas == 999999)          pos = 0;
-  else if (vis_frente == min_visitas) pos = 2;
-  else if (vis_izq == min_visitas)    pos = 1;
-  else                                pos = 3;
+    // Elijo la ruta menos visitada (desempate: recto > izquierda > derecha)
+    int min_visitas = min({vis_frente, vis_izq, vis_der});
+    int pos = 0;
+    if (min_visitas == 999999)          pos = 0;
+    else if (vis_frente == min_visitas) pos = 2;
+    else if (vis_izq == min_visitas)    pos = 1;
+    else                                pos = 3;
 
-  // Ejecuto acción
-  switch (pos) {
-    case 2: accion = WALK; break;
-    case 1: accion = TURN_SL; break;
-    case 3: accion = TURN_SR; break;
-    default: 
-        // Callejón sin salida: doy la vuelta
-        giro45Izq = 3; 
-        accion = TURN_SL; 
-        break; 
-  }
+    // Ejecuto acción
+    switch (pos) {
+        case 2: accion = WALK; break;
+        case 1: accion = TURN_SL; break;
+        case 3: accion = TURN_SR; break;
+        default: 
+            // Callejón sin salida: doy la vuelta
+            giro45Izq = 3; 
+            accion = TURN_SL; 
+            break; 
+    }
 
-  last_action = accion;
-  return accion;
+    last_action = accion;
+    return accion;
 }
 
 
 
 
 
+// =========================================================================                                                                                                                                                                               
+// ALGORITMOS DE BÚSQUEDA (NIVEL 2)                                                                                                                                                                                                                        
+// =========================================================================                                                                                                                                                                               
+// Implementa BFS (Búsqueda en Anchura) para encontrar el camino más corto                                                                                                                                                                                 
+// (en número de acciones) entre dos posiciones del mapa conocido.                                                                                                                                                                                         
+//                                                                                                                                                                                                                                                         
+// El espacio de estados es (fila, columna, orientación, tiene_zapatillas).                                                                                                                                                                                
+// Las zapatillas se adquieren automáticamente al pisar una casilla 'D' y                                                                                                                                                                                  
+// amplían el desnivel máximo permitido de 1 a 2 para WALK y JUMP.                                                                                                                                                                                         
+// =========================================================================                                                                                                                                                                                                                                                                                                                                                                                                                               
 
-// =========================================================================
-// ALGORITMOS DE BÚSQUEDA (NIVEL 2)
-// =========================================================================
-
+/**                                                                                                                                                                                                                                                        
+    * @brief Búsqueda en Anchura (BFS) para planificación de rutas.
+    *                                                                                                                                                                                                                                                         
+    * Encuentra la secuencia mínima de acciones (WALK, JUMP, TURN_SL, TURN_SR)
+    * para llevar al agente desde 'origen' hasta 'destino'.                                                                                                                                                                                                   
+    *                                                                                                                                                                                                                                                         
+    * Estado = (fila, columna, orientación, tiene_zapatillas). Dos estados con                                                                                                                                                                                
+    * la misma posición pero distinta orientación son diferentes porque orientarse                                                                                                                                                                            
+    * cuesta acciones. El campo zapatillas se incluye porque cambia el desnivel                                                                                                                                                                               
+    * máximo permitido.                                                                                                                                                                                                                                       
+    *                                                                                                                                                                                                                                                         
+    * Reglas de transitabilidad aplicadas:                                                                                                                                                                                                                    
+    *   WALK: desnivel |dest - orig| <= 1 (o <= 2 con zapatillas), no M/P/B,                                                                                                                                                                                
+    *           A solo si agua_permitida, entidades solo si ignorar_entidades.                                                                                                                                                                                
+    *   JUMP: casilla intermedia y destino deben ser transitables; el desnivel                                                                                                                                                                              
+    *           se calcula respecto al origen del salto.                                                                                                                                                                                                      
+    *                                                                                                                                                                                                                                                         
+    * @param origen             Estado inicial (fila, columna, orientación).                                                                                                                                                                                  
+    * @param destino            Casilla objetivo (solo se compara fila y columna).                                                                                                                                                                            
+    * @param agua_permitida     Si true, permite cruzar agua ('A').                                                                                                                                                                                           
+    * @param ignorar_entidades  Si true, ignora otras entidades en las casillas.                                                                                                                                                                              
+    * @param tiene_zap_inicio   Si true, el agente ya tiene zapatillas al salir.                                                                                                                                                                              
+    * @return Lista de acciones que llevan al agente al destino, vacía si no hay camino.                                                                                                                                                                      
+*/                                                                                                              
 list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, const estado& destino, bool agua_permitida, bool ignorar_entidades, bool tiene_zap_inicio) {
     map<estado_ext, pair<estado_ext, Action>> padres;
     queue<estado_ext> abierta;
@@ -398,7 +428,7 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, co
                 hijo.orientacion = (act.orientacion + 7) % 8;
             } else if (accion == TURN_SR) {
                 hijo.orientacion = (act.orientacion + 1) % 8;
-            } else if (accion == WALK) {
+            } else if (accion == WALK) { // WALK: avanza 1 casilla en la dirección actual
                 int nf = act.fila, nc = act.columna;
                 switch(act.orientacion) {
                     case 0: nf--; break; case 1: nf--; nc++; break;
@@ -420,7 +450,7 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, co
                         }
                     }
                 }
-            } else if (accion == JUMP) {
+            } else if (accion == JUMP) { // JUMP: salta 2 casillas; verifica casilla intermedia y destino
                 int jf = act.fila, jc = act.columna, mf = act.fila, mc = act.columna;
                 switch(act.orientacion) {
                     case 0: jf-=2; mf--; break; case 1: jf-=2; jc+=2; mf--; mc++; break;
@@ -431,8 +461,7 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, co
                 if (jf < 0 || jf >= (int)mapaResultado.size() || jc < 0 || jc >= (int)mapaResultado[0].size()) valido = false;
                 else {
                     unsigned char c_mid = mapaResultado[mf][mc], c_fin = mapaResultado[jf][jc];
-                    if (c_mid == 'M' || c_mid == 'P' || c_mid == 'B' || (!agua_permitida && c_mid == 'A') ||
-                        c_fin == 'M' || c_fin == 'P' || c_fin == 'B' || (!agua_permitida && c_fin == 'A')) valido = false;
+                    if (c_mid == 'M' || c_mid == 'P' || c_mid == 'B' || (!agua_permitida && c_mid == 'A') || c_fin == 'M' || c_fin == 'P' || c_fin == 'B' || (!agua_permitida && c_fin == 'A')) valido = false;
                     else if (!ignorar_entidades) {
                         unsigned char e_mid = mapaEntidades[mf][mc], e_fin = mapaEntidades[jf][jc];
                         if ((e_mid != '_' && e_mid != '?') || (e_fin != '_' && e_fin != '?')) valido = false;
@@ -460,8 +489,8 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, co
 
     list<Action> camino;
     estado_ext cur = meta;
-    while (!(cur.fila == ini.fila && cur.columna == ini.columna &&
-             cur.orientacion == ini.orientacion && cur.zapatillas == ini.zapatillas)) {
+
+    while (!(cur.fila == ini.fila && cur.columna == ini.columna && cur.orientacion == ini.orientacion && cur.zapatillas == ini.zapatillas)) {
         auto& p = padres[cur];
         camino.push_front(p.second);
         cur = p.first;
@@ -472,13 +501,29 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura(const estado& origen, co
 
 
 /**
- * @brief Comportamiento del ingeniero para el Nivel 2 (búsqueda).
- * @param sensores Datos actuales de los sensores.
- * @return Acción a realizar.
- */
+    * @brief Nivel 2: Agente deliberativo: planifica y ejecuta la ruta hasta BelPos.                                                                                                                                                                         
+    *                                                                                
+    * Estrategia en dos pasos:                                                                                                                                                                                                                                
+    *   1. PLANIFICACIÓN (cuando hayPlan == false):
+    *      Lanza dos BFS en paralelo, uno sin agua y otro con agua, para tener                                                                                                                                                                              
+    *      ambas opciones. Si ambos fallan (mapa con entidades bloqueando), reintento                                                                                                                                                                     
+    *      ignorando entidades. Elijo el plan más corto; si solo existe uno, lo uso.                                                                                                                                                                          
+    *                                                                                                                                                                                                                                                         
+    *   2. EJECUCIÓN (cuando hayPlan == true):                                                                                                                                                                                                                
+    *      Saco acciones del frente del plan. Si la siguiente acción es WALK/JUMP                                                                                                                                                                             
+    *      y hay un agente enfrente, invalido el plan y espero (IDLE) para replanificar.                                                                                                                                                                      
+    *                                                                                                                                                                                                                                                         
+    * Detección de bloqueo: si la última acción ejecutada fue WALK/JUMP pero el agente                                                                                                                                                                        
+    * no se movió (posición igual a la del turno anterior), el plan se invalida                                                                                                                                                                               
+    * automáticamente para replantear una ruta alternativa.                                                                                                                                                                                                   
+    *                                                                                                                                                                                                                                                         
+    * @param sensores Datos actuales de los sensores.                                                                                                                                                                                                         
+    * @return Siguiente acción del plan, o IDLE si no hay destino o el plan falla.                                                                                                                                                                            
+*/   
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_2(Sensores sensores) {
     ActualizarMapa(sensores);
     Action accion = IDLE;
+    // recordar: guardo la posición y la última acción para detectar bloqueos al turno siguiente.
     auto recordar = [&](Action a) {
         ultimaFilaPlan = sensores.posF;
         ultimaColPlan = sensores.posC;
@@ -490,6 +535,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_2(Sensores sensores
         tiene_zapatillas = true;
     }
 
+    // Si intento moverme pero sigo en la misma casilla, el paso falló: replanifico.
     if ((ultimaAccionPlan == WALK || ultimaAccionPlan == JUMP) &&
         sensores.posF == ultimaFilaPlan && sensores.posC == ultimaColPlan) {
         hayPlan = false;
@@ -498,6 +544,8 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_2(Sensores sensores
 
     if (sensores.BelPosF == 0 && sensores.BelPosC == 0) return IDLE;
 
+    // Planificación: BFS preferentemente sin agua (menor coste ambiental);
+    // si es más corto con agua, acepto. Si ambos fallan, reintento ignorando entidades.
     if (!hayPlan) {
         estado origen = {sensores.posF, sensores.posC, (int)sensores.rumbo};
         estado destino = {sensores.BelPosF, sensores.BelPosC, 0};
@@ -519,6 +567,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_2(Sensores sensores
         hayPlan = true;
     }
 
+    // Ejecución: anticolisión, si hay agente en la casilla de destino, invalido y espero.
     if (!plan.empty()) {
         Action siguiente = plan.front();
         if ((siguiente == WALK || siguiente == JUMP) && sensores.agentes[2] != '_') {
@@ -536,24 +585,36 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_2(Sensores sensores
 }
 
 /**
- * @brief Comportamiento del ingeniero para el Nivel 3.
- * @param sensores Datos actuales de los sensores.
- * @return Acción a realizar.
- */
+    * @brief Nivel 3: El Ingeniero actúa de cedente: se aparta si el Técnico está enfrente.                                                                                                                                                                  
+    *                                                                                       
+    * En este nivel el protagonista es el Técnico (A* con coste de batería). El Ingeniero                                                                                                                                                                     
+    * no planifica ninguna ruta propia, solo reacciona cuando detecta al Técnico justo   
+    * delante o cuando registra una colisión, para no bloquear su camino:                                                                                                                                                                                     
+    *                                                                                                                                                                                                                                                         
+    *   Si la casilla de enfrente está libre y es accesible => WALK (se aleja).                                                                                                                                                                              
+    *   Si la casilla de enfrente está bloqueada (muro, agua, agente) => TURN_SR (gira).                                                                                                                                                                     
+    *   Si no hay Técnico ni colisión => IDLE (permanece quieto).                                                                                                                                                                                            
+    *                                                                                                                                                                                                                                                         
+    * @param sensores Datos actuales de los sensores.                                                                                                                                                                                                         
+    * @return WALK, TURN_SR o IDLE según la situación.                                                                                                                                                                                                        
+*/      
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_3(Sensores sensores) {
     ActualizarMapa(sensores);
     if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
     bool tecnico_delante = (sensores.agentes[2] == 't' || sensores.agentes[2] == 'T');
 
+    // Solo actúa si el Técnico está justo enfrente o si hubo colisión.
     if (tecnico_delante || sensores.choque) {
         unsigned char c = sensores.superficie[2];
         int dif = sensores.cota[2] - sensores.cota[0];
         int max_dif = tiene_zapatillas ? 2 : 1;
-        
+
+        // Intento avanzar si la casilla frontal es transitable y está despejada
         if (c != 'M' && c != 'P' && c != 'B' && c != 'A' && abs(dif) <= max_dif && sensores.agentes[2] == '_') {
             return WALK;
         } else {
+            // No puede avanzar: gira para liberar el paso
             return TURN_SR;
         }
     }
@@ -562,14 +623,52 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_3(Sensores sensores
 
 
 // =========================================================
-// === MOTOR DE PLANIFICACIÓN DE TUBERÍAS (NIVEL 4) ===
+// === MOTOR DE PLANIFICACIÓN DE TUBERÍAS (NIVEL 4) ========                                                                                                                                                                                               
 // =========================================================
+// Dijkstra sobre el grafo de casillas del mapa para encontrar la ruta de
+// tubería de menor impacto ecológico desde BelPos hasta 'U'.                                                                                                                                                                                              
+//                                                           
+// Estado: (fila, columna, altura_tuberia). La altura de la tubería en cada                                                                                                                                                                                
+// casilla puede diferir de la cota real del terreno si se terraforma (DIG/RAISE).
+//                                                                                                                                                                                                                                                         
+// Restricción de gravedad: h_actual >= h_siguiente y (h_actual - h_siguiente) <= 1.
+// Modela que el agua solo fluye cuesta abajo, con caída máxima de 1 por tramo.                                                                                                                                                                            
+//                                                                                                                                                                                                                                                         
+// Coste total por transición (actual => vecino):
+//   imp_op(vecino, op)    : terraformar la casilla vecino                                                                                                                                                                                                 
+//   + imp_install(vecino) : instalar tubería en el vecino                                                                                                                                                                                                 
+//   + imp_install(actual) : instalar tubería en la casilla actual
+//                           (se suma al "cerrar" el tramo entre ambas)                                                                                                                                                                                    
+// =========================================================    
 
+/**                                                                                                                                                                                                                                                        
+    * @brief Dijkstra para planificar la ruta de tubería con mapa completamente conocido.
+    *                                                                                                                                                                                                                                                         
+    * Busca la secuencia de casillas de menor impacto ecológico que conecta
+    * start con 'U', respetando la restricción de gravedad.                
+    *                                                                                                                                                                                                                                                         
+    * Costes de instalación (imp_install):
+    *   A=50, H=45, S=25, C/U=15, otros=30                                                                                                                                                                                                                    
+    *                                                                                                                                                                                                                                                         
+    * Costes de terraformación (imp_op):
+    *   RAISE (+1): H=55, S=30, C/U=10, otros=40                                                                                                                                                                                                              
+    *   DIG   (-1): H=65, S=40, C/U=25, otros=50
+    *                                                                                                                                                                                                                                                         
+    * En el nodo inicial se prueban hasta 3 alturas (cota real, cota-1, cota+1)
+    * para permitir terraformación desde el primer tramo. El agua ('A') no se                                                                                                                                                                                 
+    * terraforma: su altura de tubería siempre es la cota real del terreno.                                                                                                                                                                                   
+    *                                                                      
+    * @param start_f/start_c  Casilla de origen (BelPos del Ingeniero).                                                                                                                                                                                       
+    * @param plan_resultante  Lista de Paso {fila, col, op} que define la tubería.
+    * @param limite_eco       Presupuesto ecológico máximo permitido.                                                                                                                                                                                         
+    * @return true si existe un plan dentro del límite ecológico.                                                                                                                                                                                             
+*/  
 bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco) {
     plan_resultante.clear();
     std::priority_queue<NodoN4, std::vector<NodoN4>, std::greater<NodoN4>> abiertos;
     std::map<EstadoN4, int> cerrados;
 
+    // imp_install: impacto ecológico de instalar un tramo de tubería según el terreno.
     auto imp_install = [](unsigned char terreno) {
         if (terreno == 'A') return 50;
         if (terreno == 'H') return 45;
@@ -578,6 +677,7 @@ bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::li
         return 30;
     };
 
+    // imp_op: impacto ecológico de terraformar (RAISE=+1, DIG=-1); 0 si no hay modificación.
     auto imp_op = [](unsigned char terreno, int op) {
         if (op == 1) {
             if (terreno == 'H') return 55;
@@ -599,7 +699,9 @@ bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::li
     int start_H = mapaCotas[start_f][start_c];
     std::vector<int> alturas_inicio;
 
+    // El agua no se puede terraformar: su altura de tubería = cota real del mapa
     if (start_terr == 'A') {
+        // Para el resto pruebo también h±1 para permitir terraformación en el tramo de salida.
         alturas_inicio.push_back(start_H); 
     } else {
         alturas_inicio.push_back(start_H);
@@ -622,6 +724,7 @@ bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::li
         }
     }
 
+    // Expansión ortogonal (4 vecinos): la tubería solo va en línea recta (N/S/E/O)
     int df[] = {-1, 1, 0, 0};
     int dc[] = {0, 0, 1, -1};
 
@@ -657,10 +760,12 @@ bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::li
             }
 
             for (int nh : alturas_vecino) {
+                // Restricción de gravedad: la tubería solo puede bajar, máximo 1 por tramo.
                 if (actual.st.h >= nh && (actual.st.h - nh) <= 1) {
                     EstadoN4 siguiente = {nf, nc, nh};
                     int op = nh - nH;
                     
+                    // Coste del tramo: terraformar vecino + instalar en ambos extremos del tramo.
                     int impacto_tramo = imp_op(n_terr, op) + imp_install(n_terr) + imp_install(actual_terr);
                     int nuevo_impacto = actual.impacto + impacto_tramo;
 
@@ -683,20 +788,35 @@ bool ComportamientoIngeniero::EncontrarPlan_N4(int start_f, int start_c, std::li
 }
 
 /**
- * @brief Comportamiento del ingeniero para el Nivel 4.
- * @param sensores Datos actuales de los sensores.
- * @return Acción a realizar.
- */
+    * @brief Nivel 4: El Ingeniero actúa únicamente como planificador de tuberías.                                                                                                                                                                           
+    *                                                                              
+    * En este nivel el Ingeniero no instala nada: su único trabajo es calcular,                                                                                                                                                                               
+    * en el primer turno, la ruta óptima de tubería desde BelPos hasta 'U' usando                                                                                                                                                                             
+    * EncontrarPlan_N4 (Dijkstra con restricción de gravedad y presupuesto ecológico).                                                                                                                                                                        
+    *                                                                                                                                                                                                                                                         
+    * El resultado se vuelca en plan_tuberias y se visualiza en el mapa gráfico.                                                                                                                                                                              
+    * A partir de ahí siempre devuelve IDLE; es el Técnico quien recorre y ejecuta                                                                                                                                                                            
+    * la instalación tramo a tramo en su propio ComportamientoTecnicoNivel_4.                                                                                                                                                                                 
+    *                                                                                                                                                                                                                                                         
+    * El flag plan_tuberias_hecho evita recalcular el plan en turnos posteriores.                                                                                                                                                                             
+    *                                                                                                                                                                                                                                                         
+    * @param sensores Datos actuales de los sensores.                                                                                                                                                                                                         
+    * @return Siempre IDLE (el Ingeniero no se mueve en este nivel).                                                                                                                                                                                          
+*/
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_4(Sensores sensores) {
-  if (!plan_tuberias_hecho) {
-    bool exito = EncontrarPlan_N4(sensores.BelPosF, sensores.BelPosC, plan_tuberias, sensores.max_ecologico);
+    // Solo planifico una vez; en turnos sucesivos el flag lo bloquea.
+    if (!plan_tuberias_hecho) {
+        // Calculo la ruta de tubería de menor impacto ecológico. 
+        bool exito = EncontrarPlan_N4(sensores.BelPosF, sensores.BelPosC, plan_tuberias, sensores.max_ecologico);
 
-    if (exito && !plan_tuberias.empty()) {
-      VisualizaRedTuberias(plan_tuberias);
+        // Si hay plan, lo mando al sistema de visualización del mapa gráfico.
+        if (exito && !plan_tuberias.empty()) {
+            VisualizaRedTuberias(plan_tuberias);
+        }
+
+        plan_tuberias_hecho = true;
     }
-    plan_tuberias_hecho = true;
-  }
-  return IDLE; 
+    return IDLE; // El Ingeniero no actúa físicamente en este nivel.
 }
 
 
@@ -704,7 +824,14 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_4(Sensores sensores
 // =========================================================
 // FUNCIONES AUXILIARES DE ALINEACIÓN (NIVEL 5)
 // =========================================================
+// Utilidades estáticas para orientar al agente hacia una casilla adyacente
+// y verificar si ya existe una conexión de tubería entre dos casillas.
+// =========================================================
 
+/**
+    *  @brief Calcula la orientación cardinal (N/S/E/O) desde una casilla hacia otra adyacente.
+    *  Solo es válida para casillas ortogonalmente adyacentes (no diagonales).
+*/
 static Orientacion OrientacionHacia(int fromF, int fromC, int toF, int toC) {
     if (toF < fromF) return norte;
     if (toF > fromF) return sur;
@@ -713,12 +840,29 @@ static Orientacion OrientacionHacia(int fromF, int fromC, int toF, int toC) {
     return norte; 
 }
 
+/**
+    * @brief Número de giros de 45° a la derecha (TURN_SR) para pasar de 'actual' a 'objetivo'.
+    * Si el resultado es > 4, es más eficiente girar a la izquierda (8 - resultado).
+*/
 static int GirosNecesarios(Orientacion actual, Orientacion objetivo) {
     return ((int)objetivo - (int)actual + 8) % 8;
 }
 
-static bool HayTuberiaEntreIngeniero(const vector<vector<unsigned char>> &mapaTuberias,
-                                     int f1, int c1, int f2, int c2) {
+/**
+    * @brief Compruebo si hay una tubería instalada entre dos casillas ortogonalmente adyacentes.
+    *
+    * El mapaTuberias codifica las conexiones de cada casilla como bits:
+    *   bit 0  (valor   1) = conexión hacia el norte
+    *   bit 2  (valor   4) = conexión hacia el este
+    *   bit 4  (valor  16) = conexión hacia el sur
+    *   bit 6  (valor  64) = conexión hacia el oeste
+    *
+    * Para confirmar la tubería entre (f1,c1) y (f2,c2), ambas casillas deben tener
+    * activo el bit de conexión recíproca (la casilla A apunta a B y B apunta a A).
+    *
+    * @return true solo si los bits de conexión mutuos están activos en ambas casillas.
+*/
+static bool HayTuberiaEntreIngeniero(const vector<vector<unsigned char>> &mapaTuberias, int f1, int c1, int f2, int c2) {
     if (abs(f1 - f2) + abs(c1 - c2) != 1) return false;
 
     unsigned char a = mapaTuberias[f1][c1];
@@ -731,20 +875,27 @@ static bool HayTuberiaEntreIngeniero(const vector<vector<unsigned char>> &mapaTu
     return false;
 }
 
+/**
+    * @brief Dijkstra para planificar la ruta de tubería en los Niveles 5 y 6.
+    *
+    * Lógica idéntica a EncontrarPlan_N4 con dos diferencias clave:
+    *   - Las casillas '?' (inexploradas) se saltan: no se puede planificar
+    *     por zonas del mapa aún no descubiertas.
+    *   - Optimización de cola (lazy deletion): al extraer un nodo, si su impacto
+    *     es mayor que el ya registrado en cerrados, se descarta sin expandir.
+    *
+    * Mismos costes ecológicos que N4:
+    *   Instalación: A=50, H=45, S=25, C/U=15, otros=30
+    *   RAISE (+1):  H=55, S=30, C/U=10, otros=40
+    *   DIG   (-1):  H=65, S=40, C/U=25, otros=50
+    *
+    * @param start_f/start_c  Casilla de origen (BelPos del Ingeniero).
+    * @param plan_resultante  Lista de Paso {fila, col, op} que define la tubería.
+    * @param limite_eco       Presupuesto ecológico máximo permitido.
+    * @return true si se encontró un plan viable dentro del límite.
+*/
 bool ComportamientoIngeniero::EncontrarPlan_N5(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco) {
     plan_resultante.clear();
-    bool dbg_oculto_30 = (mapaResultado.size() == 30 && limite_eco != 648 && limite_eco != 1000 &&
-                          limite_eco != 1804 && limite_eco != 2364);
-    bool dbg_plan = (limite_eco == 2364 || limite_eco == 2688 || limite_eco == 3533 ||
-                     limite_eco == 2107 ||
-                     limite_eco == 1719 || limite_eco == 1500 || dbg_oculto_30);
-    dbg_plan = false;
-    static std::map<int, int> llamadas_por_limite;
-    int llamada = ++llamadas_por_limite[limite_eco];
-    if (dbg_plan && (llamada <= 5 || llamada % 25 == 0)) {
-        cerr << "[PLAN_N5 CALL] limite=" << limite_eco << " call=" << llamada
-             << " start=(" << start_f << "," << start_c << ")\n";
-    }
 
     std::priority_queue<NodoN4, std::vector<NodoN4>, std::greater<NodoN4>> abiertos;
     std::map<EstadoN4, int> cerrados;
@@ -804,21 +955,15 @@ bool ComportamientoIngeniero::EncontrarPlan_N5(int start_f, int start_c, std::li
     int df[] = {-1, 1, 0, 0};
     int dc[] = {0, 0, 1, -1};
 
-    int expansiones = 0;
     while (!abiertos.empty()) {
         NodoN4 actual = abiertos.top();
         abiertos.pop();
-        expansiones++;
 
+        // Si ya encuentro una ruta mejor a este estado, lo ignoro.
         if (cerrados[actual.st] < actual.impacto) continue;
 
         if (mapaResultado[actual.st.f][actual.st.c] == 'U') {
             plan_resultante = actual.secuencia;
-            if (dbg_plan) {
-                cerr << "[PLAN_N5 OK] limite=" << limite_eco << " call=" << llamada
-                     << " exp=" << expansiones << " size=" << plan_resultante.size()
-                     << " impacto=" << actual.impacto << "\n";
-            }
             return true;
         }
 
@@ -866,13 +1011,31 @@ bool ComportamientoIngeniero::EncontrarPlan_N5(int start_f, int start_c, std::li
             }
         }
     }
-    if (dbg_plan && (llamada <= 5 || llamada % 25 == 0)) {
-        cerr << "[PLAN_N5 FAIL] limite=" << limite_eco << " call=" << llamada
-             << " exp=" << expansiones << "\n";
-    }
     return false; 
 }
 
+/**
+    * @brief Dijkstra relajado para orientar la exploración cuando el mapa es parcialmente conocido.                                                                                                                                                          
+    *                                                                                               
+    * A diferencia de EncontrarPlan_N5, este algoritmo:                                                                                                                                                                                                       
+    *   Trata las casillas '?' como transitables con coste 18 (zona inexplorada asumida libre).
+    *   NO aplica la restricción de gravedad (ignora cotas): solo busca conectividad.                                                                                                                                                                       
+    *   No modela instalación ni terraformación: el coste es únicamente por tipo de celda.                                                                                                                                                                  
+    *   Devuelve todos los pasos con op=0 (sin operaciones de terreno).                                                                                                                                                                                     
+    *                                                                                                                                                                                                                                                         
+    * Su uso en Nivel 6: cuando EncontrarPlan_N5 falla porque la ruta atraviesa zonas '?',                                                                                                                                                                    
+    * este planner encuentra el camino tentativo y se usa para identificar qué casilla '?'                                                                                                                                                                    
+    * se debe explorar primero para desbloquear la ruta real.                                                                                                                                                                                                 
+    *                                                                                                                                                                                                                                                         
+    * Costes de travesía por tipo de celda:                                                                                                                                                                                                                   
+    *   '?' = 18, A = 50, H = 45, S = 25, C/U = 15, otros = 30                                                                                                                                                                                                
+    * Bloqueadas (no se expanden): M, P, B.                                                                                                                                                                                                                   
+    *                                                                                                                                                                                                                                                         
+    * @param start_f/start_c  Casilla de origen.                                                                                                                                                                                                              
+    * @param plan_resultante  Lista de Paso {fila, col, op=0} que forma el camino tentativo.                                                                                                                                                                  
+    * @param limite_eco       Límite de coste acumulado (actúa como radio de búsqueda).                                                                                                                                                                       
+    * @return true si existe un camino desde el origen hasta 'U' dentro del límite.                                                                                                                                                                           
+*/                                           
 bool ComportamientoIngeniero::EncontrarPlan_N5_Tentativo(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco) {
     plan_resultante.clear();
     if (start_f < 0 || start_f >= (int)mapaResultado.size() ||
@@ -893,8 +1056,9 @@ bool ComportamientoIngeniero::EncontrarPlan_N5_Tentativo(int start_f, int start_
         return terreno == 'M' || terreno == 'P' || terreno == 'B';
     };
 
+    // coste_celda: coste de traversía sin restricción de altura ni terraformación.
     auto coste_celda = [&](unsigned char terreno) {
-        if (terreno == '?') return 18;
+        if (terreno == '?') return 18; // Inexplorada: asumo que es transitable con penalización moderada.
         if (terreno == 'A') return 50;
         if (terreno == 'H') return 45;
         if (terreno == 'S') return 25;
@@ -921,6 +1085,7 @@ bool ComportamientoIngeniero::EncontrarPlan_N5_Tentativo(int start_f, int start_
         std::pair<int, int> clave_actual = {actual.f, actual.c};
         if (mejor_coste[clave_actual] < actual.coste) continue;
 
+        // Reconstrucción del camino desde 'U' de vuelta al origen por el mapa de padres.
         if (mapaResultado[actual.f][actual.c] == 'U') {
             std::vector<std::pair<int, int>> camino;
             std::pair<int, int> p = clave_actual;
@@ -939,8 +1104,7 @@ bool ComportamientoIngeniero::EncontrarPlan_N5_Tentativo(int start_f, int start_
         for (int i = 0; i < 4; i++) {
             int nf = actual.f + df[i];
             int nc = actual.c + dc[i];
-            if (nf < 0 || nf >= (int)mapaResultado.size() ||
-                nc < 0 || nc >= (int)mapaResultado[0].size()) {
+            if (nf < 0 || nf >= (int)mapaResultado.size() || nc < 0 || nc >= (int)mapaResultado[0].size()) {
                 continue;
             }
 
@@ -958,10 +1122,29 @@ bool ComportamientoIngeniero::EncontrarPlan_N5_Tentativo(int start_f, int start_
             }
         }
     }
-
     return false;
 }
 
+/**                                                                                                                                                                                                                                                        
+    * @brief BFS para navegación del agente Ingeniero en los Niveles 5 y 6.
+    *                                                                                                                                                                                                                                                         
+    * Lógica idéntica a BusquedaEnAnchura con una diferencia importante:
+    * el estado inicial siempre parte con zapatillas = false, independientemente                                                                                                                                                                              
+    * de si el agente ya las tiene equipadas. Las zapatillas se adquieren durante
+    * el recorrido si el agente pisa una casilla 'D', ampliando el desnivel                                                                                                                                                                                   
+    * máximo de 1 a 2 a partir de ese punto.                                                                                                                                                                                                                  
+    *                                                                                                                                                                                                                                                         
+    * Se usa para que el Ingeniero navegue hasta cada tramo de la tubería.                                                                                                                                                                                    
+    * No tiene el parámetro tiene_zap_inicio de BusquedaEnAnchura: en N5/N6                                                                                                                                                                                   
+    * el agente planifica sin asumir sus zapatillas actuales, lo que es más                                                                                                                                                                                   
+    * conservador pero evita inconsistencias en el estado compartido.                                                                                                                                                                                         
+    *                                                                                                                                                                                                                                                         
+    * @param origen             Estado inicial (fila, columna, orientación).                                                                                                                                                                                  
+    * @param destino            Casilla objetivo (solo se compara fila y columna).                                                                                                                                                                            
+    * @param agua_permitida     Si true, puede cruzar agua ('A').                                                                                                                                                                                             
+    * @param ignorar_entidades  Si true, ignora otras entidades en las casillas.                                                                                                                                                                              
+    * @return Lista de acciones (WALK/JUMP/TURN_SL/TURN_SR), vacía si no hay camino.                                                                                                                                                                          
+*/   
 list<Action> ComportamientoIngeniero::BusquedaEnAnchura_N5(const estado& origen, const estado& destino, bool agua_permitida, bool ignorar_entidades) {
     map<estado_ext, pair<estado_ext, Action>> padres;
     queue<estado_ext> abierta;
@@ -1057,8 +1240,7 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura_N5(const estado& origen,
 
     list<Action> camino;
     estado_ext cur = meta;
-    while (!(cur.fila == ini.fila && cur.columna == ini.columna &&
-             cur.orientacion == ini.orientacion && cur.zapatillas == ini.zapatillas)) {
+    while (!(cur.fila == ini.fila && cur.columna == ini.columna && cur.orientacion == ini.orientacion && cur.zapatillas == ini.zapatillas)) {
         auto& p = padres[cur];
         camino.push_front(p.second);
         cur = p.first;
@@ -1067,12 +1249,36 @@ list<Action> ComportamientoIngeniero::BusquedaEnAnchura_N5(const estado& origen,
 }
 
 /**
- * @brief Comportamiento del ingeniero para el Nivel 5.
- * @param sensores Datos actuales de los sensores.
- * @return Acción a realizar.
- */
+    * @brief Nivel 5: Máquina de estados cooperativa para instalar la tubería tramo a tramo.                                                                                                                                                                 
+    *                                                                                        
+    * El mapa es completamente conocido. El Ingeniero planifica la ruta con EncontrarPlan_N5                                                                                                                                                                  
+    * y luego itera sobre cada tramo del vector plan_n5, coordinándose con el Técnico:      
+    *                                                                                                                                                                                                                                                         
+    *   Estado 1 (ING_IR):        Navegar hasta la casilla del tramo actual (plan_n5[tramo_n5]).                                                                                                                                                              
+    *                              Si el tramo anterior existe, se bloquea temporalmente en                                                                                                                                                                   
+    *                              mapaEntidades para que el BFS evite pasar por él.                                                                                                                                                                          
+    *   Estado 2 (ING_TERRAFOR):  Terraformar la casilla actual si op != 0 (RAISE/DIG).                                                                                                                                                                       
+    *                              Después emite COME para llamar al Técnico.                                                                                                                                                                                 
+    *                              Excepción: si tramo_n5==0 (BelPos), simplemente avanza al tramo 1.                                                                                                                                                         
+    *   Estado 4 (ING_ORIENT):    Orientarse hacia el tramo anterior (plan_n5[tramo_n5-1]),                                                                                                                                                                   
+    *                              donde estará el Técnico para instalar.                                                                                                                                                                                     
+    *   Estado 5 (ING_INSTALAR):  Esperar con orientación correcta e instalar cuando el                                                                                                                                                                       
+    *                              Técnico está enfrente (sensores.enfrente).                                                                                                                                                                                 
+    *                              Detecta éxito via HayTuberiaEntreIngeniero: al confirmarse                                                                                                                                                                 
+    *                              la conexión, avanza tramo y vuelve al estado 1.                                                                                                                                                                            
+    *                                                                                                                                                                                                                                                         
+    * Variables clave:                                                                                                                                                                                                                                        
+    *   tramo_n5: índice del tramo que el Ingeniero está instalando actualmente.                                                                                                                                                                         
+    *   terraformado_n5: flag para no aplicar RAISE/DIG más de una vez por tramo.                                                                                                                                                                            
+    *   est_n6: estado actual de la máquina (compartido con Nivel 6).                                                                                                                                                                                  
+    *                                                                                                                                                                                                                                                         
+    * @param sensores Datos actuales de los sensores.                                                                                                                                                                                                         
+    * @return Siguiente acción de la máquina de estados.                                                                                                                                                                                                      
+*/                                             
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores) {
-      ActualizarMapa(sensores);
+    ActualizarMapa(sensores);
+
+    // recordar: persiste la última posición y acción para detectar bloqueos al turno siguiente.
     auto recordar = [&](Action a) {
         ultimaFilaPlan = sensores.posF;
         ultimaColPlan = sensores.posC;
@@ -1082,12 +1288,13 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
     
     if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
-    if ((ultimaAccionPlan == WALK || ultimaAccionPlan == JUMP) &&
-        sensores.posF == ultimaFilaPlan && sensores.posC == ultimaColPlan) {
+    // Si intento moverme pero no avanzo, el plan anterior falló: replanificar.
+    if ((ultimaAccionPlan == WALK || ultimaAccionPlan == JUMP) && sensores.posF == ultimaFilaPlan && sensores.posC == ultimaColPlan) {
         hayPlan = false;
         plan.clear();
     }
- 
+
+    // Reset completo al inicio de cada escenario (sensores.tiempo == 0)
     if (sensores.tiempo == 0) {
         plan_tuberias_hecho = false;
         est_n6 = 0; plan_n5.clear();
@@ -1100,7 +1307,8 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
         ultimaColPlan = sensores.posC;
         ultimaAccionPlan = IDLE;
     }
- 
+
+    // es_seguro: la casilla de delante no es obstáculo ni supera el desnivel permitido.
     auto es_seguro = [&](Sensores sens) {
         int nf = sens.posF, nc = sens.posC;
         switch(sens.rumbo) {
@@ -1115,13 +1323,13 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
         if (real_c == 'B') return false;
         
         if (mapaResultado[nf][nc] != '?') {
-            // ¡CLAVE CPU! Permitir desnivel 2 si tiene zapatillas para no entrar en bucle infinito
             int max_dif = tiene_zapatillas ? 2 : 1;
             if (abs(mapaCotas[nf][nc] - mapaCotas[sens.posF][sens.posC]) > max_dif) return false;
         }
         return true;
     };
 
+    // salto_seguro: ambas casillas del salto son conocidas, transitables y accesibles por altura.
     auto salto_seguro = [&](Sensores sens, bool agua_permitida) {
         int mf = sens.posF, mc = sens.posC;
         int jf = sens.posF, jc = sens.posC;
@@ -1153,13 +1361,14 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
 
         return true;
     };
- 
+
+    // PLANIFICACIÓN (una sola vez)
     if (!plan_tuberias_hecho) {
         std::list<Paso> lista_plan;
-        // Usamos el nuevo cerebro modular exclusivo para Nivel 5 y 6
         if (EncontrarPlan_N5(sensores.BelPosF, sensores.BelPosC, lista_plan, sensores.max_ecologico)) {
             plan_tuberias_hecho = true;
             for (auto p : lista_plan) plan_n5.push_back(p);
+            // Si el primer tramo no requiere terraformación (op==0), es BelPos: empiezo en tramo 1.
             tramo_n5 = (plan_n5.size() > 1 && plan_n5[0].op == 0) ? 1 : 0;
             est_n6 = 1; 
             hayPlan = false; plan.clear();
@@ -1167,10 +1376,11 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
         }
         return recordar(IDLE);
     }
- 
+
     if (tramo_n5 >= (int)plan_n5.size()) return recordar(IDLE); 
     Paso tubo = plan_n5[tramo_n5]; 
- 
+
+    // ESTADO 1: navegar hasta la casilla del tramo actual.
     if (est_n6 == 1) { 
         if (sensores.posF == tubo.fil && sensores.posC == tubo.col) {
             est_n6 = 2;
@@ -1181,7 +1391,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
                 last_action = WALK;
                 return recordar(WALK);
             }
-            // Si no, usar BFS
+            // Si no, uso BFS
             if (!hayPlan) {
                 estado inicio = {sensores.posF, sensores.posC, (int)sensores.rumbo};
                 estado destino = {tubo.fil, tubo.col, 0};
@@ -1196,6 +1406,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
 
                 plan = BusquedaEnAnchura_N5(inicio, destino, true, !bloquear_anterior);
 
+                // Bloqueo el tramo anterior en mapaEntidades para que el BFS no lo use como paso.
                 if (bloquear_anterior) {
                     mapaEntidades[anterior.fil][anterior.col] = respaldo_entidad;
                 }
@@ -1210,7 +1421,8 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
             } else { hayPlan = false; return recordar(TURN_SR); }
         }
     }
- 
+
+    // ESTADO 2: terraformar si es necesario, luego llamar al Técnico con COME.
     if (est_n6 == 2) { 
         if (!terraformado_n5 && tubo.op != 0) {
             terraformado_n5 = true;
@@ -1219,6 +1431,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
         }
         terraformado_n5 = false;
         hayPlan = false; plan.clear();
+        // tramo_n5==0 es el BelPos: no hay tramo anterior, simplemente avanzo.
         if (tramo_n5 == 0) {
             tramo_n5 = 1;
             est_n6 = 1;
@@ -1227,8 +1440,8 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
         est_n6 = 4;
         return recordar(COME);
     }
- 
- 
+
+    // ESTADO 4: orientarse hacia el tramo anterior para quedar frente al Técnico.
     if (est_n6 == 4) {
         if (tramo_n5 > 0) {
             Paso anterior = plan_n5[tramo_n5 - 1];
@@ -1239,11 +1452,11 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
         }
         est_n6 = 5; 
     }
- 
+
+    // ESTADO 5: instalar el tramo, confirmar con HayTuberiaEntreIngeniero.
     if (est_n6 == 5) { 
         Paso anterior = plan_n5[tramo_n5 - 1];
-        if (HayTuberiaEntreIngeniero(mapaTuberias, sensores.posF, sensores.posC,
-                                     anterior.fil, anterior.col)) {
+        if (HayTuberiaEntreIngeniero(mapaTuberias, sensores.posF, sensores.posC, anterior.fil, anterior.col)) {
             instale_n5 = false;
             tramo_n5++;
             terraformado_n5 = false;
@@ -1259,31 +1472,54 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_5(Sensores sensores
         }
         return recordar(IDLE);
     }
-  return recordar(IDLE);
+    return recordar(IDLE);
 }
 
 
-/**
- * @brief Comportamiento del ingeniero para el Nivel 6.
- * @param sensores Datos actuales de los sensores.
- * @return Acción a realizar.
- */
+/**                                                                                                                                                                                                                                                        
+    * @brief Comportamiento del ingeniero en el Nivel 6 (mapa desconocido + tuberías cooperativas).                                                                                                                                                           
+    *                                                                                                                                                                                                                                                         
+    * Fase de exploración (plan_tuberias_hecho == false):
+    *   Llama a EncontrarPlan_N5 con throttle (solo si han aparecido >=6 casillas nuevas                                                                                                                                                                    
+    *     o han pasado suficientes ticks) para no desperdiciar CPU.                                                                                                                                                                                           
+    *   Si el mapa es grande y el plan resulta muy caro ecológicamente, usa                                                                                                                                                                                 
+    *     EncontrarPlan_N5_Tentativo para encontrar un destino de exploración que pase                                                                                                                                                                        
+    *     por casillas desconocidas y acercar al ingeniero a esa zona.                                                                                                                                                                                        
+    *   Si no hay plan de tuberías, navega mediante BFS hacia casillas desconocidas                                                                                                                                                                         
+    *     (priorizando las que están en la trayectoria tentativa).                                                                                                                                                                                            
+    *   Lambdas locales: recordar() actualiza el "último movimiento" para detectar                                                                                                                                                                          
+    *     bloqueos; es_seguro() y salto_seguro() validan el terreno antes de WALK/JUMP.                                                                                                                                                                       
+    *                                                                                                                                                                                                                                                         
+    * Máquina de estados principal (est_n6), se activa cuando plan_tuberias_hecho == true:                                                                                                                                                                    
+    *   Estado 1: Navegar hacia plan_n5[tramo_n5] (casilla actual de la tubería).                                                                                                                                                                            
+    *   Estado 2: Terraformar la casilla actual si el plan lo requiere (RAISE/DIG).                                                                                                                                                                          
+    *   Estado 3: Emitir COME para llamar al técnico y pasar al estado 4.                                                                                                                                                                                    
+    *   Estado 4: Orientarse hacia plan_n5[tramo_n5+1] y avanzar allí a pie,                                                                                                                                                                                 
+    *             si la tubería ya está instalada (HayTuberia...), avanzar al siguiente tramo.                                                                                                                                                              
+    *   Estado 5: El técnico no llegó o se fue; orientarse de vuelta hacia tubo y pasar a est 6.                                                                                                                                                             
+    *   Estado 6: Esperar señal enfrente para INSTALL; si espera > 80 ticks sin éxito,                                                                                                                                                                       
+    *               hacer "swap": emitir COME e ir a la casilla del tramo (est 7).                                                                                                                                                                            
+    *   Estado 7: Navegando hasta plan_n5[tramo_n5] para instalar desde allí (posición swapped).                                                                                                                                                             
+    *   Estado 8: Instalando el tramo siguiente desde la posición swapped.                                                                                                                                                                                   
+    *   Estado 12: Post-swap directo: ya estoy en la casilla correcta; instalo el siguiente                                                                                                                                                               
+    *                tramo y volver a estado 1 si se completa.                                                                                                                                                                                                
+    *   Estados 9-11: Variante alternativa (navegar al siguiente tramo, terraformar e instalar                                                                                                                                                               
+    *                  desde allí), activada en ciertos casos de bloqueo.                                                                                                                                                                                     
+    *                                                                                                                                                                                                                                                         
+    * @param sensores Datos actuales de los sensores.                                                                                                                                                                                                         
+    * @return Acción a realizar.                                                                                                                                                                                                                              
+*/ 
 Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores) {
     ActualizarMapa(sensores);
     tick_n6++;
-    bool dbg_oculto_30 = (mapaResultado.size() == 30 && sensores.max_ecologico != 648 &&
-                          sensores.max_ecologico != 1000 && sensores.max_ecologico != 1804 &&
-                          sensores.max_ecologico != 2364);
-    bool dbg_n6 = (sensores.max_ecologico == 2364 || sensores.max_ecologico == 2688 || sensores.max_ecologico == 3533 ||
-                   sensores.max_ecologico == 2107 ||
-                   sensores.max_ecologico == 1719 || sensores.max_ecologico == 1500 || dbg_oculto_30);
-    dbg_n6 = false;
+    
     auto recordar = [&](Action a) {
         ultimaFilaPlan = sensores.posF;
         ultimaColPlan = sensores.posC;
         ultimaAccionPlan = a;
         return a;
     };
+
     if (sensores.superficie[0] == 'D') tiene_zapatillas = true;
 
     if ((ultimaAccionPlan == WALK || ultimaAccionPlan == JUMP) &&
@@ -1413,28 +1649,18 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
         };
 
         int conocidas_actuales = casillas_conocidas();
-        int nuevas_desde_intento =
-            conocidas_ultimo_intento_plan_n6 < 0 ? 999999 :
-            conocidas_actuales - conocidas_ultimo_intento_plan_n6;
+        int nuevas_desde_intento = conocidas_ultimo_intento_plan_n6 < 0 ? 999999 : conocidas_actuales - conocidas_ultimo_intento_plan_n6;
         int cooldown_plan_n6 = (mapaResultado.size() >= 90) ? 8 : 4;
-        bool puede_reintentar_plan =
-            conocidas_ultimo_intento_plan_n6 < 0 ||
-            nuevas_desde_intento >= 6 ||
-            tick_n6 - ultimo_intento_plan_n6 >= cooldown_plan_n6;
+        bool puede_reintentar_plan = conocidas_ultimo_intento_plan_n6 < 0 || nuevas_desde_intento >= 6 || tick_n6 - ultimo_intento_plan_n6 >= cooldown_plan_n6;
         if (mapaResultado[sensores.BelPosF][sensores.BelPosC] != '?' && puede_reintentar_plan) {
-          ultimo_intento_plan_n6 = tick_n6;
-          conocidas_ultimo_intento_plan_n6 = conocidas_actuales;
-          // Usamos el nuevo cerebro modular exclusivo para Nivel 5 y 6
-          if (EncontrarPlan_N5(sensores.BelPosF, sensores.BelPosC, lista_plan, sensores.max_ecologico)) {
+            ultimo_intento_plan_n6 = tick_n6;
+            conocidas_ultimo_intento_plan_n6 = conocidas_actuales;
+            if (EncontrarPlan_N5(sensores.BelPosF, sensores.BelPosC, lista_plan, sensores.max_ecologico)) {
                 int impacto_estimado = impacto_plan_conocido(lista_plan);
-                bool plan_caro_en_mapa_grande = mapaResultado.size() >= 100 &&
-                                                sensores.energia < 5000 &&
-                                                sensores.max_ecologico >= 2000 &&
-                                                impacto_estimado > (sensores.max_ecologico * 80) / 100;
+                bool plan_caro_en_mapa_grande = mapaResultado.size() >= 100 && sensores.energia < 5000 && sensores.max_ecologico >= 2000 && impacto_estimado > (sensores.max_ecologico * 80) / 100;
                 if (plan_caro_en_mapa_grande) {
                     std::list<Paso> plan_tentativo;
-                    if (EncontrarPlan_N5_Tentativo(sensores.BelPosF, sensores.BelPosC,
-                                                    plan_tentativo, sensores.max_ecologico)) {
+                    if (EncontrarPlan_N5_Tentativo(sensores.BelPosF, sensores.BelPosC, plan_tentativo, sensores.max_ecologico)) {
                         for (const Paso& paso : plan_tentativo) {
                             if (mapaResultado[paso.fil][paso.col] == '?') {
                                 destino_preferente.fila = paso.fil;
@@ -1447,15 +1673,6 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
                 if (destino_preferente.fila == -1) {
                 plan_tuberias_hecho = true;
                 for (auto p : lista_plan) plan_n5.push_back(p);
-                if (dbg_n6) {
-                    cerr << "[ING6 PLAN] t=" << sensores.tiempo << " maxeco=" << sensores.max_ecologico
-                         << " size=" << plan_n5.size() << " pos=(" << sensores.posF << "," << sensores.posC
-                         << ") energia=" << sensores.energia << "\n";
-                    for (int k = 0; k < (int)plan_n5.size(); k++) {
-                        cerr << "  [" << k << "] (" << plan_n5[k].fil << "," << plan_n5[k].col
-                             << ") op=" << plan_n5[k].op << "\n";
-                    }
-                }
                 est_n6 = 1; 
                 hayPlan = false; plan.clear();
                 return recordar(IDLE); 
@@ -1470,9 +1687,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
                 destino.fila = sensores.BelPosF; destino.columna = sensores.BelPosC;
             } else if (destino.fila == -1) {
                 std::list<Paso> plan_tentativo;
-                if ((int)mapaResultado.size() <= 75 &&
-                    EncontrarPlan_N5_Tentativo(sensores.BelPosF, sensores.BelPosC,
-                                                plan_tentativo, sensores.max_ecologico)) {
+                if ((int)mapaResultado.size() <= 75 && EncontrarPlan_N5_Tentativo(sensores.BelPosF, sensores.BelPosC, plan_tentativo, sensores.max_ecologico)) {
                     for (const Paso& paso : plan_tentativo) {
                         if (mapaResultado[paso.fil][paso.col] == '?') {
                             destino.fila = paso.fil;
@@ -1482,8 +1697,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
                     }
                 }
 
-                if (destino.fila == -1 && (int)mapaResultado.size() >= 90 &&
-                    sensores.max_ecologico <= 1500) {
+                if (destino.fila == -1 && (int)mapaResultado.size() >= 90 && sensores.max_ecologico <= 1500) {
                     int mejor_u_f = -1, mejor_u_c = -1, mejor_u_dist = 999999;
                     for (int i = 0; i < (int)mapaResultado.size(); i++) {
                         for (int j = 0; j < (int)mapaResultado[0].size(); j++) {
@@ -1576,10 +1790,12 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
         }
     }
 
-    if (tramo_n5 >= (int)plan_n5.size() - 1) return recordar(IDLE); 
-    Paso tubo = plan_n5[tramo_n5]; 
+    // Guarda: si ya completo todos los tramos no hay nada más que instalar.
+    if (tramo_n5 >= (int)plan_n5.size() - 1) return recordar(IDLE);
+    Paso tubo = plan_n5[tramo_n5]; // Tramo de la tubería que el ingeniero debe atender ahora.
 
-    if (est_n6 == 1) { 
+    // Estado 1: Navegar mediante BFS hasta la casilla plan_n5[tramo_n5]
+    if (est_n6 == 1) {
         if (sensores.posF == tubo.fil && sensores.posC == tubo.col) {
             espera_n6 = 0;
             invertir_tramo_n6 = false;
@@ -1612,7 +1828,8 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
         }
     }
 
-    if (est_n6 == 2) { 
+    // Estado 2: Terraformar la casilla actual (RAISE/DIG) si el plan lo requiere.
+    if (est_n6 == 2) {
         if (!terraformado_n5 && tubo.op != 0) {
             terraformado_n5 = true;
             if (tubo.op == 1) return recordar(RAISE);
@@ -1621,18 +1838,16 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
         est_n6 = 3; return recordar(IDLE);
     }
 
-    if (est_n6 == 3) { 
+    // Estado 3: Emitir COME para llamar al técnico y pasar a esperar la instalación (est 4).
+    if (est_n6 == 3) {
         espera_n6 = 0;
         est_n6 = 4;
-        terraformado_n5 = false; 
-        if (dbg_n6) {
-            cerr << "[ING6 COME] t=" << sensores.tiempo << " tramo=" << tramo_n5
-                 << " pos=(" << sensores.posF << "," << sensores.posC << ") energia=" << sensores.energia << "\n";
-        }
+        terraformado_n5 = false;
         return recordar(COME);
     }
 
-    if (est_n6 == 4) { 
+    // Estado 4: Avanzar hacia plan_n5[tramo_n5+1]; si ya está instalado, pasar al siguiente tramo.
+    if (est_n6 == 4) {
         if (sensores.posF != tubo.fil || sensores.posC != tubo.col) {
             hayPlan = false;
             plan.clear();
@@ -1640,8 +1855,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
         }
         if (tramo_n5 + 1 < (int)plan_n5.size()) {
             Paso next_tubo = plan_n5[tramo_n5 + 1];
-            if (HayTuberiaEntreIngeniero(mapaTuberias, sensores.posF, sensores.posC,
-                                         next_tubo.fil, next_tubo.col)) {
+            if (HayTuberiaEntreIngeniero(mapaTuberias, sensores.posF, sensores.posC, next_tubo.fil, next_tubo.col)) {
                 tramo_n5++;
                 hayPlan = false;
                 plan.clear();
@@ -1650,17 +1864,10 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
                 bool puede_continuar_directo = false;
                 if (tramo_n5 + 1 < (int)plan_n5.size()) {
                     Paso siguiente = plan_n5[tramo_n5 + 1];
-                    puede_continuar_directo =
-                        abs(sensores.posF - siguiente.fil) +
-                        abs(sensores.posC - siguiente.col) == 1;
+                    puede_continuar_directo = abs(sensores.posF - siguiente.fil) + abs(sensores.posC - siguiente.col) == 1;
                 }
                 post_swap_n6 = puede_continuar_directo;
                 est_n6 = puede_continuar_directo ? 12 : 1;
-                if (dbg_n6) {
-                    cerr << "[ING6 PRE OK] t=" << sensores.tiempo << " tramo=" << tramo_n5
-                         << " pos=(" << sensores.posF << "," << sensores.posC << ") eco=" << sensores.ecologico
-                         << " energia=" << sensores.energia << "\n";
-                }
                 return recordar(IDLE);
             }
             Orientacion ori_deseada = OrientacionHacia(sensores.posF, sensores.posC, next_tubo.fil, next_tubo.col);
@@ -1673,7 +1880,8 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
         return recordar(IDLE);
     }
 
-    if (est_n6 == 5) { 
+    // Estado 5: El ingeniero se desplazó (técnico no llegó); orientarse hacia tubo => estado 6
+    if (est_n6 == 5) {
         if (tramo_n5 + 1 < (int)plan_n5.size()) {
             Paso next_tubo = plan_n5[tramo_n5 + 1];
             if (!terraformado_n5 && next_tubo.op != 0) {
@@ -1689,60 +1897,39 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
         est_n6 = 6; return recordar(IDLE);
     }
 
-    if (est_n6 == 6) { 
-        if (HayTuberiaEntreIngeniero(mapaTuberias, sensores.posF, sensores.posC,
-                                     tubo.fil, tubo.col)) {
+    // Estado 6: Esperar señal enfrente del técnico para INSTALL; timeout > 80 ticks => swap (est 7).
+    if (est_n6 == 6) {
+        if (HayTuberiaEntreIngeniero(mapaTuberias, sensores.posF, sensores.posC, tubo.fil, tubo.col)) {
             tramo_n5++;
             hayPlan = false; plan.clear();
             espera_n6 = 0;
             invertir_tramo_n6 = false;
             post_swap_n6 = false;
             est_n6 = 1; 
-            if (dbg_n6) {
-                cerr << "[ING6 OK] t=" << sensores.tiempo << " tramo=" << tramo_n5
-                     << " pos=(" << sensores.posF << "," << sensores.posC << ") eco=" << sensores.ecologico
-                     << " energia=" << sensores.energia << "\n";
-            }
             return recordar(IDLE);
         }
         if (sensores.enfrente) { 
             espera_n6 = 0;
-            if (dbg_n6) {
-                cerr << "[ING6 INSTALL] t=" << sensores.tiempo << " tramo=" << tramo_n5
-                     << " pos=(" << sensores.posF << "," << sensores.posC << ") energia=" << sensores.energia << "\n";
-            }
             return recordar(INSTALL);
         }
         espera_n6++;
-        if (dbg_n6 && espera_n6 % 20 == 0) {
-            cerr << "[ING6 WAIT] t=" << sensores.tiempo << " tramo=" << tramo_n5
-                 << " espera=" << espera_n6 << " pos=(" << sensores.posF << "," << sensores.posC
-                 << ") rumbo=" << sensores.rumbo << " ag2=" << sensores.agentes[2]
-                 << " enfrente=" << sensores.enfrente << " energia=" << sensores.energia << "\n";
-        }
+        
         if (!invertir_tramo_n6 && espera_n6 > 80) {
             invertir_tramo_n6 = true;
             espera_n6 = 0;
             hayPlan = false;
             plan.clear();
             est_n6 = 7;
-            if (dbg_n6) {
-                cerr << "[ING6 SWAP COME] t=" << sensores.tiempo << " tramo=" << tramo_n5
-                     << " pos=(" << sensores.posF << "," << sensores.posC << ") energia=" << sensores.energia << "\n";
-            }
             return recordar(COME);
         }
         return recordar(IDLE);
     }
 
+    // Estado 7 (swap): Navegar hasta plan_n5[tramo_n5] para instalar desde el otro lado.
     if (est_n6 == 7) {
         Orientacion ori_deseada = OrientacionHacia(sensores.posF, sensores.posC, tubo.fil, tubo.col);
         if (sensores.posF == tubo.fil && sensores.posC == tubo.col) {
             est_n6 = 8;
-            if (dbg_n6) {
-                cerr << "[ING6 EST8] t=" << sensores.tiempo << " tramo=" << tramo_n5
-                     << " pos=(" << sensores.posF << "," << sensores.posC << ") energia=" << sensores.energia << "\n";
-            }
             return recordar(IDLE);
         }
         if (sensores.rumbo != ori_deseada) {
@@ -1753,11 +1940,11 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
         return recordar(IDLE);
     }
 
+    // Estado 8 (posición swapped): Instalar el siguiente tramo desde la casilla del tramo actual.
     if (est_n6 == 8) {
         if (tramo_n5 + 1 < (int)plan_n5.size()) {
             Paso next_tubo = plan_n5[tramo_n5 + 1];
-            if (HayTuberiaEntreIngeniero(mapaTuberias, sensores.posF, sensores.posC,
-                                         next_tubo.fil, next_tubo.col)) {
+            if (HayTuberiaEntreIngeniero(mapaTuberias, sensores.posF, sensores.posC, next_tubo.fil, next_tubo.col)) {
                 tramo_n5++;
                 hayPlan = false;
                 plan.clear();
@@ -1771,11 +1958,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
                     post_swap_n6 = false;
                     est_n6 = 1;
                 }
-                if (dbg_n6) {
-                    cerr << "[ING6 SWAP OK] t=" << sensores.tiempo << " tramo=" << tramo_n5
-                         << " pos=(" << sensores.posF << "," << sensores.posC << ") eco=" << sensores.ecologico
-                         << " energia=" << sensores.energia << "\n";
-                }
+                
                 return recordar(IDLE);
             }
             Orientacion ori_deseada = OrientacionHacia(sensores.posF, sensores.posC, next_tubo.fil, next_tubo.col);
@@ -1784,16 +1967,14 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
             }
             if (sensores.enfrente) {
                 espera_n6 = 0;
-                if (dbg_n6) {
-                    cerr << "[ING6 INSTALL SWAP] t=" << sensores.tiempo << " tramo=" << tramo_n5
-                         << " pos=(" << sensores.posF << "," << sensores.posC << ") energia=" << sensores.energia << "\n";
-                }
+
                 return recordar(INSTALL);
             }
         }
         return recordar(IDLE);
     }
 
+    // Estado 12 (post-swap directo): Estoy en la casilla correcta; instalo el siguiente tramo.
     if (est_n6 == 12) {
         if (tramo_n5 + 1 >= (int)plan_n5.size()) {
             post_swap_n6 = false;
@@ -1843,8 +2024,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
         hayPlan = false;
         plan.clear();
 
-        if (HayTuberiaEntreIngeniero(mapaTuberias, sensores.posF, sensores.posC,
-                                     siguiente.fil, siguiente.col)) {
+        if (HayTuberiaEntreIngeniero(mapaTuberias, sensores.posF, sensores.posC, siguiente.fil, siguiente.col)) {
             tramo_n5++;
             espera_n6 = 0;
             intentos_install_post_n6 = 0;
@@ -1861,8 +2041,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
             if (siguiente.op == -1) return recordar(DIG);
         }
 
-        Orientacion ori_deseada = OrientacionHacia(sensores.posF, sensores.posC,
-                                                   siguiente.fil, siguiente.col);
+        Orientacion ori_deseada = OrientacionHacia(sensores.posF, sensores.posC, siguiente.fil, siguiente.col);
         if (sensores.rumbo != ori_deseada) {
             return recordar((GirosNecesarios(sensores.rumbo, ori_deseada) <= 4) ? TURN_SR : TURN_SL);
         }
@@ -1872,12 +2051,6 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
         bool rumbo_ortogonal = (sensores.rumbo == norte || sensores.rumbo == este ||
                                 sensores.rumbo == sur || sensores.rumbo == oeste);
         if (tecnico_delante && sensores.enfrente && rumbo_ortogonal) {
-            if (dbg_n6) {
-                cerr << "[ING6 POST INSTALL] t=" << sensores.tiempo << " tramo=" << tramo_n5
-                     << " pos=(" << sensores.posF << "," << sensores.posC << ") sig=("
-                     << siguiente.fil << "," << siguiente.col << ") ag2=" << sensores.agentes[2]
-                     << " enfrente=" << sensores.enfrente << "\n";
-            }
             intentos_install_post_n6++;
             if (intentos_install_post_n6 > 2) {
                 intentos_install_post_n6 = 0;
@@ -1891,12 +2064,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
         }
 
         espera_n6++;
-        if (dbg_n6 && espera_n6 % 2 == 0) {
-            cerr << "[ING6 POST WAIT] t=" << sensores.tiempo << " tramo=" << tramo_n5
-                 << " espera=" << espera_n6 << " pos=(" << sensores.posF << "," << sensores.posC
-                 << ") rumbo=" << sensores.rumbo << " sig=(" << siguiente.fil << "," << siguiente.col
-                 << ") ag2=" << sensores.agentes[2] << " enfrente=" << sensores.enfrente << "\n";
-        }
+        
         if (espera_n6 > 4 && tecnico_delante && rumbo_ortogonal) {
             espera_n6 = 0;
             return recordar(COME);
@@ -1910,6 +2078,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
         return recordar(IDLE);
     }
 
+    // Estado 9 (alternativo): Navegar hasta plan_n5[tramo_n5+1] para instalar desde allí
     if (est_n6 == 9) {
         if (tramo_n5 + 1 >= (int)plan_n5.size()) {
             post_swap_n6 = false;
@@ -1959,6 +2128,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
         return recordar(IDLE);
     }
 
+    // Estado 10 (alternativo): Terraformar plan_n5[tramo_n5+1] si es necesario antes de instalar.
     if (est_n6 == 10) {
         if (tramo_n5 + 1 >= (int)plan_n5.size()) {
             post_swap_n6 = false;
@@ -1978,6 +2148,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
         return recordar(IDLE);
     }
 
+    // Estado 11 (alternativo): Instalar el tramo desde la posición de plan_n5[tramo_n5+1]
     if (est_n6 == 11) {
         if (tramo_n5 + 1 >= (int)plan_n5.size()) {
             post_swap_n6 = false;
@@ -1986,8 +2157,7 @@ Action ComportamientoIngeniero::ComportamientoIngenieroNivel_6(Sensores sensores
         }
 
         Paso next_tubo = plan_n5[tramo_n5 + 1];
-        if (HayTuberiaEntreIngeniero(mapaTuberias, sensores.posF, sensores.posC,
-                                     tubo.fil, tubo.col)) {
+        if (HayTuberiaEntreIngeniero(mapaTuberias, sensores.posF, sensores.posC, tubo.fil, tubo.col)) {
             tramo_n5++;
             hayPlan = false;
             plan.clear();
