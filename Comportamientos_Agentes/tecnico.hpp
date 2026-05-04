@@ -316,16 +316,17 @@ private:
   // =========================================================
   // === VARIABLES Y ESTRUCTURAS NIVEL 3 (A-ESTRELLA) ========
   // =========================================================
-    int ultimaPosFN3 = -1;
-    int ultimaPosN3 = -1; 
-    int ultimaPosCN3 = -1;
-    Action ultimaAccionN3 = IDLE;
+  int ultimaPosFN3 = -1;
+  int ultimaPosN3 = -1; 
+  int ultimaPosCN3 = -1;
+  Action ultimaAccionN3 = IDLE;
 
+  // Estado para el A* de niveles 3-5: posición + orientación + flag zapatillas (necesario para bosques)
   struct EstadoN3 {
     int f;
     int c;
     Orientacion brujula;
-    bool zapatillas; 
+    bool zapatillas;
 
     bool operator<(const EstadoN3& otro) const {
       if (f != otro.f) return f < otro.f;
@@ -340,15 +341,16 @@ private:
     }
   };
 
+  // Nodo A* para niveles 3-5: coste real g (batería acumulada) + heurística h
   struct NodoN3 {
     EstadoN3 st;
     std::list<Action> secuencia;
-    int coste_g; 
-    int coste_h; 
-    int f() const { return coste_g + coste_h; } 
+    int coste_g; // Batería gastada hasta aquí
+    int coste_h; // Estimación de batería restante hasta la meta
+    int f() const { return coste_g + coste_h; } // Coste total estimado (función de evaluación A*)
 
     bool operator>(const NodoN3& otro) const {
-      return f() > otro.f(); 
+      return f() > otro.f(); // La cola de prioridad ordena de menor a mayor f()
     }
   };
 
@@ -367,20 +369,21 @@ private:
   bool terraformado_n5 = false;
   std::vector<Paso> plan_n5;
 
+  // Estado del Dijkstra de tuberías: posición (f,c) + altura virtual h de la tubería en esa casilla
   struct EstadoN4_Tecnico {
     int f, c, h;
     bool operator<(const EstadoN4_Tecnico& otro) const {
       if (f != otro.f) return f < otro.f;
       if (c != otro.c) return c < otro.c;
-
       return h < otro.h;
     }
   };
 
+  // Nodo Dijkstra de tuberías: prioridad = longitud del plan (×10000) + impacto ecológico acumulado
   struct NodoN4_Tecnico {
     EstadoN4_Tecnico st;
     std::list<Paso> secuencia;
-    int impacto = 0 ; 
+    int impacto = 0; // Impacto ecológico acumulado
 
     bool operator>(const NodoN4_Tecnico& otro) const {
       int coste_a = (int)secuencia.size() * 10000 + impacto;
@@ -389,32 +392,36 @@ private:
     }
   };
 
+  // Dijkstra ecológico para tuberías con mapa completo (N4/N5)
   bool EncontrarPlan_N5_Arquitecto(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco);
-
+  // Mismo algoritmo para mapa parcialmente conocido (N6)
   bool EncontrarPlan_N5_Tecnico(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco);
 
+  // Validación de movimiento para N5 (sin agua, desnivel máx 1)
   bool EsValida_N5(const EstadoN3& st, Action act, bool ignorarentidades = false);
+  // A* de navegación para N5 usando EsValida_N5
   bool EncontrarPlan_N5_Caminar(EstadoN3 inicio, int dest_f, int dest_c, std::list<Action>& plan, bool ignorarentidades = false, bool parar_adyacente = false);
 
   // =========================================================
   // === MÁQUINA DE ESTADOS NIVEL 5 (OPERARIO) ==============
   // =========================================================
+  // Estados del técnico durante la instalación cooperativa
   enum EstadoObraTec { TEC_ESPERAR_AVISO, TEC_IR_CASILLA, TEC_ALINEARSE };
   EstadoObraTec estado_obra_tec = TEC_ESPERAR_AVISO;
 
 
   // =========================================================
-  // === NIVEL 6 (COOPERACIÓN COMPLETA) =========================
+  // === NIVEL 6 (COOPERACIÓN COMPLETA) ======================
   // =========================================================
-  int estado_n6 = 0;
-  int destn6_f = -1, destn6_c = -1;
-  int intento_orbita_n6 = 0; 
-  int retirada_n6 = -1;
-  bool retirada_izq_n6 = false;
-  bool install_pendiente_n6 = false;
-  bool come_postswap_n6 = false;
-  bool install_postswap_emitido_n6 = false;
-  int eco_ref_install_n6 = -1;
+  int estado_n6 = 0;                // 0=idle, 1=navegar, 2=instalar, 3=retirada
+  int destn6_f = -1, destn6_c = -1; // Destino recibido del Ingeniero via COME (GotoF/GotoC)
+  int intento_orbita_n6 = 0;        // Contador de intentos de reposicionamiento/retirada
+  int retirada_n6 = -1;             // Orientación de referencia para la retirada (-1 = no inicializado)
+  bool retirada_izq_n6 = false;     // true => retirarse hacia la izquierda (mapas grandes con mucha energía)
+  bool install_pendiente_n6 = false; // INSTALL emitido, esperando confirmación (subida eco o tubería detectada)
+  bool come_postswap_n6 = false;    // Ingeniero adyacente => instalar inmediatamente sin navegar a dest
+  bool install_postswap_emitido_n6 = false; // INSTALL de postswap ya emitido en este ciclo
+  int eco_ref_install_n6 = -1;      // Valor de ecológico justo antes del INSTALL (para detectar el éxito)
 };
 
 #endif

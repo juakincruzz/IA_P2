@@ -304,12 +304,12 @@ private:
     int ultimaColPlan = -1;
     Action ultimaAccionPlan = IDLE;
 
-    // NIVEL 3
+    // Estado para el A* del nivel 3: posición + orientación + flag zapatillas (para bosques)
     struct Estado {
         int f;
         int c;
         Orientacion brujula;
-        bool zapatillas; // Para cruzar bosques lo uso
+        bool zapatillas;
         
         bool operator<(const Estado& otro) const {
             if (f != otro.f) return f < otro.f;
@@ -322,19 +322,21 @@ private:
         }
     };
 
+    // Nodo A* para nivel 3: coste real g (batería acumulada) + heurística h
     struct Nodo {
         Estado st;
         std::list<Action> secuencia;
-        int coste_g; // Coste real acumulado (Batería gastada)
-        int coste_h; // Heurística (Distancia estimada)
-        int f() const { return coste_g + coste_h; } // Coste total estimado
+        int coste_g; // Batería gastada hasta aquí
+        int coste_h; // Estimación de batería restante hasta la meta
+        int f() const { return coste_g + coste_h; } // Coste total estimado (función de evaluación A*)
 
-        // Para que la Cola de Prioridad ordene de menor a mayor coste
+        // La cola de prioridad ordena de menor a mayor f()
         bool operator>(const Nodo& otro) const {
             return f() > otro.f();
         }
     };
 
+    // Variante de estado para BFS con zapatillas integradas (usada en N5)
     struct estado_ext {
         int fila;
         int columna;
@@ -352,6 +354,7 @@ private:
         }
     };
 
+    // Nodo BFS para el estado_ext (sin coste, solo secuencia de acciones)
     struct nodo_ext {
         estado_ext st;
         std::list<Action> secuencia;
@@ -363,10 +366,11 @@ private:
     bool plan_tuberias_hecho = false;
     std::list<Paso> plan_tuberias;
 
+    // Estado del Dijkstra de tuberías: posición (f,c) + altura virtual h de la tubería en esa casilla
     struct EstadoN4 {
         int f;
         int c;
-        int h; // Altura que tendrá la tubería en esta casilla
+        int h; // Altura virtual de la tubería (puede diferir de mapaCotas por RAISE/DIG)
 
         bool operator<(const EstadoN4& otro) const {
             if (f != otro.f) return f < otro.f;
@@ -378,10 +382,11 @@ private:
         }
     };
 
+    // Nodo Dijkstra de tuberías: prioridad = longitud del plan (×10000) + impacto ecológico acumulado
     struct NodoN4 {
         EstadoN4 st;
         std::list<Paso> secuencia;
-        int impacto = 0 ; // Impacto ecológico acumulado
+        int impacto = 0; // Impacto ecológico acumulado
 
         bool operator>(const NodoN4& otro) const {
             int coste_a = (int)secuencia.size() * 10000 + impacto;
@@ -395,33 +400,38 @@ private:
     // =========================================================
     // === VARIABLES NIVEL 5 (MÁQUINA DE ESTADOS) =============
     // =========================================================
-    int tramo_n5 = 0;
-    bool acabo_de_instalar_n5 = false;
-    bool terraformado_n5 = false;
-    std::vector<Paso> plan_n5; // Vector para acceder a los tramos fácilmente
-    bool instale_n5 = false ;
+    int tramo_n5 = 0;                 // Índice del tramo de tubería que se está instalando
+    bool acabo_de_instalar_n5 = false; // true tras ejecutar INSTALL (para avanzar de tramo)
+    bool terraformado_n5 = false;     // true si ya se aplicó RAISE/DIG en la casilla actual
+    std::vector<Paso> plan_n5;        // Trazado completo de tuberías (acceso aleatorio por índice)
+    bool instale_n5 = false;          // Flag auxiliar para el flujo de instalación en N5
 
+    // Dijkstra ecológico para tuberías con mapa conocido
     bool EncontrarPlan_N5(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco);
+    // Variante tentativa: trato '?' como coste 18 para guiar la exploración en N6
     bool EncontrarPlan_N5_Tentativo(int start_f, int start_c, std::list<Paso>& plan_resultante, int limite_eco);
+    // BFS de movimiento para N5 (sin agua, sin entidades)
     list<Action> BusquedaEnAnchura_N5(const estado &origen, const estado &destino, bool agua_permitida = false, bool ignorar_entidades = false);
 
     // =========================================================
     // === MÁQUINA DE ESTADOS NIVEL 5 (JEFE DE OBRA) ==========
     // =========================================================
+    // CALCULAR_PLAN: buscar trazado; IR_CASILLA: navegar; TERRAFORMAR: RAISE/DIG;
+    // LLAMAR: emitir COME al técnico; ALINEARSE: orientarse hacia el siguiente nodo.
     enum EstadoObraIng { ING_CALCULAR_PLAN, ING_IR_CASILLA, ING_TERRAFORMAR, ING_LLAMAR, ING_ALINEARSE };
     EstadoObraIng estado_obra_ing = ING_CALCULAR_PLAN;
 
-  // =========================================================
-  // === NIVEL 6 =============================================
-  // =========================================================
-  int est_n6 ;
-  int espera_n6 = 0;
-  int tick_n6 = 0;
-  int ultimo_intento_plan_n6 = -10000;
-  int conocidas_ultimo_intento_plan_n6 = -1;
-  int intentos_install_post_n6 = 0;
-  bool invertir_tramo_n6 = false;
-  bool post_swap_n6 = false;
+    // =========================================================
+    // === NIVEL 6 =============================================
+    // =========================================================
+    int est_n6;                                // Estado de la máquina (1=navegar,2=terraformar,3=COME,4=avanzar,5=orientar,6=instalar,7=swap nav,8=swap install,12=post-swap)
+    int espera_n6 = 0;                         // Ticks esperando en el estado actual (timeout para activar swap)
+    int tick_n6 = 0;                           // Contador global de ticks (throttle de EncontrarPlan_N5)
+    int ultimo_intento_plan_n6 = -10000;       // Tick del último intento de planificación
+    int conocidas_ultimo_intento_plan_n6 = -1; // Casillas conocidas en el último intento de plan
+    int intentos_install_post_n6 = 0;          // Intentos de INSTALL en estado 12 (post-swap directo)
+    bool invertir_tramo_n6 = false;            // true tras activar el swap (evita doble-swap)
+    bool post_swap_n6 = false;                 // true si el siguiente tramo es adyacente => ir a estado 12
 };
 
 
