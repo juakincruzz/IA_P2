@@ -1,81 +1,117 @@
-# Práctica 2 de *Inteligencia Artificial*, curso 2025/2026
+# Práctica 2: Resolución de un problema práctico con agentes reactivos/deliberativos
 
 ## Prerrequisitos
 
-### Crear una cuenta en [GitHub](https://github.com/). 
-Para ello, puedes usar tu correo personal, el de *@correo.ugr.es* o el de *@go.ugr.es*.
+### 1. Configurar el entorno de trabajo
+Asegúrate de tener instalado y configurado todo lo necesario para compilar y ejecutar la práctica:
 
+- Compilador de C++ compatible con el proyecto.
+- `cmake` y `make`.
+- Dependencias del sistema requeridas por el repositorio.
 
-### 1. Añadir tu clave SSH a GitHub
-Hay varias maneras de conectarte desde tu ordenador a GitHub. Si utilizas un navegador, usarás tu usuario y contraseña. Desde el terminal, lo más cómodo es utilizar una clave SSH. Puedes crear una nueva si no tienes, o reutilizar una ya existente. Tienes toda la información para realizar la configuración en: 
-[Conectar a GitHub con SSH](https://docs.github.com/es/authentication/connecting-to-github-with-ssh)
+---
 
+### 2. Preparar tu repositorio local
+Clona tu repositorio y sitúate en la carpeta de trabajo:
 
-### 2. Crear tu copia personal del repositorio de la asignatura
-Cada estudiante debe tener su propia copia del repositorio para poder trabajar sobre ella. En adelante, a tu copia la llamaremos *origin*, y al repositorio original de la asignatura lo llamaremos *upstream* (NOTA: Estas son convenciones que la mayoría de los desarrolladores usan, pero los puedes llamar como quieras). 
-
-> La forma usual de crear tu copia del repositorio es realizando un *fork*. Sin embargo, dado que realizar un *fork* de un repositorio con visibilidad pública obliga al que la copia sea también pública, nosotros usaremos un procedimiento diferente que nos permite que nuestra copia del repositorio sea privada.
-
-Para realizar la copia, una vez que tengas creada tu cuenta en GitHub, haz click en <https://github.com/new/import> y rellena tal y como se ve en la imagen de abajo. El repositorio que quieres importar es `https://github.com/ugr-ccia-IA/practica2`. ¡Asegúrate de que tu repositorio es privado!
-
-![Importar repositorio practica2](doc/img/import_new_repo.png)
-
-
-### 3. Clonar tu repositorio en tu máquina
-Una vez hecho el paso anterior, tendrás tu repositorio personal de la práctica1 en GitHub; puedes descargarlo a tu ordenador usando:
-`git clone git@github.com:TU_USUARIO_GITHUB/practica2.git` (si no has configurado tu clave SSH, esto no funcionará).
-
-
-### 4. Modificar el código y guardar los cambios
-Es el momento de empezar a modificar ficheros. Abre el fichero README.md (este fichero), ve al final y añade una línea que diga "Esto lo puse yo."
-Una vez lo hayas modificado, guarda el fichero, y ejecuta los siguientes comandos en el terminal estando dentro de la carpeta `practica2`:
-
-```
-git add . 
-git commit -m "Modificando README.md"
-git push origin main 
+```bash
+git clone git@github.com:juakincruzz/IA.git
+cd IA
 ```
 
-Los tres comandos anteriores le indican a git que 1) queremos guardar una nueva versión con todos los ficheros modificados de la carpeta, 2) que haga esa versión y le ponga el comentario "Cambiando el enlace del botón", y 3) que envíe esta nueva versión a la copia de nuestro repositorio alojada en GitHub.
+Si trabajas con HTTPS, usa la URL correspondiente en lugar de SSH.
 
-Este proceso es el que debes repetir cada vez que vayas avanzando en la implementación de la práctica: add, commit, push.
+---
 
+### 3. Compilar el proyecto
+Puedes compilar usando el script de instalación o compilación manual:
 
+```bash
+./install.sh
+```
 
-### 5. Enlazar tu repositorio personal con el de la asignatura
-Aunque tu repositorio y el de la asignatura (recuerda que los conocemos por *origin* y *upstream* respectivamente) sean independientes, nos va a interesar que estén enlazados. De esta forma, podrás aplicar fácilmente sobre tu repositorio (*origin*) cualquier actualización que los profesores realicemos en *upstream*. Para enlazarlos, ejecuta lo siguiente dentro de la carpeta de tu repositorio:
+Si necesitas recompilar tras cambios:
 
-`git remote add upstream git@github.com:ugr-ccia-IA/practica2.git`
+```bash
+make clean
+make -j$(nproc)
+```
 
+---
 
-### Actualizar tu repositorio con cambios realizados en el de la asignatura
-Una vez tengas los repositiorios enlazados, lo único que debes hacer para aplicar posibles cambios en el repositorio de la asignatura en tu repositorio (cambios de *upstream* en *origin*) es: `git pull upstream main`
+### 4. Ejecutar la práctica
+Según la configuración disponible en el repositorio, puedes ejecutar:
 
-Hacer esto no sobreescribirá tus avances en la implementación de la práctica, puesto que tú no deberías haber modificado ninguna parte del código diferente a la que se indica en el guión.
+```bash
+./practica2
+```
 
-Si quieres que esos cambios también se guarden en github, a continuación ejecuta: `git push origin main`
+o sin interfaz gráfica:
 
+```bash
+./practica2SG
+```
 
-> Si quieres saber más sobre Git y GitHub, en Internet existen multitud de recursos, incluidos videos y tutoriales. Para realizar esta práctica sólo necesitas lo básico (hacer commits), pero hay muchas cosas más que se pueden hacer con estas herramientas (uso de ramas, gestión de conflictos, etc.) 
-El propio GitHub pone a tu disposición un [breve curso](https://classroom.github.com/a/W33pQ3pa) (en inglés) para aprender lo básico.
+---
 
+### 5. Guardar y subir cambios
+Cada vez que avances en la práctica, guarda tus cambios con Git:
+
+```bash
+git add .
+git commit -m "Actualizando práctica 2"
+git push origin main
+```
+
+Este flujo (`add`, `commit`, `push`) debe repetirse durante el desarrollo.
+
+---
+
+### 6. (Opcional) Mantener sincronización con el repositorio base
+Si trabajas con un repositorio enlazado a otro de referencia, puedes añadir `upstream`:
+
+```bash
+git remote add upstream git@github.com:ugr-ccia-IA/practica2.git
+```
+
+Y actualizar cuando haya cambios:
+
+```bash
+git pull upstream main
+git push origin main
+```
+
+---
 
 ## Realización de la práctica
-El guión (disponible en [PRADO](https://pradogrado2526.ugr.es/)) contiene toda la información sobre en qué consiste la práctica2. Leelo con atención.
 
-Junto a ellos, también tienes a tu disposición una pequeña presentación de resumen, y un tutorial. Debes revisarlos pues continen los primeros pasos a realizar.
+Esta práctica consiste en la **resolución de un problema práctico con agentes reactivos/deliberativos**, aplicando técnicas de Inteligencia Artificial para el diseño, implementación y evaluación del comportamiento del agente en el entorno propuesto.
 
+Durante el desarrollo se ha trabajado en:
 
-### Instalación local (linux)
+- Modelado del problema y del entorno.
+- Implementación de comportamiento **reactivo**.
+- Implementación de comportamiento **deliberativo**.
+- Comparación de enfoques y resultados.
+- Validación del rendimiento en distintos escenarios.
 
-Una vez que tengas tu repositorio (el fork que has realizado) en tu ordenador, puedes compilar el código usando `./install.sh` (esto instalará todas las dependencias, y ejecutará `cmake` y `make`. ).
-A continuación, puedes lanzar el software con interfaz gráfica con `./practica2`, o sin ella con `./practica2SG`.
+---
 
-Cuando realices cualquier modificación en el código, debes recompilar, así que usa `make clean` y `make -j$(nproc)`.
+## Resultados
 
+- **Calificación final:** **9,55/10**
 
+> La nota refleja un desempeño sólido en el diseño del agente, la implementación técnica y el cumplimiento de los objetivos de la práctica.
 
+---
 
 ## Más información
-Hemos creado un [fichero con preguntas frecuentes](./FAQ.md) que han ido apareciendo en las distintas sesiones de prácticas.
 
+Para detalles adicionales (preguntas frecuentes, decisiones de implementación o notas técnicas), consulta la documentación complementaria del repositorio (por ejemplo, `FAQ.md` si está disponible).
+
+---
+
+## Autor
+
+**Joaquín Cruz Lorenzo**  
+GitHub: [@juakincruzz](https://github.com/juakincruzz)
